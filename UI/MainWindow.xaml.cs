@@ -1,0 +1,634 @@
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
+using System.Windows.Threading;
+using Microsoft.Win32;
+using WallpaperProfiles.Autostart;
+using WallpaperProfiles.Coordination;
+using WallpaperProfiles.Engine;
+using WallpaperProfiles.Infrastructure;
+using WallpaperProfiles.Models;
+using WallpaperProfiles.Persistence;
+using Brush = System.Windows.Media.Brush;
+using Cursors = System.Windows.Input.Cursors;
+using DragDropEffects = System.Windows.DragDropEffects;
+using DragEventArgs = System.Windows.DragEventArgs;
+using FontFamily = System.Windows.Media.FontFamily;
+using HorizontalAlignment = System.Windows.HorizontalAlignment;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+using Orientation = System.Windows.Controls.Orientation;
+using Path = System.IO.Path;
+using Rectangle = System.Windows.Shapes.Rectangle;
+
+namespace WallpaperProfiles.UI;
+
+internal partial class MainWindow : Window
+{
+    private sealed record RailEntry(Guid Id, Border Card, MonitorThumbnail Monitor);
+
+    private readonly WallpaperCoordinator _coordinator;
+    private readonly ProfileStore _store;
+    private readonly SettingsStore _settingsStore;
+    private AppSettings _settings;
+
+    private readonly List<RailEntry> _railEntries = new();
+    private Guid? _selectedId;
+    private WallpaperProfile? _selected;
+
+    private readonly DispatcherTimer _pathDebounce;
+    private int _pathVersion;
+
+    public MainWindow(WallpaperCoordinator coordinator, ProfileStore store, SettingsStore settingsStore)
+    {
+        InitializeComponent();
+        _coordinator = coordinator;
+        _store = store;
+        _settingsStore = settingsStore;
+        _settings = settingsStore.Load();
+        TrySetAppIcon();
+
+        _pathDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+        _pathDebounce.Tick += (_, _) =>
+        {
+            _pathDebounce.Stop();
+            ValidatePath();
+        };
+        FolderBox.TextChanged += (_, _) =>
+        {
+            _pathDebounce.Stop();
+            _pathDebounce.Start();
+        };
+
+        Loaded += OnLoaded;
+        Closing += OnClosing;
+        _coordinator.StateChanged += RefreshActiveGlow;
+    }
+
+    private void OnLoaded(object? sender, RoutedEventArgs e)
+    {
+        AutostartToggle.IsChecked = AutostartManager.IsEnabled();
+        MinimizedToggle.IsChecked = _settings.StartMinimizedToTray;
+        BuildRail();
+        if (_railEntries.Count > 0)
+        {
+            Select(_railEntries[0].Id);
+        }
+    }
+
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (!System.Windows.Application.Current.Dispatcher.HasShutdownStarted)
+        {
+            e.Cancel = true;
+            Hide();
+        }
+    }
+
+    private void TrySetAppIcon()
+    {
+        try
+        {
+            var path = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(path))
+            {
+                var exeIcon = System.Drawing.Icon.ExtractAssociatedIcon(path);
+                if (exeIcon != null)
+                {
+                    Icon = Imaging.CreateBitmapSourceFromHIcon(
+                        exeIcon.Handle, System.Windows.Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                }
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private void TitleBar_Drag(object sender, MouseButtonEventArgs e)
+    {
+        if (e.LeftButton == MouseButtonState.Pressed)
+        {
+            DragMove();
+        }
+    }
+
+    private void MinBtn_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void CloseBtn_Click(object sender, RoutedEventArgs e) => Hide();
+
+    private System.Windows.Media.Brush ThemeBrush(string key) => (System.Windows.Media.Brush)FindResource(key);
+
+    // ============ Rail ============
+
+    private void BuildRail()
+    {
+        RailStack.Children.Clear();
+        _railEntries.Clear();
+
+        if (_coordinator.Profiles.Count == 0)
+        {
+            RailStack.Children.Add(new TextBlock
+            {
+                Text = "No profiles yet.\nAdd one below.",
+                Foreground = ThemeBrush("TextTertiaryBrush"),
+                FontSize = 12,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 2, 0, 10),
+                Opacity = 0.9,
+            });
+        }
+
+        foreach (var profile in _coordinator.Profiles)
+        {
+            var monitor = new MonitorThumbnail
+            {
+                Width = 188,
+                BezelWidth = 90,
+                BezelHeight = 58,
+                ShowName = true,
+                ProfileName = profile.Name,
+                HasRules = profile.Schedule.Count > 0 || profile.EventTriggers.Count > 0,
+                IsActive = profile.Id == _coordinator.ActiveProfileId,
+            };
+
+            var card = new Border
+            {
+                Margin = new Thickness(0, 0, 0, 6),
+                Style = (Style)FindResource("ProfileCard"),
+                Child = monitor,
+            };
+            card.MouseLeftButtonUp += (_, _) => Select(profile.Id);
+            RailStack.Children.Add(card);
+            _railEntries.Add(new RailEntry(profile.Id, card, monitor));
+
+            _ = LoadRailThumbAsync(profile, monitor);
+        }
+
+        var addCard = new Grid
+        {
+            Margin = new Thickness(0, 2, 0, 4),
+            Height = 42,
+            Cursor = Cursors.Hand,
+        };
+        var dashed = new Rectangle
+        {
+            Stroke = ThemeBrush("BorderBrush"),
+            StrokeThickness = 1.5,
+            Fill = ThemeBrush("SurfaceBrush"),
+            RadiusX = 6,
+            RadiusY = 6,
+        };
+        var plus = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        plus.Children.Add(new TextBlock
+        {
+            Text = "\uE710",
+            FontFamily = (FontFamily)FindResource("IconFont"),
+            FontSize = 12,
+            Foreground = ThemeBrush("TextSecondaryBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 7, 0),
+        });
+        plus.Children.Add(new TextBlock
+        {
+            Text = "New profile",
+            Foreground = ThemeBrush("TextSecondaryBrush"),
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        addCard.Children.Add(dashed);
+        addCard.Children.Add(plus);
+        addCard.MouseEnter += (_, _) =>
+        {
+            dashed.Stroke = ThemeBrush("BorderStrongBrush");
+            dashed.Fill = ThemeBrush("SurfaceHoverBrush");
+        };
+        addCard.MouseLeave += (_, _) =>
+        {
+            dashed.Stroke = ThemeBrush("BorderBrush");
+            dashed.Fill = ThemeBrush("SurfaceBrush");
+        };
+        addCard.MouseLeftButtonUp += (_, _) => AddProfile();
+        RailStack.Children.Add(addCard);
+    }
+
+    private static async Task LoadRailThumbAsync(WallpaperProfile profile, MonitorThumbnail monitor)
+    {
+        var isLive = WallpaperEngine.IsLiveFile(profile.FolderPath);
+        // Live sources (video/GIF) load through the video frame grabber / image decoder directly.
+        var image = await Task.Run(() => ThumbnailLoader.Load(
+            isLive ? profile.FolderPath : null, 320)
+            ?? ThumbnailLoader.FirstImage(profile.FolderPath, 320));
+        monitor.IsVideo = isLive;
+        monitor.ScreenSource = image;
+    }
+
+    private void Select(Guid id)
+    {
+        _selectedId = id;
+        _selected = _coordinator.Profiles.FirstOrDefault(p => p.Id == id);
+        if (_selected == null)
+        {
+            return;
+        }
+        foreach (var entry in _railEntries)
+        {
+            if (entry.Id == id)
+            {
+                entry.Card.BorderBrush = ThemeBrush("AccentBrush");
+                entry.Card.Background = ThemeBrush("AccentSubtleBrush");
+            }
+            else
+            {
+                entry.Card.ClearValue(Border.BorderBrushProperty);
+                entry.Card.ClearValue(Border.BackgroundProperty);
+            }
+        }
+
+        NameBox.Text = _selected.Name;
+        FolderBox.Text = _selected.FolderPath;
+        FitCombo.SelectedItem = _selected.FitMode;
+        IntervalBox.Text = _selected.SlideshowIntervalMinutes.ToString(CultureInfo.InvariantCulture);
+        RandomBox.IsChecked = _selected.SlideshowRandom;
+        VideoMuteBox.IsChecked = _selected.VideoMuted;
+        IconSafeBox.IsChecked = _selected.IconFriendlyLive;
+        ScheduleSummary.Text = _selected.Schedule.Count > 0
+            ? $"Schedule: {_selected.Schedule.Count} rule(s)" : "Schedule: none";
+        TriggerSummary.Text = _selected.EventTriggers.Count > 0
+            ? $"Triggers: {string.Join(", ", _selected.EventTriggers.Select(t => t.Describe()))}" : "Triggers: none";
+    }
+
+    private void RefreshActiveGlow()
+    {
+        foreach (var entry in _railEntries)
+        {
+            var profile = _coordinator.Profiles.FirstOrDefault(p => p.Id == entry.Id);
+            entry.Monitor.IsActive = profile != null && profile.Id == _coordinator.ActiveProfileId;
+        }
+    }
+
+    // ============ Path validation & preview ============
+
+    private async void ValidatePath()
+    {
+        var path = FolderBox.Text.Trim();
+        var version = ++_pathVersion;
+
+        if (path.Length == 0)
+        {
+            SetPathStatus("TextTertiaryBrush", "No location set");
+            PreviewMon.ScreenSource = null;
+            return;
+        }
+
+        var info = await Task.Run(() => InspectPath(path));
+        if (version != _pathVersion)
+        {
+            return;
+        }
+
+        if (!info.Exists)
+        {
+            SetPathStatus("DangerBrush", "Path not found");
+            PreviewMon.ScreenSource = null;
+            PreviewMon.IsVideo = false;
+            return;
+        }
+
+        if (info.IsFile)
+        {
+            if (info.VideoCount > 0)
+            {
+                SetPathStatus("GoodBrush", "Single video · live wallpaper");
+            }
+            else if (info.ImageCount > 0)
+            {
+                SetPathStatus("GoodBrush", "Single image");
+            }
+            else
+            {
+                SetPathStatus("DangerBrush", "Not an image or video");
+            }
+        }
+        else if (info.ImageCount == 1 && info.VideoCount == 0)
+        {
+            SetPathStatus("GoodBrush", "Folder · 1 image");
+        }
+        else if (info.ImageCount == 0 && info.VideoCount > 0)
+        {
+            SetPathStatus("DangerBrush",
+                $"Folder · {info.VideoCount} video(s) — pick a video file directly for a live wallpaper");
+        }
+        else
+        {
+            var text = $"Folder · {info.ImageCount} images";
+            if (info.VideoCount > 0)
+            {
+                text += $" · {info.VideoCount} video(s)";
+            }
+            SetPathStatus("GoodBrush", text);
+        }
+
+        var image = info.FirstMedia is null
+            ? null
+            : await Task.Run(() => ThumbnailLoader.Load(info.FirstMedia, 900));
+        if (version != _pathVersion)
+        {
+            return;
+        }
+        var previous = PreviewMon.ScreenSource;
+        PreviewMon.ScreenSource = image;
+        PreviewMon.IsVideo = info.IsFile && info.VideoCount > 0;
+        if (image != null && !ReferenceEquals(previous, image))
+        {
+            PreviewMon.Pulse();
+        }
+    }
+
+    private static (bool Exists, bool IsFile, int ImageCount, int VideoCount, string? FirstMedia) InspectPath(string path)
+        => PathInspector.Inspect(path);
+
+    private void SetPathStatus(string brushKey, string text)
+    {
+        PathStatusDot.Fill = (Brush)FindResource(brushKey);
+        PathStatusText.Text = text;
+    }
+
+    // ============ Pickers & drag-drop ============
+
+    private void Browse_Click(object sender, RoutedEventArgs e)
+    {
+        var current = FolderBox.Text.Trim();
+        var start = current.Length > 0 ? current : _selected?.FolderPath;
+        var picked = ModernFolderPicker.Pick(this, "Choose a wallpaper folder", start);
+        if (picked != null)
+        {
+            FolderBox.Text = picked;
+        }
+    }
+
+    private void PickImage_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Choose a wallpaper image",
+            Filter = DropHelper.ImageFileFilter,
+        };
+        var current = FolderBox.Text.Trim();
+        if (File.Exists(current))
+        {
+            dialog.InitialDirectory = Path.GetDirectoryName(current);
+        }
+        else if (Directory.Exists(current))
+        {
+            dialog.InitialDirectory = current;
+        }
+        if (dialog.ShowDialog() == true)
+        {
+            FolderBox.Text = dialog.FileName;
+        }
+    }
+
+    private void PickVideo_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Choose a live wallpaper video",
+            Filter = DropHelper.VideoFileFilter,
+        };
+        var current = FolderBox.Text.Trim();
+        if (File.Exists(current))
+        {
+            dialog.InitialDirectory = Path.GetDirectoryName(current);
+        }
+        else if (Directory.Exists(current))
+        {
+            dialog.InitialDirectory = current;
+        }
+        if (dialog.ShowDialog() == true)
+        {
+            FolderBox.Text = dialog.FileName;
+        }
+    }
+
+    private void DropZone_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        e.Handled = true;
+        if (DropHelper.CanAccept(e.Data))
+        {
+            e.Effects = DragDropEffects.Copy;
+            DropOverlay.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            e.Effects = DragDropEffects.None;
+        }
+    }
+
+    private void DropZone_DragLeave(object sender, System.Windows.DragEventArgs e)
+    {
+        DropOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void DropZone_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        DropOverlay.Visibility = Visibility.Collapsed;
+        var path = DropHelper.ExtractPath(e.Data);
+        if (path != null)
+        {
+            FolderBox.Text = path;
+        }
+    }
+
+    // ============ Editing ============
+
+    private bool CollectFields()
+    {
+        if (_selected == null)
+        {
+            return false;
+        }
+        var name = NameBox.Text.Trim();
+        if (name.Length == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Please enter a profile name.", "Cannot save",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+        if (!int.TryParse(IntervalBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var interval)
+            || interval < 0 || interval > 1440)
+        {
+            System.Windows.MessageBox.Show(this, "Slideshow interval must be a whole number between 0 and 1440.",
+                "Cannot save", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+
+        _selected.Name = name;
+        _selected.FolderPath = FolderBox.Text.Trim();
+        _selected.FitMode = (FitMode)(FitCombo.SelectedItem ?? FitMode.Fill);
+        _selected.SlideshowIntervalMinutes = interval;
+        _selected.SlideshowRandom = RandomBox.IsChecked == true;
+        _selected.VideoMuted = VideoMuteBox.IsChecked != false;
+        _selected.IconFriendlyLive = IconSafeBox.IsChecked == true;
+        return true;
+    }
+
+    private bool TrySaveProfile(WallpaperProfile profile)
+    {
+        try
+        {
+            _store.Save(profile);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Saving profile '{profile.Name}' failed.", ex);
+            System.Windows.MessageBox.Show(this,
+                $"The profile could not be saved:\n{ex.Message}\n\nMake sure the app has write access to:\n{AppPaths.AppDataRoot}",
+                "Save failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
+        }
+    }
+
+    private void ApplyNow_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedId is not Guid id || !CollectFields())
+        {
+            return;
+        }
+        // Persist before applying so the running wallpaper always matches what is on disk.
+        if (!TrySaveProfile(_selected!))
+        {
+            return;
+        }
+        _coordinator.ProfilesEdited();
+        _coordinator.SwitchManually(id);
+        RefreshActiveGlow();
+        ValidatePath();
+    }
+
+    private void Save_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected == null || !CollectFields())
+        {
+            return;
+        }
+        if (!TrySaveProfile(_selected))
+        {
+            return;
+        }
+        _coordinator.ProfilesEdited();
+        BuildRail();
+        Select(_selected.Id);
+    }
+
+    private void Delete_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedId is not Guid id || _selected == null)
+        {
+            return;
+        }
+        var answer = System.Windows.MessageBox.Show(this, $"Delete profile '{_selected.Name}'?", "Confirm delete",
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+        try
+        {
+            _store.Delete(id);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Deleting profile '{_selected.Name}' failed.", ex);
+            System.Windows.MessageBox.Show(this, $"The profile could not be deleted:\n{ex.Message}",
+                "Delete failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+        Logger.Info($"Deleted profile '{_selected.Name}'.");
+        _selected = null;
+        _selectedId = null;
+        _coordinator.ProfilesEdited();
+        BuildRail();
+        if (_railEntries.Count > 0)
+        {
+            Select(_railEntries[0].Id);
+        }
+        else
+        {
+            _pathDebounce.Stop();
+            ++_pathVersion;
+            NameBox.Text = "";
+            FolderBox.Text = "";
+            ScheduleSummary.Text = "";
+            TriggerSummary.Text = "";
+            SetPathStatus("TextTertiaryBrush", "No location set");
+            PreviewMon.ScreenSource = null;
+            PreviewMon.IsVideo = false;
+        }
+    }
+
+    private void AddProfile()
+    {
+        var editor = new ProfileEditorWindow(new WallpaperProfile(), isNew: true) { Owner = this };
+        if (editor.ShowDialog() == true && editor.Result != null)
+        {
+            if (!TrySaveProfile(editor.Result))
+            {
+                return;
+            }
+            _coordinator.ProfilesEdited();
+            BuildRail();
+            Select(editor.Result.Id);
+        }
+    }
+
+    private void EditRules_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected == null)
+        {
+            return;
+        }
+        var editor = new ProfileEditorWindow(_selected, isNew: false) { Owner = this };
+        if (editor.ShowDialog() == true)
+        {
+            if (!TrySaveProfile(_selected))
+            {
+                return;
+            }
+            _coordinator.ProfilesEdited();
+            BuildRail();
+            Select(_selected.Id);
+        }
+    }
+
+    private void Toggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded)
+        {
+            return;
+        }
+        AutostartManager.SetEnabled(AutostartToggle.IsChecked == true);
+        AutostartToggle.IsChecked = AutostartManager.IsEnabled();
+        _settings.StartMinimizedToTray = MinimizedToggle.IsChecked == true;
+        try
+        {
+            _settingsStore.Save(_settings);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Saving settings failed.", ex);
+        }
+    }
+}

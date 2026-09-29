@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>WallpaperProfiles</RootNamespace>
+    <AssemblyName>Belie</AssemblyName>
+    <ApplicationIcon>appicon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.2.0</Version>
+    <FileVersion>1.2.0.0</FileVersion>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <Product>Belie</Product>
+    <Description>Cyberpunk-styled tray-resident wallpaper profiles with live wallpapers, schedules, slideshows, and event triggers.</Description>
+    <Copyright>Copyright © 2026</Copyright>
+    <NeutralLanguage>en</NeutralLanguage>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WallpaperProfiles.Tests" />
+  </ItemGroup>
+
+  <!-- The test project lives inside this folder tree; keep its sources out of the app assembly. -->
+  <ItemGroup>
+    <Compile Remove="WallpaperProfiles.Tests\**" />
+  </ItemGroup>
+
+</Project>

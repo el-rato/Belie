@@ -1,0 +1,16 @@
+# .NET build output
+**/bin/
+**/obj/
+
+# Published application output
+publish/
+publish-*/
+release-output/
+
+# Visual Studio and user-specific files
+.vs/
+*.user
+*.suo
+
+# Test output
+**/TestResults/
