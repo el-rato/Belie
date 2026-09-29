@@ -14,9 +14,6 @@ internal static class DropHelper
     public const string VideoFileFilter =
         "Videos|*.mp4;*.m4v;*.mov;*.wmv;*.avi;*.mpg;*.mpeg;*.m2v;*.mkv;*.webm;*.3gp|All files|*.*";
 
-    public const string MediaFileFilter =
-        "Images and videos|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.tif;*.tiff;*.jfif;*.mp4;*.m4v;*.mov;*.wmv;*.avi;*.mpg;*.mpeg;*.m2v;*.mkv;*.webm;*.3gp|All files|*.*";
-
     /// <summary>Returns the first accepted path in the data object, or null.</summary>
     public static string? ExtractPath(System.Windows.IDataObject data)
     {
