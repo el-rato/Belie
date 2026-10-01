@@ -132,6 +132,8 @@ internal sealed class DesktopCanvasStore
         {
             File.WriteAllText(temporary, JsonSerializer.Serialize(document, JsonOptions.Shared));
             File.Move(temporary, FilePath, overwrite: true);
+            if (EventWaitHandle.TryOpenExisting(WallpaperProfiles.Engine.DesktopCanvasProcess.MutexName(FilePath) + ".Changed", out var changed))
+            { using (changed) changed.Set(); }
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }

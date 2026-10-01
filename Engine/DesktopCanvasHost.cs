@@ -59,16 +59,26 @@ internal sealed class DesktopCanvasHost : IDisposable
     private readonly DesktopCanvasStore _store;
     private readonly Mutex _mutex;
     private readonly EventWaitHandle _stop;
+    private readonly EventWaitHandle _changed;
+    private readonly RegisteredWaitHandle _changeWait;
     private readonly DispatcherTimer _timer;
     private readonly Dictionary<Guid, DesktopWidgetWindow> _windows = new();
+    private readonly Func<DesktopWidget, DesktopWidgetWindow> _createWindow;
     private bool _disposed;
 
-    public DesktopCanvasHost(string file)
+    public DesktopCanvasHost(string file, Func<DesktopWidget, DesktopWidgetWindow>? createWindow = null)
     {
         _store = new DesktopCanvasStore(file);
         _mutex = new Mutex(true, DesktopCanvasProcess.MutexName(file), out var first);
         if (!first) { _mutex.Dispose(); throw new InvalidOperationException("The desktop canvas is already running."); }
         _stop = new EventWaitHandle(false, EventResetMode.AutoReset, DesktopCanvasProcess.MutexName(file) + ".Stop");
+        _createWindow = createWindow ?? (widget => new DesktopWidgetWindow(widget, _store));
+        _changed = new EventWaitHandle(false, EventResetMode.AutoReset, DesktopCanvasProcess.MutexName(file) + ".Changed");
+        var dispatcher = System.Windows.Application.Current.Dispatcher;
+        _changeWait = ThreadPool.RegisterWaitForSingleObject(_changed, (_, _) =>
+        {
+            if (!dispatcher.HasShutdownStarted) dispatcher.BeginInvoke(Refresh);
+        }, null, Timeout.Infinite, executeOnlyOnce: false);
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => Refresh();
         _timer.Start();
@@ -95,7 +105,7 @@ internal sealed class DesktopCanvasHost : IDisposable
             {
                 if (!_windows.TryGetValue(widget.Id, out var window))
                 {
-                    window = new DesktopWidgetWindow(widget, _store);
+                    window = _createWindow(widget);
                     _windows.Add(widget.Id, window);
                     window.Closed += (_, _) => _windows.Remove(widget.Id);
                     window.Show();
@@ -113,6 +123,8 @@ internal sealed class DesktopCanvasHost : IDisposable
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
+        _changeWait.Unregister(null);
+        _changed.Dispose();
         foreach (var window in _windows.Values.ToArray()) window.Close();
         _windows.Clear();
         _stop.Dispose();
