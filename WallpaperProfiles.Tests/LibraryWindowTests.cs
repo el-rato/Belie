@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -31,6 +32,9 @@ public sealed class LibraryWindowTests
                 {
                     Source = new Uri("pack://application:,,,/Belie;component/UI/Theme.xaml")
                 });
+                var iconExport = Environment.GetEnvironmentVariable("BELIE_APP_ICON_EXPORT");
+                if (!string.IsNullOrEmpty(iconExport))
+                    File.WriteAllBytes(iconExport, UiAppearance.IconBytes(UiAppearance.Find("Sage"), 16, 20, 24, 32, 40, 48, 64, 128, 256));
                 var imagePath = Path.Combine(dir, "forest.png");
                 var visual = new DrawingVisual();
                 using (var drawing = visual.RenderOpen())
@@ -159,10 +163,44 @@ public sealed class LibraryWindowTests
         typeof(WallpaperCoordinator).GetField("_profiles", BindingFlags.Instance | BindingFlags.NonPublic)!
             .SetValue(coordinator, new List<WallpaperProfile> { profile });
         var main = new MainWindow(coordinator, profiles, settings, libraryStore);
+        // Present real popup controls without invoking startup and registry changes.
+        main.Loaded -= (RoutedEventHandler)Delegate.CreateDelegate(typeof(RoutedEventHandler), main,
+            typeof(MainWindow).GetMethod("OnLoaded", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)!);
+        main.Opacity = 0; main.ShowInTaskbar = false; main.ShowActivated = false; main.Show();
         typeof(MainWindow).GetMethod("BuildRail", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, null);
         typeof(MainWindow).GetMethod("Select", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, new object[] { profile.Id });
         var profilePane = (FrameworkElement)main.FindName("ProfilePane");
         var libraryPane = (ContentControl)main.FindName("LibraryPane");
+        profile.Schedule.Add(new ScheduleRule { DaysOfWeek = new() { DayOfWeek.Monday, DayOfWeek.Friday },
+            StartTime = new TimeOnly(22, 0), EndTime = new TimeOnly(6, 0) });
+        profile.EventTriggers.Add(new WallpaperProfiles.Models.EventTrigger { Type = TriggerType.BelowBatteryPercent, Condition = "15", Priority = 8 });
+        typeof(MainWindow).GetMethod("Select", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, new object[] { profile.Id });
+        Assert.Contains("22:00 – 06:00 · overnight", ((TextBlock)main.FindName("ScheduleSummary")).Text);
+        Assert.Contains(CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName(DayOfWeek.Monday), ((TextBlock)main.FindName("ScheduleSummary")).Text);
+        Assert.Equal("battery ≤ 15% · priority 8", ((TextBlock)main.FindName("TriggerSummary")).Text);
+        Assert.Equal("Edit rules", ((Button)main.FindName("EditRulesButton")).Content);
+        ((TabControl)main.FindName("ProfileTabs")).SelectedIndex = 2;
+        RenderWorkspace(main, "profile-rules", 880, 650);
+        foreach (var (button, tab) in new[] { ("EditProfileButton", 0), ("EditRulesButton", 2) })
+        {
+            Exception? editorFailure = null;
+            main.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
+            {
+                var editor = System.Windows.Application.Current.Windows.OfType<ProfileEditorWindow>().Single(window => window.Owner == main);
+                try
+                {
+                    Assert.Equal(tab, ((TabControl)editor.FindName("EditorTabs")).SelectedIndex);
+                    Assert.Single(((ItemsControl)editor.FindName("RulesList")).Items);
+                }
+                catch (Exception ex) { editorFailure = ex; }
+                finally { editor.Close(); }
+            }));
+            Click(main, button);
+            if (editorFailure != null) throw editorFailure;
+        }
+        profile.Schedule.Clear(); profile.EventTriggers.Clear();
+        typeof(MainWindow).GetMethod("Select", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, new object[] { profile.Id });
+        ((TabControl)main.FindName("ProfileTabs")).SelectedIndex = 0;
 
         Click(main, "LibraryNavButton");
         Assert.Equal(Visibility.Collapsed, profilePane.Visibility);
@@ -192,6 +230,18 @@ public sealed class LibraryWindowTests
         Assert.Equal(imagePath, ((TextBox)main.FindName("FolderBox")).Text);
         Assert.Equal("Focus", ((TextBox)main.FindName("NameBox")).Text);
         Assert.Equal("", Assert.Single(profiles.LoadAll()).FolderPath);
+        var profileTabs = (TabControl)main.FindName("ProfileTabs");
+        Assert.Equal(4, profileTabs.Items.Count);
+        profileTabs.SelectedIndex = 1;
+        RenderWorkspace(main, "profiles-playback", 1040, 790);
+        Assert.Equal("Focus", ((TextBox)main.FindName("NameBox")).Text);
+        Assert.Equal(imagePath, ((TextBox)main.FindName("FolderBox")).Text);
+        profileTabs.SelectedIndex = 0;
+        Click(main, "SettingsButton");
+        Assert.True(((System.Windows.Controls.Primitives.Popup)main.FindName("SettingsPopup")).IsOpen);
+        Click(main, "SettingsButton");
+        Assert.False(((System.Windows.Controls.Primitives.Popup)main.FindName("SettingsPopup")).IsOpen);
+        CheckAppearance(main, coordinator, settings, profile);
         RenderWorkspace(main, "profiles", 1040, 790);
         RenderWorkspace(main, "profiles-compact", 880, 650);
         CheckActivityAndSceneControls(main, coordinator, clock, profile, imagePath);
@@ -199,20 +249,82 @@ public sealed class LibraryWindowTests
         library.Close();
     }
 
+    private static void CheckAppearance(MainWindow main, WallpaperCoordinator coordinator, SettingsStore settings, WallpaperProfile profile)
+    {
+        var picker = (ListBox)main.FindName("ThemePicker");
+        Assert.Equal(5, picker.Items.Count);
+        Assert.Equal("Sage", UiAppearance.Find("unknown-theme").Name);
+        var icons = new HashSet<string>();
+        foreach (var theme in UiAppearance.Themes)
+        {
+            picker.SelectedItem = theme;
+            main.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+            Assert.Equal(theme.Name, UiAppearance.Current.Name);
+            Assert.Equal(theme.Name, settings.Load().UiTheme);
+            Assert.Equal((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(theme.Background), ((SolidColorBrush)main.Background).Color);
+            Assert.Equal((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(theme.Text), ((SolidColorBrush)main.Foreground).Color);
+            var icon = (BitmapSource)main.Icon;
+            var pixels = new byte[icon.PixelWidth * icon.PixelHeight * 4]; icon.CopyPixels(pixels, icon.PixelWidth * 4, 0);
+            icons.Add(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pixels)));
+            using var trayIcon = UiAppearance.CreateTrayIcon();
+            Assert.Equal(32, trayIcon.Width);
+            RenderWorkspace(main, "theme-" + theme.Name.ToLowerInvariant(), 1040, 790);
+        }
+        Assert.Equal(5, icons.Count);
+        picker.SelectedItem = UiAppearance.Find("Ember");
+        coordinator.SwitchManually(profile.Id);
+        Assert.Equal("Ember", settings.Load().UiTheme);
+        Assert.Equal(profile.Id.ToString(), settings.Load().LastActiveProfileId);
+        var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(main);
+        Assert.NotNull(chrome);
+        Assert.Equal(new Thickness(0), chrome.GlassFrameThickness);
+        if (Environment.OSVersion.Version.Build >= 22000) Assert.True(UiAppearance.UpdateFrame(main));
+        Click(main, "MaximizeButton");
+        main.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        Assert.Equal(WindowState.Maximized, main.WindowState);
+        Assert.Equal("Restore", ((Button)main.FindName("MaximizeButton")).ToolTip);
+        var handle = new System.Windows.Interop.WindowInteropHelper(main).Handle;
+        var work = System.Windows.Forms.Screen.FromHandle(handle).WorkingArea;
+        Assert.True(WallpaperProfiles.Infrastructure.NativeMethods.GetWindowRect(handle, out var bounds));
+        Assert.Equal(work.Left, bounds.Left);
+        Assert.Equal(work.Top, bounds.Top);
+        Assert.Equal(work.Right, bounds.Right);
+        Assert.Equal(work.Bottom, bounds.Bottom);
+        Click(main, "MaximizeButton");
+        main.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        Assert.Equal(WindowState.Normal, main.WindowState);
+        Assert.Equal("Maximize", ((Button)main.FindName("MaximizeButton")).ToolTip);
+        profile.SceneAccent = "#B7CDBC";
+        coordinator.SwitchManually(profile.Id);
+        picker.SelectedItem = UiAppearance.Find("Midnight");
+        Assert.Equal((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#B7CDBC"), System.Windows.Application.Current.Resources["SceneAccentColor"]);
+        profile.SceneAccent = "";
+        coordinator.SwitchManually(profile.Id);
+        Assert.Equal((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(UiAppearance.Current.Accent), System.Windows.Application.Current.Resources["SceneAccentColor"]);
+        picker.SelectedItem = UiAppearance.Find("Sage");
+    }
+
     private static void CheckDesktopCanvasPanel(MainWindow main, string dir, string imagePath)
     {
         var store = new DesktopCanvasStore(Path.Combine(dir, "canvas.json"));
         var starts = 0;
-        var view = new DesktopCanvasView(store, () => starts++);
+        var widgetProfiles = new List<WallpaperProfile> { new() { Name = "Study" }, new() { Name = "Chill" } };
+        var view = new DesktopCanvasView(store, () => starts++, profiles: () => widgetProfiles);
         var pane = (ContentControl)main.FindName("CanvasPane");
         pane.Content = view;
         Click(main, "CanvasNavButton");
+        main.UpdateLayout();
+        main.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         Assert.Equal(Visibility.Visible, pane.Visibility);
         Assert.Equal(Visibility.Collapsed, ((FrameworkElement)main.FindName("DashboardPane")).Visibility);
         void Press(string name) => ((Button)view.FindName(name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.True(((ComboBox)view.FindName("WidgetFont")).Items.Count > 7);
         Assert.Contains("Segoe UI", ((ComboBox)view.FindName("WidgetFont")).Items.Cast<string>());
+        Press("AddWidgetButton");
+        Assert.True(((System.Windows.Controls.Primitives.Popup)view.FindName("WidgetTypePicker")).IsOpen);
+        Assert.False(File.Exists(store.FilePath));
         Press("AddNoteButton");
+        Assert.False(((System.Windows.Controls.Primitives.Popup)view.FindName("WidgetTypePicker")).IsOpen);
         ((TextBox)view.FindName("WidgetTitle")).Text = "My project";
         ((TextBox)view.FindName("WidgetContent")).Text = "Sketch ideas\nBuild something useful";
         Press("SaveWidgetButton");
@@ -220,6 +332,13 @@ public sealed class LibraryWindowTests
         Assert.Equal("My project", Assert.Single(store.Load().Widgets).Title);
         Assert.Equal(1, starts);
         var savedBeforeEditing = File.ReadAllText(store.FilePath);
+        Press("WidgetStyleTab");
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)VisualTreeHelper.GetParent((ComboBox)view.FindName("WidgetFont"))).Visibility);
+        Press("WidgetLayoutTab");
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)VisualTreeHelper.GetParent((ComboBox)view.FindName("WidgetFont"))).Visibility);
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)VisualTreeHelper.GetParent((Slider)view.FindName("WidgetWidth"))).Visibility);
+        Assert.Equal(savedBeforeEditing, File.ReadAllText(store.FilePath));
+        Press("WidgetContentTab");
         var previewBox = (Viewbox)view.FindName("WidgetPreview");
         var previewCard = (Border)previewBox.Child;
         var previewSurface = (Grid)previewCard.Child;
@@ -268,6 +387,23 @@ public sealed class LibraryWindowTests
         Assert.False(styled.ShowHeader);
         Assert.Equal(.8, styled.Opacity);
         Assert.NotNull(((Viewbox)view.FindName("WidgetPreview")).Child);
+        var widgetProfile = (ComboBox)view.FindName("WidgetProfile");
+        Assert.Equal(3, widgetProfile.Items.Count);
+        widgetProfile.SelectedIndex = 1;
+        Press("SaveWidgetButton");
+        Assert.Equal(widgetProfiles[0].Id, Assert.Single(store.Load().Widgets).ProfileId);
+        var scopeFilter = (ComboBox)view.FindName("WidgetScopeFilter");
+        scopeFilter.SelectedIndex = 1; // General only
+        Assert.Empty(((ListBox)view.FindName("WidgetList")).Items);
+        scopeFilter.SelectedIndex = 2; // Study
+        Assert.Single(((ListBox)view.FindName("WidgetList")).Items);
+        scopeFilter.SelectedIndex = 0;
+        widgetProfiles.RemoveAt(0);
+        view.RefreshProfiles();
+        Assert.Equal("Missing profile", TypeDescriptor.GetProperties(widgetProfile.SelectedItem)["Label"]!.GetValue(widgetProfile.SelectedItem));
+        widgetProfile.SelectedIndex = 0;
+        Press("SaveWidgetButton");
+        Assert.Null(Assert.Single(store.Load().Widgets).ProfileId);
         ((TextBox)view.FindName("WidgetTextColor")).Text = "red";
         Press("SaveWidgetButton");
         Assert.Equal("#282A25", Assert.Single(store.Load().Widgets).TextColor);
@@ -287,7 +423,7 @@ public sealed class LibraryWindowTests
         var saveLocation = save.TranslatePoint(new System.Windows.Point(0, 0), (UIElement)main.Content);
         Assert.True(save.ActualHeight > 0);
         Assert.InRange(saveLocation.Y + save.ActualHeight, 1, ((FrameworkElement)main.Content).ActualHeight);
-        var editorScroll = (ScrollViewer)((Grid)view.Content).Children[0];
+        var editorScroll = (ScrollViewer)view.FindName("WidgetEditorScroll");
         editorScroll.ScrollToEnd();
         main.UpdateLayout();
         var previewLocation = previewBox.TranslatePoint(new System.Windows.Point(0, 0), (UIElement)main.Content);
@@ -366,6 +502,7 @@ public sealed class LibraryWindowTests
         ((Slider)view.FindName("WidgetWidth")).Value = 350;
         Press("SaveWidgetButton");
         Assert.True(Assert.Single(store.Load().Widgets).GlassEffect);
+        CheckPreviewScaling(store, imagePath);
         var glassWidget = new WallpaperProfiles.Engine.DesktopWidgetWindow(Assert.Single(store.Load().Widgets), store);
         RenderWorkspace(glassWidget, "canvas-glass", 350, 230);
         glassWidget.Close();
@@ -389,6 +526,20 @@ public sealed class LibraryWindowTests
                 Assert.True(updated(), "Saved edits did not reach the running widget.");
             }
             AwaitUpdate(() => windows.Count == 1);
+            var generalId = Assert.Single(store.Load().Widgets).Id;
+            var studyId = Guid.NewGuid(); var chillId = Guid.NewGuid();
+            var studyWidget = new DesktopWidget { ProfileId = studyId, Content = "Study only" };
+            var chillWidget = new DesktopWidget { ProfileId = chillId, Content = "Chill only" };
+            store.Update(canvas => { canvas.ActiveProfileId = studyId; canvas.Widgets.Add(studyWidget); canvas.Widgets.Add(chillWidget); });
+            AwaitUpdate(() => windows.Count == 2 && windows.ContainsKey(generalId) && windows.ContainsKey(studyWidget.Id));
+            store.Update(canvas => canvas.ActiveProfileId = chillId);
+            AwaitUpdate(() => windows.Count == 2 && windows.ContainsKey(generalId) && windows.ContainsKey(chillWidget.Id));
+            store.Update(canvas => { canvas.ActiveProfileId = null; canvas.Widgets.First(widget => widget.Id == generalId).ProfileId = studyId; });
+            AwaitUpdate(() => windows.Count == 0);
+            Assert.True(WallpaperProfiles.Engine.DesktopCanvasProcess.IsRunning(store.FilePath));
+            Assert.Equal("Study only", store.Load().Widgets.Single(widget => widget.Id == studyWidget.Id).Content);
+            store.Update(canvas => { canvas.ActiveProfileId = studyId; canvas.Widgets.First(widget => widget.Id == generalId).ProfileId = null; canvas.Widgets.RemoveAll(widget => widget.Id != generalId); });
+            AwaitUpdate(() => windows.Count == 1 && windows.ContainsKey(generalId));
             var running = Assert.Single(windows.Values);
             ((TextBox)view.FindName("WidgetTitle")).Text = "Updated project";
             ((TextBox)view.FindName("WidgetContent")).Text = "Changes saved while the widget is running.";
@@ -555,10 +706,40 @@ public sealed class LibraryWindowTests
         }
         Assert.Equal(3, store.Load().Widgets.Count);
         ((ListBox)view.FindName("WidgetList")).SelectedIndex = 0;
-        ((Grid)view.Content).Children.OfType<ScrollViewer>().Single().ScrollToTop(); main.UpdateLayout();
+        ((ScrollViewer)view.FindName("WidgetEditorScroll")).ScrollToTop(); main.UpdateLayout();
         Assert.Null(view.FindName("BoardList"));
         RenderWorkspace(main, "canvas-widgets", 1040, 790);
         RenderWorkspace(main, "canvas-widgets-compact", 880, 650);
+        Press("CloseWidgetEditorButton");
+        Assert.Null(((ListBox)view.FindName("WidgetList")).SelectedItem);
+        Assert.Null(previewBox.Child);
+        RenderWorkspace(main, "canvas-gallery", 1040, 790);
+        var overview = (FrameworkElement)view.FindName("DesktopOverview");
+        Assert.Equal(Visibility.Visible, overview.Visibility);
+        Assert.True(overview.ActualWidth > 300);
+        var displayedWidget = store.Load().Widgets.First();
+        var desktopItem = VisualChildren(overview).OfType<Border>().Single(item => Equals(item.ToolTip, displayedWidget.DisplayTitle));
+        var desktopScale = WallpaperProfiles.Engine.DesktopWidgetWindow.PreviewScale(displayedWidget);
+        Assert.Equal(Math.Ceiling(displayedWidget.Width * desktopScale.M11), desktopItem.Width);
+        Assert.Equal(Math.Ceiling(displayedWidget.Height * desktopScale.M22), desktopItem.Height);
+        Assert.IsType<Viewbox>(desktopItem.Child);
+        var widgetList = (ListBox)view.FindName("WidgetList");
+        Button VisibilityButton()
+        {
+            main.UpdateLayout();
+            var container = (DependencyObject)widgetList.ItemContainerGenerator.ContainerFromIndex(0);
+            return VisualChildren(container).OfType<Button>().Single(button => button.Name == "CardVisibilityButton");
+        }
+        var firstWidget = store.Load().Widgets[0];
+        store.UpdateWidget(firstWidget.Id, saved => saved.Content = "Latest content from another window");
+        VisibilityButton().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(store.Load().Widgets[0].Enabled);
+        Assert.Equal("Latest content from another window", store.Load().Widgets[0].Content);
+        VisibilityButton().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(store.Load().Widgets[0].Enabled);
+        Assert.Equal(3, store.Load().Widgets.Count);
+        widgetList.SelectedIndex = 0;
+        Assert.Equal("Latest content from another window", ((TextBox)view.FindName("WidgetContent")).Text);
         Click(main, "ProfilesNavButton");
         Assert.Equal(Visibility.Collapsed, pane.Visibility);
         Click(main, "CanvasNavButton");
@@ -604,6 +785,31 @@ public sealed class LibraryWindowTests
         Assert.NotEmpty(((ItemsControl)main.FindName("RecentActivityList")).Items);
         RenderWorkspace(main, "activity", 1040, 790);
         RenderWorkspace(main, "activity-compact", 880, 650);
+        var dashboard = (ScrollViewer)main.FindName("DashboardPane");
+        var settingsButton = (Button)main.FindName("SettingsButton");
+        var root = (FrameworkElement)main.Content;
+        var settingsPosition = settingsButton.TranslatePoint(new System.Windows.Point(), root);
+        Assert.True(settingsButton.IsVisible);
+        Assert.InRange(settingsPosition.Y + settingsButton.ActualHeight, 1, root.ActualHeight);
+        Assert.InRange(dashboard.ViewportHeight, 1, root.ActualHeight - 47);
+        Assert.True(dashboard.ScrollableHeight > 0);
+        dashboard.ScrollToTop(); main.UpdateLayout();
+        var recentActivity = (ItemsControl)main.FindName("RecentActivityList");
+        var wheel = new System.Windows.Input.MouseWheelEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, -120)
+            { RoutedEvent = System.Windows.Input.Mouse.MouseWheelEvent };
+        recentActivity.RaiseEvent(wheel); main.UpdateLayout();
+        Assert.True(wheel.Handled);
+        Assert.True(dashboard.VerticalOffset > 0);
+        dashboard.ScrollToEnd(); main.UpdateLayout();
+        Assert.Equal(dashboard.ScrollableHeight, dashboard.VerticalOffset, precision: 1);
+        var lastActivity = (FrameworkElement)recentActivity.ItemContainerGenerator.ContainerFromIndex(recentActivity.Items.Count - 1);
+        var lastPosition = lastActivity.TranslatePoint(new System.Windows.Point(), dashboard);
+        Assert.InRange(lastPosition.Y + lastActivity.ActualHeight, 1, dashboard.ActualHeight);
+        Click(main, "SettingsButton");
+        Assert.True(((System.Windows.Controls.Primitives.Popup)main.FindName("SettingsPopup")).IsOpen);
+        Click(main, "SettingsButton");
+        RenderWorkspace(main, "activity-scrolled", 880, 650);
+        dashboard.ScrollToTop(); main.UpdateLayout();
 
         var editor = new ProfileEditorWindow(new WallpaperProfile { FolderPath = imagePath }, isNew: true)
             { ShowInTaskbar = false, Opacity = 0 };
@@ -615,7 +821,7 @@ public sealed class LibraryWindowTests
             Assert.True(((CheckBox)editor.FindName("AmbientMuteBox")).IsChecked);
             Assert.Equal(15, ((Slider)editor.FindName("AmbientVolumeSlider")).Value);
             ((TextBox)editor.FindName("AudioPathBox")).Text = Path.Combine(Path.GetDirectoryName(imagePath)!, "ambient.wav");
-            ((ScrollViewer)editor.FindName("EditorScroll")).ScrollToVerticalOffset(250);
+            ((TabControl)editor.FindName("EditorTabs")).SelectedIndex = 1;
             RenderWorkspace(editor, "scene-editor", 680, 720);
             typeof(ProfileEditorWindow).GetMethod("Save_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .Invoke(editor, new object[] { editor, new RoutedEventArgs() });
@@ -627,8 +833,48 @@ public sealed class LibraryWindowTests
         Assert.EndsWith("ambient.wav", editor.Result?.AmbientAudioPath);
     }
 
+    private static void CheckPreviewScaling(DesktopCanvasStore store, string imagePath)
+    {
+        var type = typeof(WallpaperProfiles.Engine.DesktopWidgetWindow);
+        var fields = new[] { "_wallpaper", "_wallpaperKey", "_wallpaperStyle", "_wallpaperChecked" }
+            .Select(name => type.GetField(name, BindingFlags.Static | BindingFlags.NonPublic)!).ToArray();
+        var originals = fields.Select(field => field.GetValue(null)).ToArray();
+        var savedCanvas = File.ReadAllText(store.FilePath);
+        try
+        {
+            fields[0].SetValue(null, ThumbnailLoader.Load(imagePath, 1920));
+            fields[1].SetValue(null, "preview-test"); fields[2].SetValue(null, "2"); fields[3].SetValue(null, DateTime.UtcNow);
+            var screen = System.Windows.Forms.Screen.PrimaryScreen!;
+            var widget = new DesktopWidget { Title = "Preview", Width = 320, Height = 200, GlassEffect = true,
+                X = screen.WorkingArea.Right - 10, Y = screen.WorkingArea.Bottom - 10 };
+            var renderer = new WallpaperProfiles.Engine.DesktopWidgetWindow(widget, store);
+            try
+            {
+                foreach (var factor in new[] { 1.25, 1.5, 2 })
+                {
+                    var bounds = renderer.UpdatePreview(widget, new Matrix(factor, 0, 0, factor, 0, 0));
+                    Assert.Equal(320 * factor, bounds.Width); Assert.Equal(200 * factor, bounds.Height);
+                    Assert.Equal(screen.WorkingArea.Right - bounds.Width, bounds.X);
+                    Assert.Equal(screen.WorkingArea.Bottom - bounds.Height, bounds.Y);
+                    var frost = (Border)type.GetField("_frost", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(renderer)!;
+                    var brush = Assert.IsType<ImageBrush>(frost.Background);
+                    Assert.Equal((320 + 48) * factor / screen.Bounds.Width, brush.Viewbox.Width, precision: 6);
+                    Assert.Equal((200 + 48) * factor / screen.Bounds.Height, brush.Viewbox.Height, precision: 6);
+                    Assert.Equal((bounds.X - 24 * factor - screen.Bounds.Left) / screen.Bounds.Width, brush.Viewbox.X, precision: 6);
+                    Assert.Equal((bounds.Y - 24 * factor - screen.Bounds.Top) / screen.Bounds.Height, brush.Viewbox.Y, precision: 6);
+                }
+                Assert.Equal(screen.WorkingArea.Right - 10, widget.X);
+                Assert.Equal(screen.WorkingArea.Bottom - 10, widget.Y);
+                Assert.Equal(savedCanvas, File.ReadAllText(store.FilePath));
+            }
+            finally { renderer.Close(); }
+        }
+        finally { for (var i = 0; i < fields.Length; i++) fields[i].SetValue(null, originals[i]); }
+    }
+
     private static void RenderWorkspace(Window window, string view, int width, int height)
     {
+        if (window is MainWindow) { window.Width = width; window.Height = height; window.UpdateLayout(); }
         var content = (FrameworkElement)window.Content;
         content.Measure(new Size(width - 2, height - 2));
         content.Arrange(new Rect(0, 0, width - 2, height - 2));
@@ -641,6 +887,16 @@ public sealed class LibraryWindowTests
         png.Frames.Add(BitmapFrame.Create(bitmap));
         using var output = File.Create(Path.Combine(path, view + ".png"));
         png.Save(output);
+    }
+
+    private static IEnumerable<DependencyObject> VisualChildren(DependencyObject parent)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            yield return child;
+            foreach (var descendant in VisualChildren(child)) yield return descendant;
+        }
     }
 
     private static void CheckAmbientPlayback(string dir)

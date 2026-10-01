@@ -93,9 +93,22 @@ internal partial class App : System.Windows.Application
             _exitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Exit");
             _canvasActivateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Canvas.Open");
             var settings = settingsStore.Load();
+            UiAppearance.Apply(settings.UiTheme);
             var profileStore = new ProfileStore(AppPaths.ProfilesDir);
 
             _coordinator = new WallpaperCoordinator(profileStore, settingsStore, settings);
+            _coordinator.StateChanged += () =>
+            {
+                try
+                {
+                    var canvasStore = new DesktopCanvasStore(DesktopCanvasProcess.DefaultFile);
+                    if (!File.Exists(canvasStore.FilePath)) return;
+                    var active = _coordinator.ActiveProfileId;
+                    if (canvasStore.Load().ActiveProfileId != active)
+                        canvasStore.Update(canvas => canvas.ActiveProfileId = active);
+                }
+                catch (Exception ex) { Logger.Error("Updating profile widgets failed.", ex); }
+            };
             _coordinator.Init();
 
             try { DesktopCanvasProcess.Start(DesktopCanvasProcess.DefaultFile); }

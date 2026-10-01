@@ -5,19 +5,19 @@
         x:ClassModifier="internal"
         Title="Belie — Edit Profile" Width="680" Height="720" MinWidth="620" MinHeight="600"
         WindowStyle="None" WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BgBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1">
-    <Grid>
+        Background="{DynamicResource BgBrush}" BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1">
+    <Grid Background="{DynamicResource BgBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="42"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="{StaticResource BgBrush}" BorderBrush="{StaticResource BorderBrush}"
+        <Border Grid.Row="0" Background="{DynamicResource BgBrush}" BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_Drag">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0" IsHitTestVisible="False">
-                    <TextBlock x:Name="TitleText" Text="Edit Profile" Foreground="{StaticResource TextPrimaryBrush}"
+                    <TextBlock x:Name="TitleText" Text="Edit Profile" Foreground="{DynamicResource TextPrimaryBrush}"
                                FontWeight="SemiBold" FontSize="13"/>
                 </StackPanel>
                 <Button x:Name="CloseBtn" Style="{StaticResource TitleBarCloseButton}" Content="&#xE8BB;"
@@ -25,21 +25,20 @@
             </Grid>
         </Border>
 
-        <ScrollViewer x:Name="EditorScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="18,16,18,8">
+        <TabControl x:Name="EditorTabs" Grid.Row="1" Margin="22,18,22,8">
+        <TabItem Header="Wallpaper"><ScrollViewer x:Name="EditorScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="WallpaperEditorFields" Margin="0,0,8,8">
                 <StackPanel x:Name="PresetPanel" Margin="0,0,0,16">
                     <TextBlock Text="Start with a scene" Style="{StaticResource FieldLabel}"/>
                     <ComboBox x:Name="PresetCombo" SelectionChanged="Preset_Changed"/>
-                    <TextBlock Text="Focus, Gaming, or Evening. Choose your own wallpaper and optional audio below."
-                               Style="{StaticResource HintText}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
                 <TextBlock Text="Profile name" Style="{StaticResource FieldLabel}"/>
                 <TextBox x:Name="NameBox"/>
 
                 <local:MonitorThumbnail x:Name="EditorPreview" ShowName="False" IsActive="False"
-                                        BezelWidth="250" BezelHeight="156" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                                        BezelWidth="{Binding ActualWidth, ElementName=WallpaperEditorFields}" BezelHeight="190" HorizontalAlignment="Center" Margin="0,16,0,0"/>
 
-                <TextBlock Text="Wallpaper image, video, or folder" Style="{StaticResource FieldLabel}" Margin="0,16,0,6"/>
+                <TextBlock Text="Source" Style="{StaticResource FieldLabel}" Margin="0,16,0,6"/>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -70,10 +69,8 @@
                 </Grid>
                 <StackPanel Orientation="Horizontal" Margin="2,7,0,0">
                     <Ellipse x:Name="PathStatusDot" Width="8" Height="8" VerticalAlignment="Center"
-                             Margin="0,0,6,0" Fill="{StaticResource TextTertiaryBrush}"/>
+                             Margin="0,0,6,0" Fill="{DynamicResource TextTertiaryBrush}"/>
                     <TextBlock x:Name="PathStatusText" Style="{StaticResource HintText}" Text="No location set"/>
-                    <TextBlock Style="{StaticResource HintText}" Text="· you can drag &amp; drop a file here"
-                               Margin="8,0,0,0" Opacity="0.8"/>
                 </StackPanel>
 
                 <Grid Margin="0,16,0,0">
@@ -86,43 +83,43 @@
                     <TextBlock Text="Fit mode" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <ComboBox Grid.Column="1" x:Name="FitCombo"
                               ItemsSource="{x:Static local:EnumLists.FitModes}" Margin="0,0,16,0"/>
-                    <TextBlock Grid.Column="2" Text="Slideshow (min, 0 = off)" Style="{StaticResource FieldLabel}"
+                    <TextBlock Grid.Column="2" Text="Slideshow · min" Style="{StaticResource FieldLabel}"
                                VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <TextBox Grid.Column="3" x:Name="IntervalBox" Width="64" FontFamily="{StaticResource MonoFont}"/>
+                    <TextBox Grid.Column="3" x:Name="IntervalBox" Width="64" ToolTip="0 turns slideshow off" FontFamily="{StaticResource MonoFont}"/>
                 </Grid>
-                <StackPanel Orientation="Horizontal" Margin="0,12,0,4">
-                    <CheckBox x:Name="RandomOrderCheck" Content="Random slideshow order"/>
-                    <CheckBox x:Name="VideoMuteCheck" Content="Mute live video audio" Margin="18,0,0,0"
+                <StackPanel Margin="0,12,0,4">
+                    <CheckBox x:Name="RandomOrderCheck" Style="{StaticResource SwitchStyle}" Content="Shuffle"/>
+                    <CheckBox x:Name="VideoMuteCheck" Style="{StaticResource SwitchStyle}" Content="Mute video" Margin="0,12,0,0"
                               ToolTip="Applies to video wallpapers; animated GIFs have no sound"/>
-                    <CheckBox x:Name="IconSafeCheck" Content="Keep desktop icons visible" Margin="18,0,0,0"
+                    <CheckBox x:Name="IconSafeCheck" Style="{StaticResource SwitchStyle}" Content="Keep icons visible" Margin="0,12,0,0"
                               ToolTip="Plays the video as the real desktop wallpaper at ~4 fps instead of a smooth overlay. Icons and taskbar stay fully visible."/>
                 </StackPanel>
-
+            </StackPanel>
+        </ScrollViewer></TabItem>
+        <TabItem Header="Mood"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
                 <Border Style="{StaticResource CardBorder}" Margin="0,16,0,4">
                     <StackPanel>
-                        <TextBlock Text="Scene mood" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
-                        <TextBlock Text="Belie accent (#RRGGBB, blank = default)" Style="{StaticResource FieldLabel}"/>
+                        <TextBlock Text="Accent color" Style="{StaticResource FieldLabel}"/>
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Content="Choose color" Click="ChooseAccent_Click" Margin="8,0,0,0"/>
-                            <TextBox x:Name="SceneAccentBox" MaxLength="7"/>
+                            <TextBox x:Name="SceneAccentBox" MaxLength="7" ToolTip="#RRGGBB · clear to use the default"/>
                         </DockPanel>
                         <TextBlock Text="Ambient audio (optional)" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Content="Browse" Click="PickAudio_Click" Margin="8,0,0,0"/>
                             <TextBox x:Name="AudioPathBox"/>
                         </DockPanel>
-                        <TextBlock Text="Use a local track. Audio loops while this scene is active; clear the path to remove it."
-                                   Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,7,0,12"/>
-                        <Grid>
+                        <Grid Margin="0,16,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <TextBlock Text="Volume" VerticalAlignment="Center" Margin="0,0,12,0"/>
                             <Slider Grid.Column="1" x:Name="AmbientVolumeSlider" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
                             <TextBlock Grid.Column="2" Text="{Binding Value, ElementName=AmbientVolumeSlider, StringFormat={}{0:0}%}" VerticalAlignment="Center" Margin="12,0,0,0"/>
                         </Grid>
-                        <CheckBox x:Name="AmbientMuteBox" Content="Start ambient audio muted" Margin="0,12,0,0"/>
+                        <CheckBox x:Name="AmbientMuteBox" Style="{StaticResource SwitchStyle}" Content="Start muted" Margin="0,12,0,0"/>
                     </StackPanel>
                 </Border>
-                <Separator Margin="0,10,0,12"/>
+        </StackPanel></ScrollViewer></TabItem>
+        <TabItem Header="Rules"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
                 <DockPanel Margin="0,0,0,8">
                     <Button DockPanel.Dock="Right" Padding="10,4" Click="AddRule_Click">
                         <StackPanel Orientation="Horizontal">
@@ -135,7 +132,7 @@
                 <ItemsControl x:Name="RulesList" Margin="0,0,0,6">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                            <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                     BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
                                 <StackPanel>
                                     <UniformGrid Columns="8">
@@ -177,10 +174,10 @@
                 <ItemsControl x:Name="TriggersList">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                            <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                     BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
                                 <StackPanel>
-                                    <StackPanel Orientation="Horizontal">
+                                    <WrapPanel>
                                         <ComboBox Width="230"
                                                   ItemsSource="{x:Static local:EnumLists.TriggerTypes}"
                                                   SelectedValue="{Binding Type}" SelectedValuePath="Key"
@@ -189,7 +186,7 @@
                                         <TextBox Width="120" Text="{Binding Condition, UpdateSourceTrigger=PropertyChanged}"/>
                                         <TextBlock Text="Priority" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="10,0,6,0"/>
                                         <TextBox Width="44" Text="{Binding PriorityText}"/>
-                                    </StackPanel>
+                                    </WrapPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,9,0,0">
                                         <TextBlock Text="Input:" Style="{StaticResource HintText}" VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding Hint}" Style="{StaticResource HintText}" VerticalAlignment="Center"
@@ -202,10 +199,10 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
                 <TextBlock x:Name="NoTriggersHint" Style="{StaticResource HintText}" Margin="0,0,0,6"/>
-            </StackPanel>
-        </ScrollViewer>
+        </StackPanel></ScrollViewer></TabItem>
+        </TabControl>
 
-        <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+        <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,1,0,0" Padding="18,12">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="Cancel" Width="96" Height="32" IsCancel="True" Margin="0,0,8,0"/>

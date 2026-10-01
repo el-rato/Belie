@@ -324,29 +324,14 @@ internal partial class ProfileEditorWindow : Window
     private void RefreshHints()
     {
         NoRulesHint.Text = _rules.Count == 0
-            ? "No schedule rules yet — the profile will only activate manually or via events."
+            ? "No schedules"
             : "";
-        NoTriggersHint.Text = _triggers.Count == 0 ? "No event triggers yet." : "";
+        NoTriggersHint.Text = _triggers.Count == 0 ? "No triggers" : "";
     }
 
     private void TrySetAppIcon()
     {
-        try
-        {
-            var path = Environment.ProcessPath;
-            if (!string.IsNullOrEmpty(path))
-            {
-                var exeIcon = System.Drawing.Icon.ExtractAssociatedIcon(path);
-                if (exeIcon != null)
-                {
-                    Icon = Imaging.CreateBitmapSourceFromHIcon(
-                        exeIcon.Handle, System.Windows.Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                }
-            }
-        }
-        catch
-        {
-        }
+        UiAppearance.Attach(this);
     }
 
     private void TitleBar_Drag(object sender, MouseButtonEventArgs e)

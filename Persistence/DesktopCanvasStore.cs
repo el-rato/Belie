@@ -20,6 +20,8 @@ internal sealed class DesktopWidget
     public double Width { get; set; } = 300;
     public double Height { get; set; } = 230;
     public bool Enabled { get; set; } = true;
+    public Guid? ProfileId { get; set; }
+    public bool IsVisibleOn(Guid? activeProfileId) => Enabled && (!ProfileId.HasValue || ProfileId == activeProfileId);
     public bool Locked { get; set; }
     public string FontFamily { get; set; } = "Segoe UI";
     public double FontSize { get; set; } = 16;
@@ -95,6 +97,7 @@ internal sealed class DesktopWidget
 internal sealed class DesktopCanvasDocument
 {
     public bool Enabled { get; set; }
+    public Guid? ActiveProfileId { get; set; }
     public List<DesktopWidget> Widgets { get; set; } = new();
 }
 

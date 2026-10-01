@@ -117,7 +117,8 @@ internal sealed class DesktopCanvasHost : IDisposable
             var document = _store.Load();
             if (!document.Enabled || !document.Widgets.Any(w => w.Enabled))
             { System.Windows.Application.Current.Shutdown(); return; }
-            var enabled = document.Widgets.Where(w => w.Enabled).ToDictionary(w => w.Id);
+            // Stay alive when the current profile has no widgets; the next switch can reveal them.
+            var enabled = document.Widgets.Where(w => w.IsVisibleOn(document.ActiveProfileId)).ToDictionary(w => w.Id);
             foreach (var id in _windows.Keys.Where(id => !enabled.ContainsKey(id)).ToArray())
             {
                 var window = _windows[id];
@@ -192,6 +193,7 @@ internal sealed class DesktopWidgetWindow : Window
     private static string _wallpaperStyle = "10";
     private static DateTime _wallpaperChecked;
     private string _glassPosition = "";
+    private Matrix? _previewScale;
     private readonly Thumb _resize = new() { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 8),
         HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
         VerticalAlignment = VerticalAlignment.Bottom, Cursor = Cursors.SizeNWSE, Opacity = .5 };
@@ -479,6 +481,36 @@ internal sealed class DesktopWidgetWindow : Window
         Place();
     }
 
+    internal static Matrix PreviewScale(DesktopWidget widget)
+    {
+        // An invisible source on the target monitor gets its actual DPI without displaying a widget.
+        using var source = new HwndSource(new HwndSourceParameters("Belie preview DPI")
+        {
+            PositionX = (int)widget.X, PositionY = (int)widget.Y, Width = 1, Height = 1,
+            WindowStyle = NativeMethods.WS_POPUP
+        });
+        return source.CompositionTarget.TransformToDevice;
+    }
+
+    internal static Rect DesktopBounds(DesktopWidget widget, Matrix scale)
+    {
+        var work = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point((int)widget.X, (int)widget.Y)).WorkingArea;
+        var width = (int)Math.Ceiling(widget.Width * scale.M11);
+        var height = (int)Math.Ceiling(widget.Height * scale.M22);
+        return new Rect(Math.Clamp((int)widget.X, work.Left, Math.Max(work.Left, work.Right - width)),
+            Math.Clamp((int)widget.Y, work.Top, Math.Max(work.Top, work.Bottom - height)), width, height);
+    }
+
+    internal Rect UpdatePreview(DesktopWidget widget, Matrix scale)
+    {
+        _previewScale = scale;
+        var bounds = DesktopBounds(widget, scale);
+        var draft = widget.Duplicate();
+        draft.Id = widget.Id; draft.Title = widget.Title; draft.X = bounds.X; draft.Y = bounds.Y;
+        Update(draft);
+        return bounds;
+    }
+
     private FrameworkElement LinkCard(DesktopWidget widget)
     {
         var panel = new StackPanel();
@@ -540,10 +572,8 @@ internal sealed class DesktopWidgetWindow : Window
             _widget.CornerRadius, _widget.CornerRadius);
     }
 
-    private void RefreshGlass()
+    private static void RefreshWallpaper()
     {
-        if (!_widget.GlassEffect || !_widget.ShowBackground) return;
-        // Sample only the wallpaper file, so app windows and desktop content never become part of the material.
         if (DateTime.UtcNow - _wallpaperChecked > TimeSpan.FromSeconds(2))
         {
             _wallpaperChecked = DateTime.UtcNow;
@@ -558,12 +588,15 @@ internal sealed class DesktopWidgetWindow : Window
             }
             catch { _wallpaper = null; }
         }
-        var scale = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
-        var bounds = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point((int)_widget.X, (int)_widget.Y)).Bounds;
-        var position = $"{_wallpaperKey}|{_wallpaperStyle}|{_widget.X}|{_widget.Y}|{Width}|{Height}|{scale.M11}|{bounds}";
-        if (_glassPosition == position) return;
-        _glassPosition = position;
-        if (_wallpaper == null) { _frost.Background = Brushes.Transparent; return; }
+    }
+
+    internal static string WallpaperKey { get { RefreshWallpaper(); return _wallpaperKey + "|" + _wallpaperStyle; } }
+
+    internal static ImageBrush? WallpaperBrush(Rect region, System.Drawing.Rectangle? monitorBounds = null)
+    {
+        RefreshWallpaper();
+        if (_wallpaper == null) return null;
+        var bounds = monitorBounds ?? System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point((int)region.X, (int)region.Y)).Bounds;
         if (_wallpaperStyle == "22") bounds = System.Windows.Forms.SystemInformation.VirtualScreen;
         var imageWidth = (double)_wallpaper.PixelWidth; var imageHeight = (double)_wallpaper.PixelHeight;
         var ratio = _wallpaperStyle == "6" ? Math.Min(bounds.Width / imageWidth, bounds.Height / imageHeight)
@@ -572,11 +605,23 @@ internal sealed class DesktopWidgetWindow : Window
         var renderedHeight = _wallpaperStyle == "2" ? bounds.Height : imageHeight * ratio;
         var imageX = bounds.Left + (bounds.Width - renderedWidth) / 2;
         var imageY = bounds.Top + (bounds.Height - renderedHeight) / 2;
-        var brush = new ImageBrush(_wallpaper) { Stretch = Stretch.Fill, ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
-            Viewbox = new Rect((_widget.X - 24 * scale.M11 - imageX) / renderedWidth,
-                (_widget.Y - 24 * scale.M22 - imageY) / renderedHeight,
-                (Width + 48) * scale.M11 / renderedWidth, (Height + 48) * scale.M22 / renderedHeight) };
-        _frost.Background = brush;
+        return new ImageBrush(_wallpaper) { Stretch = Stretch.Fill, ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
+            Viewbox = new Rect((region.X - imageX) / renderedWidth, (region.Y - imageY) / renderedHeight,
+                region.Width / renderedWidth, region.Height / renderedHeight) };
+    }
+
+    private void RefreshGlass()
+    {
+        if (!_widget.GlassEffect || !_widget.ShowBackground) return;
+        // Sample only the wallpaper file, so app windows never become part of the material.
+        RefreshWallpaper();
+        var scale = _previewScale ?? PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
+        var bounds = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point((int)_widget.X, (int)_widget.Y)).Bounds;
+        var position = $"{_wallpaperKey}|{_wallpaperStyle}|{_widget.X}|{_widget.Y}|{Width}|{Height}|{scale.M11}|{bounds}";
+        if (_glassPosition == position) return;
+        _glassPosition = position;
+        _frost.Background = WallpaperBrush(new Rect(_widget.X - 24 * scale.M11, _widget.Y - 24 * scale.M22,
+            (Width + 48) * scale.M11, (Height + 48) * scale.M22), bounds) ?? (System.Windows.Media.Brush)Brushes.Transparent;
     }
 
     public static IntPtr FindDesktop()
@@ -613,12 +658,9 @@ internal sealed class DesktopWidgetWindow : Window
     {
         if (_handle == IntPtr.Zero || _dragStart != null && !IsMouseCaptured && !IsMouseCaptureWithin) return;
         var scale = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
-        var screen = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point((int)_widget.X, (int)_widget.Y));
-        var work = screen.WorkingArea;
-        var width = (int)Math.Ceiling(Width * scale.M11);
-        var height = (int)Math.Ceiling(Height * scale.M22);
-        var x = Math.Clamp((int)_widget.X, work.Left, Math.Max(work.Left, work.Right - width));
-        var y = Math.Clamp((int)_widget.Y, work.Top, Math.Max(work.Top, work.Bottom - height));
+        var bounds = DesktopBounds(_widget, scale);
+        var x = (int)bounds.X; var y = (int)bounds.Y;
+        var width = (int)bounds.Width; var height = (int)bounds.Height;
         _widget.X = x; _widget.Y = y;
         RefreshGlass();
         if (Topmost) Topmost = false;

@@ -1,8 +1,5 @@
-using System.Drawing;
-using System.Drawing.Drawing2D;
 using WinForms = System.Windows.Forms;
 using WallpaperProfiles.Coordination;
-using WallpaperProfiles.Infrastructure;
 
 namespace WallpaperProfiles.UI;
 
@@ -27,7 +24,7 @@ internal sealed class TrayIconManager : IDisposable
 
         _icon = new WinForms.NotifyIcon
         {
-            Icon = LoadAppIcon(),
+            Icon = UiAppearance.CreateTrayIcon(),
             Text = "Belie",
             Visible = true,
         };
@@ -40,6 +37,7 @@ internal sealed class TrayIconManager : IDisposable
             }
         };
         RebuildMenu();
+        UiAppearance.Changed += UpdateThemeIcon;
     }
 
     public void Refresh() => RebuildMenu();
@@ -83,58 +81,21 @@ internal sealed class TrayIconManager : IDisposable
         _menu!.Items.Add(item);
     }
 
-    private static Icon LoadAppIcon()
+    private void UpdateThemeIcon()
     {
-        try
-        {
-            var exe = Environment.ProcessPath;
-            if (!string.IsNullOrEmpty(exe))
-            {
-                var extracted = System.Drawing.Icon.ExtractAssociatedIcon(exe);
-                if (extracted != null)
-                {
-                    return extracted;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"Could not extract app icon for tray: {ex.Message}");
-        }
-        return CreateIcon();
-    }
-
-    private static Icon CreateIcon()
-    {
-        using var bitmap = new System.Drawing.Bitmap(32, 32);
-        using (var g = System.Drawing.Graphics.FromImage(bitmap))
-        {
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            using var brush = new System.Drawing.Drawing2D.LinearGradientBrush(
-                new System.Drawing.Rectangle(0, 0, 32, 32),
-                System.Drawing.Color.FromArgb(68, 138, 255),
-                System.Drawing.Color.FromArgb(140, 82, 255),
-                45f);
-            g.FillEllipse(brush, 2, 2, 28, 28);
-            using var pen = new System.Drawing.Pen(System.Drawing.Color.White, 2f);
-            g.DrawRectangle(pen, 8, 11, 16, 12);
-            g.DrawLine(pen, 12, 8, 12, 11);
-            g.DrawLine(pen, 20, 8, 20, 11);
-        }
-        var handle = bitmap.GetHicon();
-        return Icon.FromHandle(handle);
+        var previous = _icon.Icon;
+        _icon.Icon = UiAppearance.CreateTrayIcon();
+        previous?.Dispose();
     }
 
     public void Dispose()
     {
+        UiAppearance.Changed -= UpdateThemeIcon;
         _icon.Visible = false;
         _menu?.Dispose();
-        var handle = _icon.Icon?.Handle ?? IntPtr.Zero;
+        var image = _icon.Icon;
         _icon.Icon = null;
         _icon.Dispose();
-        if (handle != IntPtr.Zero)
-        {
-            NativeMethods.DestroyIcon(handle);
-        }
+        image?.Dispose();
     }
 }

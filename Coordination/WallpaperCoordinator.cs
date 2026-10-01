@@ -59,6 +59,7 @@ internal sealed class WallpaperCoordinator : IDisposable
     }
 
     public IReadOnlyList<WallpaperProfile> Profiles => _profiles;
+    internal AppSettings Settings => _settings;
 
     public Guid? ActiveProfileId => _currentId;
 

@@ -47,6 +47,7 @@ internal partial class LibraryWindow : Window
         _store = store;
         _assets = store.Load();
         InitializeComponent();
+        UiAppearance.Attach(this);
         Closed += (_, _) =>
         {
             _closed = true;
@@ -140,7 +141,7 @@ internal partial class LibraryWindow : Window
         Gallery.ItemsSource = entries;
         Gallery.SelectedItem = entries.FirstOrDefault(a => a.Asset.FilePath.Equals(selectPath, StringComparison.OrdinalIgnoreCase));
         ShowSelection();
-        EmptyText.Text = _assets.Count == 0 ? "Your library is ready for its first wallpaper.\nImport files or a folder to begin." : "No wallpapers match these filters.";
+        EmptyText.Text = _assets.Count == 0 ? "+ Import your first wallpaper" : "No matching wallpapers";
         EmptyText.Visibility = matches.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         StatusText.Text = $"{matches.Count} shown · {_assets.Count} in library";
         PageText.Text = $"Page {_page + 1} of {pageCount}";
@@ -172,17 +173,29 @@ internal partial class LibraryWindow : Window
     }
 
     private void Gallery_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) => ShowSelection();
+    private void Gallery_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (UseButton.IsEnabled && e.OriginalSource is DependencyObject source)
+        {
+            var item = System.Windows.Controls.ItemsControl.ContainerFromElement(Gallery, source);
+            if (item != null) Use_Click(sender, e);
+        }
+    }
 
     private void ShowSelection()
     {
         if (Gallery.SelectedItem is not GalleryEntry entry)
         {
+            DetailsFrame.Visibility = Visibility.Collapsed; DetailsColumn.Width = new GridLength(0);
+            UseButton.Visibility = Visibility.Collapsed;
             DetailsPanel.Visibility = Visibility.Collapsed;
             SelectionHint.Visibility = Visibility.Visible;
             UseButton.IsEnabled = false;
             return;
         }
         DetailsPanel.Visibility = Visibility.Visible;
+        DetailsFrame.Visibility = Visibility.Visible; DetailsColumn.Width = new GridLength(260);
+        UseButton.Visibility = Visibility.Visible;
         SelectionHint.Visibility = Visibility.Collapsed;
         AssetNameBox.Text = entry.Asset.Name;
         TagsBox.Text = string.Join(", ", entry.Asset.Tags);

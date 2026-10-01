@@ -3,19 +3,19 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:ClassModifier="internal" Title="Wallpaper library" Width="1000" Height="720"
         MinWidth="900" MinHeight="600" WindowStartupLocation="CenterOwner"
-        WindowStyle="None" Background="{StaticResource BgBrush}"
-        BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1">
-    <Grid x:Name="LibraryRoot" Background="{StaticResource BgBrush}">
+        WindowStyle="None" Background="{DynamicResource BgBrush}"
+        BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1">
+    <Grid x:Name="LibraryRoot" Background="{DynamicResource BgBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="46"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_Drag">
+        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_Drag">
             <Grid>
-                <Button x:Name="BackButton" Content="Back to profiles" HorizontalAlignment="Left" VerticalAlignment="Center"
-                        Margin="18,0" Padding="10,5" Click="Close_Click" Visibility="Collapsed"/>
+                <Button x:Name="BackButton" Content="←  Profiles" HorizontalAlignment="Left" VerticalAlignment="Center"
+                        Margin="18,0" Padding="10,5" BorderThickness="0" Click="Close_Click" Visibility="Collapsed"/>
                 <TextBlock x:Name="LibraryTitle" Text="Wallpaper library" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" Margin="18,0"/>
                 <Button x:Name="LibraryCloseButton" Style="{StaticResource TitleBarCloseButton}" Content="&#xE8BB;" HorizontalAlignment="Right"
                         Margin="0,0,6,0" Click="Close_Click" ToolTip="Close library"/>
@@ -24,60 +24,57 @@
         <StackPanel Grid.Row="1" Margin="20,18,20,14">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <Button x:Name="ImportFilesButton" Content="Import files" Click="ImportFiles_Click" Margin="0,0,8,0"/>
-                    <Button x:Name="ImportFolderButton" Content="Import folder" Click="ImportFolder_Click"/>
+                    <Button x:Name="ImportFilesButton" Content="+  Import" Style="{StaticResource PrimaryButton}" ToolTip="Import images or videos" Click="ImportFiles_Click" Margin="0,0,8,0"/>
+                    <Button x:Name="ImportFolderButton" Content="&#xE8B7;" FontFamily="{StaticResource IconFont}" ToolTip="Import folder" AutomationProperties.Name="Import folder" Click="ImportFolder_Click"/>
                 </StackPanel>
-                <TextBlock Text="Your desktop, collected." FontSize="19" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock Text="Library" FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center"/>
             </DockPanel>
-            <TextBlock Text="Bring in images and videos, then organize them into your own collections."
-                       Style="{StaticResource HintText}" Margin="0,7,0,16"/>
-            <Grid>
+            <Grid Margin="0,18,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="180"/>
+                    <ColumnDefinition Width="160"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock Text="Search names, tags, or collections" Style="{StaticResource FieldLabel}"/>
-                    <TextBox x:Name="SearchBox" TextChanged="Filter_Changed" Margin="0,0,12,0"/>
-                </StackPanel>
-                <StackPanel Grid.Column="1">
-                    <TextBlock Text="Collection" Style="{StaticResource FieldLabel}"/>
-                    <ComboBox x:Name="CollectionFilter" DisplayMemberPath="Label" SelectionChanged="Filter_Changed"/>
-                </StackPanel>
-                <CheckBox Grid.Column="2" x:Name="FavoritesFilter" Content="Favorites only" Margin="16,20,0,0"
+                <Grid Margin="0,0,12,0">
+                    <TextBox x:Name="SearchBox" TextChanged="Filter_Changed" AutomationProperties.Name="Search library" ToolTip="Search names, tags, or collections"/>
+                    <TextBlock Text="Search library" Margin="10,0" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{DynamicResource TextTertiaryBrush}">
+                        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+                <ComboBox Grid.Column="1" x:Name="CollectionFilter" DisplayMemberPath="Label" SelectionChanged="Filter_Changed" ToolTip="Collection"/>
+                <CheckBox Grid.Column="2" x:Name="FavoritesFilter" Content="★" ToolTip="Favorites only" AutomationProperties.Name="Favorites only" Margin="12,0,0,0"
                           VerticalAlignment="Center" Checked="Filter_Changed" Unchecked="Filter_Changed"/>
             </Grid>
         </StackPanel>
         <Grid Grid.Row="2" Margin="20,0,20,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="260"/>
+                <ColumnDefinition x:Name="DetailsColumn" Width="0"/>
             </Grid.ColumnDefinitions>
             <Grid Margin="0,0,16,0">
-                <ListBox x:Name="Gallery" SelectionChanged="Gallery_SelectionChanged"
-                         Background="{StaticResource BgBrush}" BorderThickness="0"
-                         Foreground="{StaticResource TextPrimaryBrush}"
+                <ListBox x:Name="Gallery" SelectionChanged="Gallery_SelectionChanged" MouseDoubleClick="Gallery_DoubleClick"
+                         Background="{DynamicResource BgBrush}" BorderThickness="0"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
                     </ListBox.ItemsPanel>
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
-                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                             <Setter Property="Margin" Value="0,0,10,10"/>
                             <Setter Property="Padding" Value="0"/>
                             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="ListBoxItem">
-                                        <Border x:Name="Card" CornerRadius="7" BorderThickness="2"
-                                                Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource BorderBrush}">
+                                        <Border x:Name="Card" CornerRadius="14" BorderThickness="1"
+                                                Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}">
                                             <ContentPresenter/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
+                                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
                                             </Trigger>
                                             <Trigger Property="IsSelected" Value="True">
                                                 <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
@@ -91,7 +88,7 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Width="194" ToolTip="{Binding Asset.FilePath}">
-                                <Grid Height="116" Background="{StaticResource SurfaceBrush}">
+                                <Grid Height="116" Background="{DynamicResource SurfaceBrush}">
                                     <TextBlock Text="{Binding Placeholder}" Style="{StaticResource HintText}"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
@@ -107,25 +104,25 @@
                 <TextBlock x:Name="EmptyText" TextWrapping="Wrap" Style="{StaticResource HintText}" FontSize="14"
                            TextAlignment="Center" VerticalAlignment="Center" Margin="35" IsHitTestVisible="False"/>
             </Grid>
-            <Border Grid.Column="1" Background="{StaticResource SurfaceBrush}" CornerRadius="8" Padding="16">
+            <Border x:Name="DetailsFrame" Visibility="Collapsed" Grid.Column="1" Background="{DynamicResource SurfaceBrush}" CornerRadius="16" Padding="16" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="Wallpaper details" Style="{StaticResource SectionTitle}" Margin="0,0,0,14"/>
-                        <TextBlock x:Name="SelectionHint" Text="Select a wallpaper to organize it or use it in a profile."
+                        <TextBlock Text="Details" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,14"/>
+                        <TextBlock x:Name="SelectionHint" Text="Choose a wallpaper"
                                    Style="{StaticResource HintText}" TextWrapping="Wrap"/>
                         <StackPanel x:Name="DetailsPanel" Visibility="Collapsed">
                             <TextBlock Text="Name" Style="{StaticResource FieldLabel}"/>
                             <TextBox x:Name="AssetNameBox"/>
                             <CheckBox x:Name="FavoriteBox" Content="Favorite" Margin="0,16,0,16"/>
-                            <TextBlock Text="Tags (comma separated)" Style="{StaticResource FieldLabel}"/>
-                            <TextBox x:Name="TagsBox"/>
-                            <TextBlock Text="Collection (new or existing)" Style="{StaticResource FieldLabel}" Margin="0,16,0,6"/>
+                            <TextBlock Text="Tags" Style="{StaticResource FieldLabel}"/>
+                            <TextBox x:Name="TagsBox" ToolTip="Separate tags with commas"/>
+                            <TextBlock Text="Collection" Style="{StaticResource FieldLabel}" Margin="0,16,0,6"/>
                             <TextBox x:Name="AssetCollectionBox"/>
-                            <Button x:Name="SaveDetailsButton" Content="Save details" Click="SaveDetails_Click" Margin="0,18,0,0"/>
-                            <TextBlock x:Name="SourceText" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,18,0,0"/>
-                            <TextBlock x:Name="MissingText" Text="Source file is missing. Restore it to its original location to use this wallpaper."
-                                       Foreground="{StaticResource DangerBrush}" TextWrapping="Wrap" Margin="0,10,0,0"/>
-                            <Button Content="Remove from library" Click="Remove_Click" Margin="0,18,0,0"
+                            <Button x:Name="SaveDetailsButton" Content="Save" Click="SaveDetails_Click" Margin="0,18,0,0"/>
+                            <TextBlock x:Name="SourceText" Style="{StaticResource HintText}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Margin="0,18,0,0"/>
+                            <TextBlock x:Name="MissingText" Text="Source file missing"
+                                       Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,10,0,0"/>
+                            <Button Content="Remove" Style="{StaticResource DangerButton}" Click="Remove_Click" Margin="0,18,0,0"
                                     ToolTip="Removes the library entry. The original file and existing profiles are kept."/>
                         </StackPanel>
                     </StackPanel>
@@ -140,9 +137,9 @@
             <StackPanel>
                 <TextBlock x:Name="StatusText" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,12,8"/>
                 <StackPanel Orientation="Horizontal">
-                    <Button x:Name="PreviousButton" Content="Previous" Click="Previous_Click" Padding="10,4"/>
+                    <Button x:Name="PreviousButton" Content="←" ToolTip="Previous page" AutomationProperties.Name="Previous page" Click="Previous_Click" Padding="10,4"/>
                     <TextBlock x:Name="PageText" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="12,0"/>
-                    <Button x:Name="NextButton" Content="Next" Click="Next_Click" Padding="10,4"/>
+                    <Button x:Name="NextButton" Content="→" ToolTip="Next page" AutomationProperties.Name="Next page" Click="Next_Click" Padding="10,4"/>
                 </StackPanel>
             </StackPanel>
             <Button Grid.Column="1" x:Name="UseButton" Content="Use in profile" Style="{StaticResource PrimaryButton}"

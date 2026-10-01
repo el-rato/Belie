@@ -32,6 +32,7 @@ internal partial class MainWindow : Window
     private readonly SettingsStore _settingsStore;
     private readonly LibraryStore _libraryStore;
     private AppSettings _settings;
+    private bool _loadingTheme = true;
 
     private readonly List<RailEntry> _railEntries = new();
     private Guid? _selectedId;
@@ -52,8 +53,13 @@ internal partial class MainWindow : Window
         _store = store;
         _settingsStore = settingsStore;
         _libraryStore = libraryStore ?? new LibraryStore(Path.Combine(AppPaths.BaseDir, "library.json"));
-        _settings = settingsStore.Load();
+        _settings = coordinator.Settings;
+        if (UiAppearance.Current.Name != UiAppearance.Find(_settings.UiTheme).Name) UiAppearance.Apply(_settings.UiTheme);
         TrySetAppIcon();
+        ThemePicker.ItemsSource = UiAppearance.Themes;
+        ThemePicker.SelectedItem = UiAppearance.Find(_settings.UiTheme);
+        _loadingTheme = false;
+        StateChanged += (_, _) => UpdateMaximizeButton();
 
         _pathDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
         _pathDebounce.Tick += (_, _) =>
@@ -115,33 +121,31 @@ internal partial class MainWindow : Window
 
     private void TrySetAppIcon()
     {
-        try
-        {
-            var path = Environment.ProcessPath;
-            if (!string.IsNullOrEmpty(path))
-            {
-                var exeIcon = System.Drawing.Icon.ExtractAssociatedIcon(path);
-                if (exeIcon != null)
-                {
-                    Icon = Imaging.CreateBitmapSourceFromHIcon(
-                        exeIcon.Handle, System.Windows.Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                }
-            }
-        }
-        catch
-        {
-        }
+        UiAppearance.Attach(this);
     }
 
     private void TitleBar_Drag(object sender, MouseButtonEventArgs e)
     {
         if (e.LeftButton == MouseButtonState.Pressed)
         {
-            DragMove();
+            if (e.ClickCount == 2) Maximize_Click(sender, e);
+            else DragMove();
         }
     }
 
     private void MinBtn_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void Maximize_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    }
+    private void UpdateMaximizeButton()
+    {
+        var maximized = WindowState == WindowState.Maximized;
+        MaximizeGlyph.Data = Geometry.Parse(maximized ? "M0,3 L7,3 7,10 0,10 Z M3,3 L3,0 10,0 10,7 7,7" : "M0,0 L10,0 10,10 0,10 Z");
+        MaximizeButton.ToolTip = maximized ? "Restore" : "Maximize";
+        System.Windows.Automation.AutomationProperties.SetName(MaximizeButton, maximized ? "Restore" : "Maximize");
+    }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) => Hide();
 
@@ -165,7 +169,7 @@ internal partial class MainWindow : Window
         ProfilesNavButton.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "AccentSubtleBrush");
         LibraryNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         DashboardNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
-        WorkspaceTitle.Text = "/  Wallpaper profiles";
+        WorkspaceTitle.Text = "/  Profiles";
     }
 
     private void OpenLibrary_Click(object sender, RoutedEventArgs e)
@@ -192,7 +196,7 @@ internal partial class MainWindow : Window
             LibraryNavButton.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "AccentSubtleBrush");
             ProfilesNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
             DashboardNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
-            WorkspaceTitle.Text = "/  Wallpaper library";
+            WorkspaceTitle.Text = "/  Library";
         }
         catch (Exception ex)
         {
@@ -220,7 +224,7 @@ internal partial class MainWindow : Window
 
     private void ShowCanvas_Click(object sender, RoutedEventArgs e)
     {
-        CanvasPane.Content ??= new DesktopCanvasView();
+        CanvasPane.Content ??= new DesktopCanvasView(profiles: () => _coordinator.Profiles, activeProfile: () => _coordinator.ActiveProfileId);
         CanvasPane.Visibility = Visibility.Visible;
         ProfilePane.Visibility = Visibility.Collapsed;
         LibraryPane.Visibility = Visibility.Collapsed;
@@ -229,7 +233,7 @@ internal partial class MainWindow : Window
         ProfilesNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         LibraryNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         DashboardNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
-        WorkspaceTitle.Text = "/  Desktop canvas";
+        WorkspaceTitle.Text = "/  Widgets";
     }
 
     internal void OpenCanvas() => Dispatcher.BeginInvoke(DispatcherPriority.Background,
@@ -239,6 +243,7 @@ internal partial class MainWindow : Window
     {
         RefreshActiveGlow();
         RefreshDashboard();
+        if (CanvasPane.Content is DesktopCanvasView canvas) canvas.RefreshProfiles();
     }
 
     private void RefreshDashboard()
@@ -249,15 +254,15 @@ internal partial class MainWindow : Window
         ActivationReasonText.Text = snapshot.Reason;
         AmbientStatusText.Text = _coordinator.AmbientStatus;
         AmbientMuteButton.IsEnabled = _coordinator.HasAmbientAudio;
+        AmbientMuteButton.Visibility = _coordinator.HasAmbientAudio ? Visibility.Visible : Visibility.Collapsed;
         AmbientMuteButton.Content = _coordinator.AmbientIsMuted ? "Unmute ambient" : "Mute ambient";
         AutomationModeText.Text = snapshot.Paused ? "Paused" : "Running";
-        AutomationHintText.Text = snapshot.Paused ? "Automatic changes are paused. Manual choices still work."
-            : "Schedules and event triggers are enabled.";
-        PauseAutomationButton.Content = snapshot.Paused ? "Resume automation" : "Pause automation";
+        AutomationHintText.Text = snapshot.Paused ? "Manual choices available" : "Schedules & triggers enabled";
+        PauseAutomationButton.Content = snapshot.Paused ? "Resume" : "Pause";
         NextScheduleText.Text = snapshot.NextScheduleAtLocal is { } next ? FormatWhen(next, now) : "No schedules";
-        NextScheduleHint.Text = snapshot.NextScheduleAtLocal == null ? "Add a schedule to a profile to automate your day."
-            : (snapshot.NextScheduledProfile != null ? snapshot.NextScheduledProfile + " is scheduled at this time. " : "No profile is scheduled at this time. ")
-              + "Overrides and events can take priority.";
+        NextScheduleHint.Text = snapshot.NextScheduleAtLocal == null ? "Add one in Profiles → Automation"
+            : snapshot.NextScheduledProfile ?? "Schedule boundary";
+        NextScheduleHint.ToolTip = "Overrides and events can take priority.";
 
         if (!ReferenceEquals(OverrideProfileCombo.ItemsSource, _coordinator.Profiles))
         {
@@ -268,6 +273,8 @@ internal partial class MainWindow : Window
         OverrideProfileCombo.IsEnabled = _coordinator.Profiles.Count > 0;
         StartOverrideButton.IsEnabled = OverrideProfileCombo.SelectedItem is WallpaperProfile;
         ResumeAutomaticButton.IsEnabled = snapshot.Paused || snapshot.ManualOverride != null;
+        ResumeAutomaticButton.Visibility = ResumeAutomaticButton.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
+        OverrideStatusText.Visibility = snapshot.ManualOverride != null ? Visibility.Visible : Visibility.Collapsed;
         if (snapshot.ManualOverride is { } manual)
         {
             var name = _coordinator.Profiles.FirstOrDefault(p => p.Id == manual.ProfileId)?.Name ?? "Profile";
@@ -356,7 +363,7 @@ internal partial class MainWindow : Window
         {
             var monitor = new MonitorThumbnail
             {
-                Width = 188,
+                Width = 162,
                 BezelWidth = 64,
                 BezelHeight = 44,
                 ShowName = true,
@@ -423,11 +430,22 @@ internal partial class MainWindow : Window
         VideoMuteBox.IsChecked = _selected.VideoMuted;
         IconSafeBox.IsChecked = _selected.IconFriendlyLive;
         ScheduleSummary.Text = _selected.Schedule.Count > 0
-            ? $"Schedule: {_selected.Schedule.Count} rule(s)" : "Schedule: none";
+            ? string.Join(Environment.NewLine, _selected.Schedule.Select(DescribeSchedule)) : "No schedules";
         TriggerSummary.Text = _selected.EventTriggers.Count > 0
-            ? $"Triggers: {string.Join(", ", _selected.EventTriggers.Select(t => t.Describe()))}" : "Triggers: none";
+            ? string.Join(Environment.NewLine, _selected.EventTriggers.Select(t => $"{t.Describe()} · priority {t.Priority}")) : "No triggers";
+        EditRulesButton.Content = _selected.Schedule.Count + _selected.EventTriggers.Count > 0 ? "Edit rules" : "+  Schedule or trigger";
         SceneSummary.Text = (_selected.SceneAccent.Length > 0 ? "Scene accent: " + _selected.SceneAccent : "Default accent")
             + (_selected.AmbientAudioPath.Length > 0 ? " · ambient: " + Path.GetFileNameWithoutExtension(_selected.AmbientAudioPath) : " · no ambient track");
+    }
+
+    private static string DescribeSchedule(ScheduleRule rule)
+    {
+        var days = rule.DaysOfWeek.Count == 7 ? "Every day"
+            : rule.DaysOfWeek.Count == 0 ? "No days selected"
+            : string.Join(", ", rule.DaysOfWeek.OrderBy(day => ((int)day + 6) % 7)
+                .Select(day => CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName(day)));
+        var duration = rule.StartTime == rule.EndTime ? " · inactive" : rule.StartTime > rule.EndTime ? " · overnight" : "";
+        return $"{days} · {rule.StartTime:HH:mm} – {rule.EndTime:HH:mm}{duration}";
     }
 
     private void RefreshActiveGlow()
@@ -795,6 +813,8 @@ internal partial class MainWindow : Window
             return;
         }
         var editor = new ProfileEditorWindow(_selected, isNew: false) { Owner = this };
+        ((System.Windows.Controls.TabControl)editor.FindName("EditorTabs")).SelectedIndex =
+            ((sender as System.Windows.Controls.Button)?.Tag as string) switch { "Mood" => 1, "Rules" => 2, _ => 0 };
         if (editor.ShowDialog() == true)
         {
             if (!TrySaveProfile(_selected))
@@ -804,6 +824,27 @@ internal partial class MainWindow : Window
             _coordinator.ProfilesEdited();
             BuildRail();
             Select(_selected.Id);
+        }
+    }
+
+    private void Settings_Click(object sender, RoutedEventArgs e) => SettingsPopup.IsOpen = !SettingsPopup.IsOpen;
+
+    private void Theme_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingTheme || ThemePicker.SelectedItem is not UiTheme theme) return;
+        var previous = _settings.UiTheme;
+        try
+        {
+            _settings.UiTheme = theme.Name;
+            _settingsStore.Save(_settings);
+            UiAppearance.Apply(theme.Name);
+        }
+        catch (Exception ex)
+        {
+            _settings.UiTheme = previous;
+            _loadingTheme = true; ThemePicker.SelectedItem = UiAppearance.Find(previous); _loadingTheme = false;
+            Logger.Error("Saving appearance failed.", ex);
+            System.Windows.MessageBox.Show(this, "The theme could not be saved: " + ex.Message, "Appearance", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

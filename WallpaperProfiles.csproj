@@ -11,9 +11,9 @@
     <AssemblyName>Belie</AssemblyName>
     <ApplicationIcon>appicon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>2.1.0</Version>
-    <FileVersion>2.1.0.0</FileVersion>
-    <AssemblyVersion>2.1.0.0</AssemblyVersion>
+    <Version>2.3.0</Version>
+    <FileVersion>2.3.0.0</FileVersion>
+    <AssemblyVersion>2.3.0.0</AssemblyVersion>
     <Product>Belie</Product>
     <Description>Personal desktop canvas and wallpaper profiles with desktop widgets, live wallpapers, scenes, schedules, and event triggers.</Description>
     <Copyright>Copyright © 2026</Copyright>

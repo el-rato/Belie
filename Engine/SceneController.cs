@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using WallpaperProfiles.Infrastructure;
 using WallpaperProfiles.Models;
+using WallpaperProfiles.UI;
 using Color = System.Windows.Media.Color;
 
 namespace WallpaperProfiles.Engine;
@@ -18,6 +19,8 @@ internal sealed class SceneController : IDisposable
     private string _audioName = "";
     private string _status = "No ambient track";
     private bool _ready;
+    private string _activeAccent = "";
+    private readonly bool _usesAppPalette;
 
     public event Action? StateChanged;
     public bool HasAudio => _player != null;
@@ -29,6 +32,15 @@ internal sealed class SceneController : IDisposable
         var root = resources ?? (System.Windows.Application.Current?.Dispatcher.CheckAccess() == true
             ? System.Windows.Application.Current.Resources : null);
         _resources = root == null ? null : FindAccentResources(root);
+        _usesAppPalette = resources == null && _resources != null;
+        if (_usesAppPalette) UiAppearance.Changed += ThemeChanged;
+    }
+
+    private void ThemeChanged()
+    {
+        // A newly selected theme becomes the restoration target for scene accents.
+        _originalColors = null; _originalBrushes = null;
+        ApplyAccent(_activeAccent);
     }
 
     private static ResourceDictionary? FindAccentResources(ResourceDictionary resources)
@@ -118,6 +130,7 @@ internal sealed class SceneController : IDisposable
 
     private void ApplyAccent(string accent)
     {
+        _activeAccent = accent;
         if (_resources == null || !AccentKeys.All(key => _resources[key] is Color)) return;
         if (!TryParseAccent(accent, out var color))
         {
@@ -167,6 +180,7 @@ internal sealed class SceneController : IDisposable
 
     public void Dispose()
     {
+        if (_usesAppPalette) UiAppearance.Changed -= ThemeChanged;
         StopAudio();
         RestoreAccent();
     }

@@ -130,6 +130,7 @@ public partial class MonitorThumbnail : System.Windows.Controls.UserControl
         Bezel.Width = BezelWidth;
         Bezel.Height = BezelHeight;
         Bezel.BorderBrush = IsActive ? accent : inactive;
+        Bezel.SetResourceReference(Border.BorderBrushProperty, IsActive ? "AccentBrush" : "BorderStrongBrush");
         Bezel.BorderThickness = new Thickness(IsActive ? 3 : 1);
         Bezel.Effect = null;
         ScreenImage.Source = ScreenSource;
