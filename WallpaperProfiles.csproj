@@ -11,11 +11,11 @@
     <AssemblyName>Belie</AssemblyName>
     <ApplicationIcon>appicon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.2.0</Version>
-    <FileVersion>1.2.0.0</FileVersion>
-    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <Version>2.0.0</Version>
+    <FileVersion>2.0.0.0</FileVersion>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
     <Product>Belie</Product>
-    <Description>Cyberpunk-styled tray-resident wallpaper profiles with live wallpapers, schedules, slideshows, and event triggers.</Description>
+    <Description>Personal desktop canvas and wallpaper profiles with desktop widgets, live wallpapers, scenes, schedules, and event triggers.</Description>
     <Copyright>Copyright © 2026</Copyright>
     <NeutralLanguage>en</NeutralLanguage>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>

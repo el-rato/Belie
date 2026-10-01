@@ -327,6 +327,56 @@ public sealed class LibraryWindowTests
         var glassWidget = new WallpaperProfiles.Engine.DesktopWidgetWindow(Assert.Single(store.Load().Widgets), store);
         RenderWorkspace(glassWidget, "canvas-glass", 350, 230);
         glassWidget.Close();
+        using (var host = new WallpaperProfiles.Engine.DesktopCanvasHost(store.FilePath,
+            saved => new WallpaperProfiles.Engine.DesktopWidgetWindow(saved, store) { Opacity = 0 }))
+        {
+            var windows = (Dictionary<Guid, WallpaperProfiles.Engine.DesktopWidgetWindow>)typeof(WallpaperProfiles.Engine.DesktopCanvasHost)
+                .GetField("_windows", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(host)!;
+            var poll = (System.Windows.Threading.DispatcherTimer)typeof(WallpaperProfiles.Engine.DesktopCanvasHost)
+                .GetField("_timer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(host)!;
+            poll.Interval = TimeSpan.FromMinutes(1); // Verify save notifications without the periodic fallback.
+            void AwaitUpdate(Func<bool> updated)
+            {
+                var frame = new System.Windows.Threading.DispatcherFrame();
+                var deadline = DateTime.UtcNow.AddSeconds(2);
+                var check = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(10) };
+                check.Tick += (_, _) => { if (updated() || DateTime.UtcNow >= deadline) frame.Continue = false; };
+                check.Start();
+                System.Windows.Threading.Dispatcher.PushFrame(frame);
+                check.Stop();
+                Assert.True(updated(), "Saved edits did not reach the running widget.");
+            }
+            AwaitUpdate(() => windows.Count == 1);
+            var running = Assert.Single(windows.Values);
+            ((TextBox)view.FindName("WidgetTitle")).Text = "Updated project";
+            ((TextBox)view.FindName("WidgetContent")).Text = "Changes saved while the widget is running.";
+            Press("StylePaperButton");
+            ((Slider)view.FindName("WidgetFontSize")).Value = 26;
+            ((Slider)view.FindName("WidgetWidth")).Value = 420;
+            Press("SaveWidgetButton");
+            AwaitUpdate(() => running.Title == "Belie widget · Updated project");
+            Assert.Same(running, Assert.Single(windows.Values));
+            var liveBody = (ContentControl)typeof(WallpaperProfiles.Engine.DesktopWidgetWindow)
+                .GetField("_body", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(running)!;
+            var liveText = (TextBlock)((ScrollViewer)liveBody.Content).Content;
+            Assert.Equal("Changes saved while the widget is running.", liveText.Text);
+            Assert.Equal(26, liveText.FontSize);
+            Assert.Equal("Georgia", liveText.FontFamily.Source);
+            Assert.Equal("#FF282A25", ((SolidColorBrush)liveText.Foreground).Color.ToString());
+            Assert.InRange(running.Width, 419, 422);
+            var liveGlass = (Grid)typeof(WallpaperProfiles.Engine.DesktopWidgetWindow)
+                .GetField("_glass", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(running)!;
+            Assert.Equal(Visibility.Collapsed, liveGlass.Visibility);
+            var liveGrip = (System.Windows.Controls.Primitives.Thumb)typeof(WallpaperProfiles.Engine.DesktopWidgetWindow)
+                .GetField("_resize", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(running)!;
+            liveGrip.RaiseEvent(new System.Windows.Controls.Primitives.DragStartedEventArgs(0, 0)
+                { RoutedEvent = System.Windows.Controls.Primitives.Thumb.DragStartedEvent });
+            ((TextBox)view.FindName("WidgetTitle")).Text = "Saved during resize";
+            Press("SaveWidgetButton");
+            liveGrip.RaiseEvent(new System.Windows.Controls.Primitives.DragCompletedEventArgs(0, 0, false)
+                { RoutedEvent = System.Windows.Controls.Primitives.Thumb.DragCompletedEvent });
+            AwaitUpdate(() => running.Title == "Belie widget · Saved during resize");
+        }
         Press("AddCountdownButton");
         ((TextBox)view.FindName("WidgetTime")).Text = "bad time";
         Press("SaveWidgetButton");
