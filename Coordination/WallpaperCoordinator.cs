@@ -27,6 +27,7 @@ internal sealed class WallpaperCoordinator : IDisposable
     private readonly TimeProvider _timeProvider;
     private readonly List<ActivityEntry> _recent = new();
     private readonly SceneController _scene = new();
+    private readonly Action<WallpaperProfile> _applyWallpaper;
     private readonly SlideshowController _slideshow = new();
     private readonly LiveWallpaperController _live = new();
     private readonly IconSafeLiveController _iconSafeLive = new();
@@ -41,18 +42,20 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     public event Action? StateChanged;
 
-    public WallpaperCoordinator(ProfileStore store, SettingsStore settingsStore, AppSettings settings, TimeProvider? timeProvider = null)
+    public WallpaperCoordinator(ProfileStore store, SettingsStore settingsStore, AppSettings settings,
+        TimeProvider? timeProvider = null, Action<WallpaperProfile>? applyWallpaper = null)
     {
         _store = store;
         _settingsStore = settingsStore;
         _settings = settings;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _resolver = new ProfileResolver(_timeProvider);
+        _applyWallpaper = applyWallpaper ?? ApplyWallpaper;
         _scene.StateChanged += () => StateChanged?.Invoke();
         _triggers = new TriggerManager();
         _triggers.TriggerStateChanged += OnTriggerStateChanged;
         _tickTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
-        _tickTimer.Tick += (_, _) => Evaluate("periodic check");
+        _tickTimer.Tick += (_, _) => CheckNow();
     }
 
     public IReadOnlyList<WallpaperProfile> Profiles => _profiles;
@@ -67,6 +70,7 @@ internal sealed class WallpaperCoordinator : IDisposable
     public bool HasAmbientAudio => _scene.HasAudio;
     public bool AmbientIsMuted => _scene.IsMuted;
     public void ToggleAmbientMuted() => _scene.ToggleMuted();
+    public void CheckNow() => Evaluate("periodic check");
 
     public void Init()
     {
@@ -263,15 +267,31 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     private void Activate(WallpaperProfile profile, ResolutionSource source)
     {
+        _currentId = profile.Id;
+        _source = source;
+        _scene.Apply(profile);
+        _applyWallpaper(profile);
+        var temporary = source == ResolutionSource.Manual && _resolver.GetManualOverride(_profiles)?.IsTimed == true;
+        if (!temporary) _settings.LastActiveProfileId = profile.Id.ToString();
+        if (source == ResolutionSource.Manual && !temporary)
+        {
+            _fallbackProfileId = profile.Id;
+            _settings.PreferredProfileId = profile.Id.ToString();
+        }
+        SaveSettingsSafe();
+        Logger.Info($"Active profile is now '{profile.Name}' (via {source}).");
+        RecordActivity(profile.Name, ActivationReason());
+        UpdateSummary();
+    }
+
+    private void ApplyWallpaper(WallpaperProfile profile)
+    {
         // A detached live host (started when the app last exited) must never outlive an
         // activation: this profile is taking over the desktop now.
         LiveHostProcess.StopRunning();
         _slideshow.Stop();
         // Invalidate any wallpaper apply still queued for the previous profile.
         WallpaperEngine.NextApplyGeneration();
-        _currentId = profile.Id;
-        _source = source;
-        _scene.Apply(profile);
         if (WallpaperEngine.IsLiveFile(profile.FolderPath))
         {
             // Live wallpaper: either the smooth overlay (covers the desktop icons) or the
@@ -293,17 +313,6 @@ internal sealed class WallpaperCoordinator : IDisposable
             _iconSafeLive.Stop();
             _slideshow.Start(profile);
         }
-        var temporary = source == ResolutionSource.Manual && _resolver.GetManualOverride(_profiles)?.IsTimed == true;
-        if (!temporary) _settings.LastActiveProfileId = profile.Id.ToString();
-        if (source == ResolutionSource.Manual && !temporary)
-        {
-            _fallbackProfileId = profile.Id;
-            _settings.PreferredProfileId = profile.Id.ToString();
-        }
-        SaveSettingsSafe();
-        Logger.Info($"Active profile is now '{profile.Name}' (via {source}).");
-        RecordActivity(profile.Name, ActivationReason());
-        UpdateSummary();
     }
 
     private string ActivationReason() => _currentId == null ? "Choose a profile to get started." : _source switch

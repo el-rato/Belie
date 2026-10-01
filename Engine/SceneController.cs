@@ -23,7 +23,8 @@ internal sealed class SceneController : IDisposable
     public string AudioStatus => _ready ? (IsMuted ? "Muted" : "Playing") + " · " + _audioName : _status;
 
     public SceneController(ResourceDictionary? resources = null)
-        => _resources = resources ?? System.Windows.Application.Current?.Resources;
+        => _resources = resources ?? (System.Windows.Application.Current?.Dispatcher.CheckAccess() == true
+            ? System.Windows.Application.Current.Resources : null);
 
     public static bool TryParseAccent(string? value, out Color color)
     {
