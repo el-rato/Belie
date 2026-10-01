@@ -29,24 +29,30 @@ internal sealed class DesktopCanvasView : UserControl
     private readonly TextBox _time = new() { Text = "18:00" };
     private readonly Slider _width = new() { Minimum = 120, Maximum = 1600, TickFrequency = 10, IsSnapToTickEnabled = true };
     private readonly Slider _height = new() { Minimum = 80, Maximum = 1200, TickFrequency = 10, IsSnapToTickEnabled = true };
-    private readonly ComboBox _font = new() { IsEditable = true, ItemsSource = new[] { "Segoe UI", "Georgia", "Consolas", "Arial", "Cambria", "Impact", "Verdana" } };
+    private static readonly string[] InstalledFonts = Fonts.SystemFontFamilies.Select(font => font.Source)
+        .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+    private readonly ComboBox _font = new() { IsEditable = true, ItemsSource = InstalledFonts, MaxDropDownHeight = 320 };
     private readonly Slider _fontSize = new() { Minimum = 10, Maximum = 96, TickFrequency = 1, IsSnapToTickEnabled = true };
     private readonly ComboBox _alignment = new() { ItemsSource = Enum.GetValues<WidgetTextAlignment>() };
     private readonly ComboBox _imageFit = new() { ItemsSource = Enum.GetValues<WidgetImageFit>() };
     private readonly TextBox _textColor = new() { MaxLength = 7 };
     private readonly TextBox _backgroundColor = new() { MaxLength = 7 };
+    private readonly TextBox _borderColor = new() { MaxLength = 7 };
+    private readonly Slider _borderWidth = new() { Minimum = 0, Maximum = 6, TickFrequency = .5, IsSnapToTickEnabled = true };
     private readonly Slider _opacity = new() { Minimum = 20, Maximum = 100, TickFrequency = 1, IsSnapToTickEnabled = true };
     private readonly Slider _radius = new() { Minimum = 0, Maximum = 60, TickFrequency = 1, IsSnapToTickEnabled = true };
     private readonly CheckBox _bold = new() { Content = "Bold text" };
+    private readonly CheckBox _italic = new() { Content = "Italic text" };
     private readonly CheckBox _showHeader = new() { Content = "Show title bar" };
     private readonly CheckBox _showBorder = new() { Content = "Show border" };
     private readonly CheckBox _showBackground = new() { Content = "Show background" };
-    private readonly Viewbox _preview = new() { Height = 150, Stretch = Stretch.Uniform, IsHitTestVisible = false, Margin = new Thickness(0, 10, 0, 0) };
+    private readonly CheckBox _glassEffect = new() { Content = "Apply glass to this style", Margin = new Thickness(0, 4, 0, 0) };
+    private readonly Viewbox _preview = new() { Height = 110, Stretch = Stretch.Uniform, IsHitTestVisible = false, Margin = new Thickness(0, 6, 0, 0) };
     private DesktopWidgetWindow? _previewWindow;
     private readonly Button _duplicate = new() { Content = "Duplicate", Margin = new Thickness(8, 0, 0, 0) };
     private Button _save = null!;
     private bool _loading;
-    private bool _glassSelected;
+    private bool _previewPending;
     private readonly CheckBox _enabled = new() { Content = "Show this widget", Margin = new Thickness(0, 12, 0, 0) };
     private readonly CheckBox _locked = new() { Content = "Lock position and size", Margin = new Thickness(0, 10, 0, 0) };
     private readonly StackPanel _fields = new();
@@ -88,7 +94,7 @@ internal sealed class DesktopCanvasView : UserControl
         _list.DisplayMemberPath = "";
         var itemContent = new FrameworkElementFactory(typeof(StackPanel));
         var itemTitle = new FrameworkElementFactory(typeof(TextBlock));
-        itemTitle.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(DesktopWidget.Title)));
+        itemTitle.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(DesktopWidget.DisplayTitle)));
         itemTitle.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
         itemContent.AppendChild(itemTitle);
         var itemKind = new FrameworkElementFactory(typeof(TextBlock));
@@ -125,16 +131,14 @@ internal sealed class DesktopCanvasView : UserControl
         var listPanel = new StackPanel();
         listPanel.Children.Add(new TextBlock { Text = "YOUR WIDGETS", FontSize = 10, Margin = new Thickness(0, 0, 0, 10) });
         listPanel.Children.Add(_list);
-        listPanel.Children.Add(new TextBlock { Text = "LIVE PREVIEW", FontSize = 10, Margin = new Thickness(0, 22, 0, 0) });
-        listPanel.Children.Add(_preview);
-        listPanel.Children.Add(new TextBlock { Text = "Drag a widget’s header to move it. Drag its lower corner to resize.",
+        listPanel.Children.Add(new TextBlock { Text = "Drag a widget’s title bar, or its body when the title is hidden, to move it. Drag its lower corner to resize.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12, Margin = new Thickness(0, 14, 0, 0) });
         columns.Children.Add(listPanel);
         var editor = new StackPanel();
         Grid.SetColumn(editor, 2); columns.Children.Add(editor);
         editor.Children.Add(_empty); editor.Children.Add(_fields);
         _fields.Children.Add(_kindLabel);
-        Field(_fields, "Title", _title);
+        Field(_fields, "Title (optional)", _title);
         _contentLabel.Margin = new Thickness(0, 12, 0, 6);
         _fields.Children.Add(_contentLabel); _fields.Children.Add(_content); _fields.Children.Add(_browse);
         Field(_targetFields, "Target date", _date);
@@ -142,17 +146,26 @@ internal sealed class DesktopCanvasView : UserControl
         _fields.Children.Add(_targetFields);
         Field(_fields, "Width", _width); Field(_fields, "Height", _height);
         var presets = new WrapPanel { Margin = new Thickness(0, 16, 0, 0) };
-        foreach (var name in new[] { "Glass", "Paper", "Minimal" })
-        { var preset = name; presets.Children.Add(ActionButton(preset, "Style" + preset + "Button", () => ApplyStyle(preset))); }
+        foreach (var name in new[] { "Glass", "Paper", "Minimal", "Gothic", "Cathedral", "Crimson", "Parchment", "Royal", "Neon", "Terminal" })
+        {
+            var preset = name;
+            var button = ActionButton(preset, "Style" + preset + "Button", () => ApplyStyle(preset));
+            button.Margin = new Thickness(0, 0, 8, 8);
+            presets.Children.Add(button);
+        }
         _fields.Children.Add(new TextBlock { Text = "Make it yours", FontSize = 16, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 22, 0, 0) });
         _fields.Children.Add(presets);
-        Field(_fields, "Font (choose or type a font name)", _font);
+        _fields.Children.Add(_glassEffect);
+        Field(_fields, "Font (installed fonts, or type a name)", _font);
         Field(_fields, "Text size", _fontSize);
         Field(_fields, "Text alignment", _alignment);
         _fields.Children.Add(_bold);
+        _fields.Children.Add(_italic);
         Field(_fields, "Image fit", _imageFit);
         ColorField("Text color", _textColor);
         ColorField("Background color", _backgroundColor);
+        ColorField("Border color", _borderColor);
+        Field(_fields, "Border thickness", _borderWidth);
         Field(_fields, "Opacity (%)", _opacity);
         Field(_fields, "Rounded corners", _radius);
         foreach (var option in new[] { _showHeader, _showBorder, _showBackground })
@@ -173,7 +186,15 @@ internal sealed class DesktopCanvasView : UserControl
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
         var footer = new StackPanel();
         _message.Margin = new Thickness(16, 10, 16, 0); footer.Children.Add(_message); footer.Children.Add(editorButtons);
-        var footerBorder = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Child = footer };
+        var footerLayout = new Grid();
+        footerLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        footerLayout.ColumnDefinitions.Add(new ColumnDefinition());
+        var previewPanel = new StackPanel { Margin = new Thickness(16, 12, 0, 12) };
+        previewPanel.Children.Add(new TextBlock { Text = "LIVE PREVIEW", FontSize = 10 });
+        previewPanel.Children.Add(_preview);
+        footerLayout.Children.Add(previewPanel);
+        Grid.SetColumn(footer, 1); footer.VerticalAlignment = VerticalAlignment.Center; footerLayout.Children.Add(footer);
+        var footerBorder = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Child = footerLayout };
         footerBorder.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
         footerBorder.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
         Grid.SetRow(footerBorder, 1); layout.Children.Add(footerBorder);
@@ -185,8 +206,9 @@ internal sealed class DesktopCanvasView : UserControl
         foreach (var (name, control) in new (string, FrameworkElement)[] { ("WidgetFont", _font), ("WidgetFontSize", _fontSize),
             ("WidgetAlignment", _alignment), ("WidgetImageFit", _imageFit), ("WidgetTextColor", _textColor),
             ("WidgetBackgroundColor", _backgroundColor), ("WidgetOpacity", _opacity), ("WidgetRadius", _radius),
-            ("WidgetBold", _bold), ("WidgetHeader", _showHeader), ("WidgetBorder", _showBorder),
-            ("WidgetBackground", _showBackground), ("WidgetPreview", _preview) })
+            ("WidgetBold", _bold), ("WidgetItalic", _italic), ("WidgetBorderColor", _borderColor), ("WidgetBorderWidth", _borderWidth),
+            ("WidgetHeader", _showHeader), ("WidgetBorder", _showBorder),
+            ("WidgetBackground", _showBackground), ("WidgetGlassEffect", _glassEffect), ("WidgetPreview", _preview) })
         { RegisterName(name, control); System.Windows.Automation.AutomationProperties.SetName(control, name[6..]); }
         foreach (var (name, element) in new (string, DependencyObject)[] { ("Widget title", _title), ("Widget content", _content),
             ("Countdown date", _date), ("Countdown time", _time), ("Widget width", _width), ("Widget height", _height) })
@@ -204,12 +226,20 @@ internal sealed class DesktopCanvasView : UserControl
         Loaded += (_, _) => { Run(RefreshList); RefreshStatus(); _timer.Start(); };
         _fields.Visibility = Visibility.Collapsed;
         _save.IsEnabled = false; _duplicate.IsEnabled = false; _delete.IsEnabled = false;
-        foreach (var box in new[] { _title, _content, _textColor, _backgroundColor, _time }) box.TextChanged += (_, _) => RefreshPreview();
-        _font.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => RefreshPreview()));
-        foreach (var slider in new[] { _width, _height, _fontSize, _opacity, _radius }) slider.ValueChanged += (_, _) => RefreshPreview();
-        foreach (var combo in new[] { _font, _alignment, _imageFit }) combo.SelectionChanged += (_, _) => RefreshPreview();
-        foreach (var box in new[] { _bold, _showHeader, _showBorder, _showBackground })
+        foreach (var box in new[] { _title, _content, _textColor, _backgroundColor, _borderColor, _time }) box.TextChanged += (_, _) => RefreshPreview();
+        _font.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => QueuePreview()), handledEventsToo: true);
+        foreach (var slider in new[] { _width, _height, _fontSize, _opacity, _radius, _borderWidth }) slider.ValueChanged += (_, _) => RefreshPreview();
+        _font.SelectionChanged += (_, _) => QueuePreview();
+        foreach (var combo in new[] { _alignment, _imageFit }) combo.SelectionChanged += (_, _) => RefreshPreview();
+        foreach (var box in new[] { _bold, _italic, _showHeader, _showBorder, _showBackground, _locked })
         { box.Checked += (_, _) => RefreshPreview(); box.Unchecked += (_, _) => RefreshPreview(); }
+        _glassEffect.Checked += (_, _) =>
+        {
+            if (_loading) return;
+            _showBackground.IsChecked = true;
+            RefreshPreview();
+        };
+        _glassEffect.Unchecked += (_, _) => RefreshPreview();
         _date.SelectedDateChanged += (_, _) => RefreshPreview();
         Run(RefreshList);
     }
@@ -226,7 +256,7 @@ internal sealed class DesktopCanvasView : UserControl
     {
         var caption = new TextBlock { Text = label, Margin = new Thickness(0, 12, 0, 6), FontSize = 12 };
         if (control is Slider slider)
-        { caption.Text = $"{label} · {slider.Value:0}"; slider.ValueChanged += (_, _) => caption.Text = $"{label} · {slider.Value:0}"; }
+        { caption.Text = $"{label} · {slider.Value:0.#}"; slider.ValueChanged += (_, _) => caption.Text = $"{label} · {slider.Value:0.#}"; }
         panel.Children.Add(caption);
         panel.Children.Add(control);
     }
@@ -253,19 +283,32 @@ internal sealed class DesktopCanvasView : UserControl
     {
         widget.FontFamily = string.IsNullOrWhiteSpace(_font.Text) ? "Segoe UI" : _font.Text.Trim();
         widget.FontSize = _fontSize.Value; widget.Bold = _bold.IsChecked == true;
+        widget.Italic = _italic.IsChecked == true;
         widget.Alignment = _alignment.SelectedItem is WidgetTextAlignment alignment ? alignment : WidgetTextAlignment.Left;
         widget.ImageFit = _imageFit.SelectedItem is WidgetImageFit fit ? fit : WidgetImageFit.Fit;
         widget.TextColor = _textColor.Text.Trim().ToUpperInvariant(); widget.BackgroundColor = _backgroundColor.Text.Trim().ToUpperInvariant();
         widget.Opacity = _opacity.Value / 100; widget.CornerRadius = _radius.Value;
         widget.ShowHeader = _showHeader.IsChecked == true; widget.ShowBorder = _showBorder.IsChecked == true;
         widget.ShowBackground = _showBackground.IsChecked == true;
-        widget.GlassEffect = _glassSelected;
+        widget.GlassEffect = _glassEffect.IsChecked == true;
+        widget.BorderColor = _borderColor.Text.Trim().ToUpperInvariant(); widget.BorderWidth = _borderWidth.Value;
+    }
+    private void QueuePreview()
+    {
+        if (_loading || _previewPending) return;
+        _previewPending = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(() =>
+        {
+            _previewPending = false;
+            RefreshPreview();
+        }));
     }
     private void RefreshPreview()
     {
         if (_loading || _selected == null) return;
         var draft = _selected.Duplicate(); draft.Id = _selected.Id;
         draft.Title = _title.Text; draft.Content = _content.Text;
+        draft.Locked = _locked.IsChecked == true;
         draft.Width = _width.Value; draft.Height = _height.Value;
         ReadAppearance(draft);
         if (_date.SelectedDate is { } date && TimeOnly.TryParseExact(_time.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
@@ -288,14 +331,29 @@ internal sealed class DesktopCanvasView : UserControl
     {
         if (_selected == null) return;
         _loading = true;
-        _glassSelected = name == "Glass";
-        _font.Text = name == "Paper" ? "Georgia" : "Segoe UI";
-        _backgroundColor.Text = name == "Paper" ? "#EEE8D8" : name == "Glass" ? "#182333" : "#1D201E";
-        _textColor.Text = name == "Paper" ? "#282A25" : name == "Glass" ? "#FFFFFF" : "#F1F2EE";
-        _radius.Value = name == "Paper" ? 3 : name == "Glass" ? 28 : 16;
+        if (name == "Glass") _glassEffect.IsChecked = true;
+        string Available(params string[] fonts) => fonts.FirstOrDefault(font => InstalledFonts.Contains(font, StringComparer.OrdinalIgnoreCase)) ?? "Georgia";
+        var gothic = Available("Old English Text MT", "UnifrakturCook", "UnifrakturMaguntia", "Gabriola");
+        var style = name switch
+        {
+            "Glass" => ("Segoe UI", "#182333", "#FFFFFF", "#E1EFFF", 28d),
+            "Paper" => ("Georgia", "#EEE8D8", "#282A25", "#738579", 3d),
+            "Gothic" => (gothic, "#141018", "#E5D8F4", "#715577", 4d),
+            "Cathedral" => (gothic, "#1B1A22", "#E9DEBF", "#A39169", 0d),
+            "Crimson" => (gothic, "#270D15", "#F1D5CB", "#9D5263", 8d),
+            "Parchment" => (Available("Gabriola", "Palatino Linotype"), "#E4D3AA", "#463421", "#A18A5F", 3d),
+            "Royal" => (Available("Garamond", "Palatino Linotype"), "#20162D", "#EADBAF", "#A58B51", 16d),
+            "Neon" => (Available("Bahnschrift", "Segoe UI"), "#10221F", "#80FFCE", "#4DDDB3", 12d),
+            "Terminal" => (Available("Cascadia Mono", "Consolas"), "#0D1711", "#B7D9AC", "#477A52", 4d),
+            _ => ("Segoe UI", "#1D201E", "#F1F2EE", "#738579", 16d)
+        };
+        _font.Text = style.Item1; _backgroundColor.Text = style.Item2;
+        _textColor.Text = style.Item3; _borderColor.Text = style.Item4; _radius.Value = style.Item5;
+        _borderWidth.Value = 1; _italic.IsChecked = false;
+        if (name is "Gothic" or "Cathedral" or "Crimson") { _bold.IsChecked = false; _fontSize.Value = Math.Max(26, _fontSize.Value); }
         _opacity.Value = 100;
         _showHeader.IsChecked = name != "Minimal"; _showBorder.IsChecked = name != "Minimal";
-        _showBackground.IsChecked = name != "Minimal";
+        _showBackground.IsChecked = name != "Minimal" || _glassEffect.IsChecked == true;
         _loading = false; RefreshPreview();
     }
     private void Run(Action action)
@@ -337,7 +395,7 @@ internal sealed class DesktopCanvasView : UserControl
     {
         _loading = true;
         _selected = widget; _isNew = isNew;
-        _glassSelected = widget.GlassEffect;
+        _glassEffect.IsChecked = widget.GlassEffect;
         _fields.Visibility = Visibility.Visible; _empty.Visibility = Visibility.Collapsed;
         _kindLabel.Text = (isNew ? "New " : "Edit ") + widget.Kind.ToString().ToLowerInvariant();
         _title.Text = widget.Title; _content.Text = widget.Content;
@@ -348,6 +406,8 @@ internal sealed class DesktopCanvasView : UserControl
         _font.Text = widget.FontFamily; _fontSize.Value = widget.FontSize;
         _alignment.SelectedItem = widget.Alignment; _imageFit.SelectedItem = widget.ImageFit;
         _textColor.Text = widget.TextColor; _backgroundColor.Text = widget.BackgroundColor;
+        _borderColor.Text = widget.BorderColor; _borderWidth.Value = widget.BorderWidth;
+        _italic.IsChecked = widget.Italic;
         _bold.IsChecked = widget.Bold; _opacity.Value = widget.Opacity * 100; _radius.Value = widget.CornerRadius;
         _showHeader.IsChecked = widget.ShowHeader; _showBorder.IsChecked = widget.ShowBorder;
         _showBackground.IsChecked = widget.ShowBackground;
@@ -370,13 +430,13 @@ internal sealed class DesktopCanvasView : UserControl
     {
         if (_selected == null) return;
         var title = _title.Text.Trim();
-        if (title.Length == 0) throw new InvalidOperationException("Give your widget a title.");
         var content = _selected.Kind == DesktopWidgetKind.Note ? _content.Text : _content.Text.Trim();
         if (_selected.Kind == DesktopWidgetKind.Link && !DesktopWidget.TryGetLink(content, out _))
             throw new InvalidOperationException("Enter a complete http:// or https:// website address.");
         if (_selected.Kind == DesktopWidgetKind.Image && (!File.Exists(content) || !WallpaperEngine.IsImageFile(content)))
             throw new InvalidOperationException("Choose an existing image file.");
-        if (!SceneController.TryParseAccent(_textColor.Text.Trim(), out _) || !SceneController.TryParseAccent(_backgroundColor.Text.Trim(), out _))
+        if (!SceneController.TryParseAccent(_textColor.Text.Trim(), out _) || !SceneController.TryParseAccent(_backgroundColor.Text.Trim(), out _)
+            || !SceneController.TryParseAccent(_borderColor.Text.Trim(), out _))
             throw new InvalidOperationException("Use #RRGGBB for text and background colors, or choose a color.");
         var target = _selected.Target;
         if (_selected.Kind == DesktopWidgetKind.Countdown)

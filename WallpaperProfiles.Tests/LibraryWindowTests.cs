@@ -210,6 +210,8 @@ public sealed class LibraryWindowTests
         Assert.Equal(Visibility.Visible, pane.Visibility);
         Assert.Equal(Visibility.Collapsed, ((FrameworkElement)main.FindName("DashboardPane")).Visibility);
         void Press(string name) => ((Button)view.FindName(name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(((ComboBox)view.FindName("WidgetFont")).Items.Count > 7);
+        Assert.Contains("Segoe UI", ((ComboBox)view.FindName("WidgetFont")).Items.Cast<string>());
         Press("AddNoteButton");
         ((TextBox)view.FindName("WidgetTitle")).Text = "My project";
         ((TextBox)view.FindName("WidgetContent")).Text = "Sketch ideas\nBuild something useful";
@@ -217,6 +219,39 @@ public sealed class LibraryWindowTests
         Assert.True(store.Load().Enabled);
         Assert.Equal("My project", Assert.Single(store.Load().Widgets).Title);
         Assert.Equal(1, starts);
+        var savedBeforeEditing = File.ReadAllText(store.FilePath);
+        var previewBox = (Viewbox)view.FindName("WidgetPreview");
+        var previewCard = (Border)previewBox.Child;
+        var previewSurface = (Grid)previewCard.Child;
+        var previewGrid = (Grid)previewSurface.Children[1];
+        var previewBody = previewGrid.Children.OfType<ContentControl>().Single();
+        var previewHeader = previewGrid.Children.OfType<Border>().Single();
+        ((TextBox)view.FindName("WidgetContent")).Text = "This is an unsaved draft.";
+        ((ComboBox)view.FindName("WidgetFont")).SelectedItem = "Georgia";
+        main.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        Assert.Equal("This is an unsaved draft.", ((TextBlock)((ScrollViewer)previewBody.Content).Content).Text);
+        Assert.Equal("Georgia", ((TextBlock)((ScrollViewer)previewBody.Content).Content).FontFamily.Source);
+        ((ComboBox)view.FindName("WidgetFont")).Text = "Consolas";
+        main.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        Assert.Equal("Consolas", ((TextBlock)((ScrollViewer)previewBody.Content).Content).FontFamily.Source);
+        ((Slider)view.FindName("WidgetFontSize")).Value = 32;
+        ((Slider)view.FindName("WidgetWidth")).Value = 420;
+        ((TextBox)view.FindName("WidgetTitle")).Text = "";
+        ((CheckBox)view.FindName("WidgetItalic")).IsChecked = true;
+        ((CheckBox)view.FindName("WidgetLocked")).IsChecked = true;
+        Assert.Equal(32, ((TextBlock)((ScrollViewer)previewBody.Content).Content).FontSize);
+        Assert.Equal(FontStyles.Italic, ((TextBlock)((ScrollViewer)previewBody.Content).Content).FontStyle);
+        Assert.Equal(420, previewCard.Width);
+        Assert.Equal(Visibility.Collapsed, previewHeader.Visibility);
+        Assert.Equal(Visibility.Collapsed, previewGrid.Children.OfType<System.Windows.Controls.Primitives.Thumb>().Single().Visibility);
+        Press("StyleCrimsonButton");
+        Assert.Equal("#FF270D15", ((SolidColorBrush)previewCard.Background).Color.ToString());
+        ((CheckBox)view.FindName("WidgetGlassEffect")).IsChecked = true;
+        Assert.Equal(Visibility.Visible, previewSurface.Children[0].Visibility);
+        Assert.Equal(savedBeforeEditing, File.ReadAllText(store.FilePath));
+        Assert.Equal(1, starts);
+        ((ListBox)view.FindName("WidgetList")).SelectedIndex = -1;
+        ((ListBox)view.FindName("WidgetList")).SelectedIndex = 0;
         Press("StylePaperButton");
         ((Slider)view.FindName("WidgetFontSize")).Value = 28;
         ((ComboBox)view.FindName("WidgetAlignment")).SelectedItem = WidgetTextAlignment.Center;
@@ -252,6 +287,13 @@ public sealed class LibraryWindowTests
         var saveLocation = save.TranslatePoint(new System.Windows.Point(0, 0), (UIElement)main.Content);
         Assert.True(save.ActualHeight > 0);
         Assert.InRange(saveLocation.Y + save.ActualHeight, 1, ((FrameworkElement)main.Content).ActualHeight);
+        var editorScroll = (ScrollViewer)((Grid)view.Content).Children[0];
+        editorScroll.ScrollToEnd();
+        main.UpdateLayout();
+        var previewLocation = previewBox.TranslatePoint(new System.Windows.Point(0, 0), (UIElement)main.Content);
+        Assert.True(previewBox.ActualHeight > 0);
+        Assert.InRange(previewLocation.Y, 0, ((FrameworkElement)main.Content).ActualHeight);
+        Assert.InRange(previewLocation.Y + previewBox.ActualHeight, 1, ((FrameworkElement)main.Content).ActualHeight);
         var pointer = new System.Drawing.Point(500, 500);
         var widget = new WallpaperProfiles.Engine.DesktopWidgetWindow(Assert.Single(store.Load().Widgets), store, () => pointer);
         RenderWorkspace(widget, "canvas-note", 300, 230);
@@ -351,6 +393,7 @@ public sealed class LibraryWindowTests
             ((TextBox)view.FindName("WidgetTitle")).Text = "Updated project";
             ((TextBox)view.FindName("WidgetContent")).Text = "Changes saved while the widget is running.";
             Press("StylePaperButton");
+            ((CheckBox)view.FindName("WidgetGlassEffect")).IsChecked = false;
             ((Slider)view.FindName("WidgetFontSize")).Value = 26;
             ((Slider)view.FindName("WidgetWidth")).Value = 420;
             Press("SaveWidgetButton");
@@ -376,8 +419,70 @@ public sealed class LibraryWindowTests
             liveGrip.RaiseEvent(new System.Windows.Controls.Primitives.DragCompletedEventArgs(0, 0, false)
                 { RoutedEvent = System.Windows.Controls.Primitives.Thumb.DragCompletedEvent });
             AwaitUpdate(() => running.Title == "Belie widget · Saved during resize");
+            Press("StyleGlassButton");
+            ((TextBox)view.FindName("WidgetBorderColor")).Text = "#BFA3EE";
+            Press("SaveWidgetButton");
+            AwaitUpdate(() => ((Border)running.Content).BorderBrush is LinearGradientBrush glassRim
+                && glassRim.GradientStops[0].Color == Color.FromArgb(190, 191, 163, 238));
+            ((CheckBox)view.FindName("WidgetGlassEffect")).IsChecked = false;
+            Press("StyleMinimalButton");
+            Assert.False(((CheckBox)view.FindName("WidgetBackground")).IsChecked);
+            ((CheckBox)view.FindName("WidgetGlassEffect")).IsChecked = true;
+            Assert.True(((CheckBox)view.FindName("WidgetBackground")).IsChecked);
+            foreach (var preset in new[] { "Paper", "Minimal", "Cathedral", "Crimson", "Parchment", "Royal", "Neon", "Terminal", "Gothic" })
+            {
+                Press("Style" + preset + "Button");
+                Press("SaveWidgetButton");
+                var appearance = Assert.Single(store.Load().Widgets);
+                AwaitUpdate(() => ((TextBlock)((ScrollViewer)liveBody.Content).Content).FontFamily.Source == appearance.FontFamily
+                    && ((SolidColorBrush)((TextBlock)((ScrollViewer)liveBody.Content).Content).Foreground).Color.ToString() == "#FF" + appearance.TextColor[1..]
+                    && liveGlass.Visibility == Visibility.Visible);
+                Assert.True(appearance.GlassEffect);
+                Assert.True(appearance.ShowBackground);
+                var styledText = (TextBlock)((ScrollViewer)liveBody.Content).Content;
+                Assert.Equal("#FF" + appearance.TextColor[1..], ((SolidColorBrush)styledText.Foreground).Color.ToString());
+                Assert.Equal(appearance.CornerRadius, ((Border)running.Content).CornerRadius.TopLeft);
+                var savedTextColor = appearance.TextColor;
+                ((CheckBox)view.FindName("WidgetGlassEffect")).IsChecked = false;
+                Press("SaveWidgetButton");
+                AwaitUpdate(() => liveGlass.Visibility == Visibility.Collapsed);
+                Assert.False(Assert.Single(store.Load().Widgets).GlassEffect);
+                Assert.Equal(savedTextColor, Assert.Single(store.Load().Widgets).TextColor);
+                ((CheckBox)view.FindName("WidgetGlassEffect")).IsChecked = true;
+                Press("SaveWidgetButton");
+                AwaitUpdate(() => liveGlass.Visibility == Visibility.Visible);
+            }
+            RenderWorkspace(running, "canvas-gothic-glass", 420, 230);
+            ((ListBox)view.FindName("WidgetList")).SelectedIndex = -1;
+            ((ListBox)view.FindName("WidgetList")).SelectedIndex = 0;
+            Assert.True(((CheckBox)view.FindName("WidgetGlassEffect")).IsChecked);
+            ((CheckBox)view.FindName("WidgetGlassEffect")).IsChecked = false;
+            ((TextBox)view.FindName("WidgetTitle")).Text = "   ";
+            ((CheckBox)view.FindName("WidgetItalic")).IsChecked = true;
+            ((TextBox)view.FindName("WidgetBorderColor")).Text = "#8956B4";
+            ((Slider)view.FindName("WidgetBorderWidth")).Value = 2.5;
+            Press("SaveWidgetButton");
+            AwaitUpdate(() => running.Title == "Belie widget · Untitled note");
+            var untitled = Assert.Single(store.Load().Widgets);
+            Assert.Equal("", untitled.Title);
+            Assert.Equal("", untitled.Duplicate().Title);
+            Assert.True(untitled.Italic);
+            Assert.Equal("#8956B4", untitled.BorderColor);
+            Assert.Equal(2.5, untitled.BorderWidth);
+            var liveHeader = (Border)typeof(WallpaperProfiles.Engine.DesktopWidgetWindow)
+                .GetField("_header", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(running)!;
+            var liveCard = (Border)running.Content;
+            Assert.Equal(Visibility.Collapsed, liveHeader.Visibility);
+            Assert.Equal(new Thickness(2.5), liveCard.BorderThickness);
+            Assert.Equal("#FF8956B4", ((SolidColorBrush)liveCard.BorderBrush).Color.ToString());
+            Assert.Equal(FontStyles.Italic, ((TextBlock)((ScrollViewer)liveBody.Content).Content).FontStyle);
+            ((TextBox)view.FindName("WidgetTitle")).Text = "A title again";
+            Press("SaveWidgetButton");
+            AwaitUpdate(() => running.Title == "Belie widget · A title again");
+            Assert.Equal(Visibility.Visible, liveHeader.Visibility);
         }
         Press("AddCountdownButton");
+        ((TextBox)view.FindName("WidgetTitle")).Text = "";
         ((TextBox)view.FindName("WidgetTime")).Text = "bad time";
         Press("SaveWidgetButton");
         Assert.Single(store.Load().Widgets);
@@ -385,12 +490,14 @@ public sealed class LibraryWindowTests
         ((TextBox)view.FindName("WidgetTime")).Text = "18:30";
         Press("SaveWidgetButton");
         Press("AddLinkButton");
+        ((TextBox)view.FindName("WidgetTitle")).Text = "";
         ((TextBox)view.FindName("WidgetContent")).Text = "file:///C:/Windows/notepad.exe";
         Press("SaveWidgetButton");
         Assert.Equal(2, store.Load().Widgets.Count);
         ((TextBox)view.FindName("WidgetContent")).Text = "https://example.com/project";
         Press("SaveWidgetButton");
         Press("AddImageButton");
+        ((TextBox)view.FindName("WidgetTitle")).Text = "";
         ((TextBox)view.FindName("WidgetContent")).Text = imagePath;
         ((CheckBox)view.FindName("WidgetLocked")).IsChecked = true;
         Press("SaveWidgetButton");

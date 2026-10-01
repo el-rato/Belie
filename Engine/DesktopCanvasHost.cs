@@ -166,6 +166,7 @@ internal sealed class DesktopWidgetWindow : Window
     private double _resizeWidth, _resizeHeight;
     private bool _resizeDirty;
     private string _appearance = "";
+    private bool HasHeader => _widget.ShowHeader && !string.IsNullOrWhiteSpace(_widget.Title);
 
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
@@ -176,7 +177,7 @@ internal sealed class DesktopWidgetWindow : Window
         _widget = widget;
         _store = store;
         _cursorPosition = cursorPosition ?? (() => System.Windows.Forms.Cursor.Position);
-        Title = "Belie widget · " + widget.Title;
+        Title = "Belie widget · " + widget.DisplayTitle;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = true;
@@ -202,18 +203,18 @@ internal sealed class DesktopWidgetWindow : Window
         };
         _card.MouseMove += (_, _) =>
         {
-            if (_widget.ShowHeader || _dragStart is not { } start) return;
+            if (HasHeader || _dragStart is not { } start) return;
             var cursor = System.Windows.Forms.Cursor.Position;
             _widget.X = _startX + cursor.X - start.X; _widget.Y = _startY + cursor.Y - start.Y; Place();
         };
         _card.MouseLeftButtonUp += (_, _) =>
         {
-            if (_widget.ShowHeader || _dragStart == null) return;
+            if (HasHeader || _dragStart == null) return;
             _dragStart = null; _card.ReleaseMouseCapture(); SaveLayout();
         };
         _card.LostMouseCapture += (_, _) =>
         {
-            if (_widget.ShowHeader || _dragStart == null) return;
+            if (HasHeader || _dragStart == null) return;
             _dragStart = null; SaveLayout();
         };
         header.MouseMove += (_, _) =>
@@ -266,7 +267,7 @@ internal sealed class DesktopWidgetWindow : Window
         Content = _card;
         _card.MouseLeftButtonDown += (_, e) =>
         {
-            if (_widget.ShowHeader || _widget.Locked || _widget.Kind == DesktopWidgetKind.Link) return;
+            if (HasHeader || _widget.Locked || _widget.Kind == DesktopWidgetKind.Link) return;
             _dragStart = System.Windows.Forms.Cursor.Position; _startX = _widget.X; _startY = _widget.Y;
             _card.CaptureMouse(); e.Handled = true;
         };
@@ -333,18 +334,23 @@ internal sealed class DesktopWidgetWindow : Window
         FontFamily = new FontFamily(widget.FontFamily);
         Foreground = ColorBrush(widget.TextColor, Color.FromRgb(241, 242, 238));
         FontWeight = widget.Bold ? FontWeights.Bold : FontWeights.Normal;
+        FontStyle = widget.Italic ? FontStyles.Italic : FontStyles.Normal;
         _card.SetValue(System.Windows.Documents.TextElement.FontFamilyProperty, FontFamily);
         _card.SetValue(System.Windows.Documents.TextElement.ForegroundProperty, Foreground);
         _card.SetValue(System.Windows.Documents.TextElement.FontWeightProperty, FontWeight);
+        _card.SetValue(System.Windows.Documents.TextElement.FontStyleProperty, FontStyle);
         _card.CornerRadius = new CornerRadius(widget.CornerRadius);
-        _card.BorderThickness = new Thickness(widget.ShowBorder ? 1 : 0);
+        _card.BorderThickness = new Thickness(widget.ShowBorder ? widget.BorderWidth : 0);
         var glass = widget.GlassEffect && widget.ShowBackground;
         _glass.Visibility = glass ? Visibility.Visible : Visibility.Collapsed;
+        var borderBrush = ColorBrush(widget.BorderColor, Color.FromRgb(115, 133, 121));
+        borderBrush.Opacity = 140d / 255;
+        var rim = widget.BorderColor == "#738579" ? Colors.White : borderBrush.Color;
         _card.BorderBrush = glass
             ? new LinearGradientBrush(new GradientStopCollection {
-                new(Color.FromArgb(190, 255, 255, 255), 0), new(Color.FromArgb(65, 225, 239, 255), .45),
-                new(Color.FromArgb(110, 255, 255, 255), 1) }, new System.Windows.Point(0, 0), new System.Windows.Point(1, 1))
-            : new SolidColorBrush(Color.FromArgb(140, 115, 133, 121));
+                new(Color.FromArgb(190, rim.R, rim.G, rim.B), 0), new(Color.FromArgb(65, rim.R, rim.G, rim.B), .45),
+                new(Color.FromArgb(110, rim.R, rim.G, rim.B), 1) }, new System.Windows.Point(0, 0), new System.Windows.Point(1, 1))
+            : borderBrush;
         _card.Background = glass ? Brushes.Transparent
             : widget.ShowBackground ? ColorBrush(widget.BackgroundColor, Color.FromRgb(29, 32, 30)) : Brushes.Transparent;
         if (glass)
@@ -360,12 +366,12 @@ internal sealed class DesktopWidgetWindow : Window
             UpdateGlassClip();
             RefreshGlass();
         }
-        _header.Visibility = widget.ShowHeader ? Visibility.Visible : Visibility.Collapsed;
-        _grid.RowDefinitions[0].Height = new GridLength(widget.ShowHeader ? 38 : 0);
-        _body.Margin = new Thickness(16, widget.ShowHeader ? 4 : 16, 16, 18);
+        _header.Visibility = HasHeader ? Visibility.Visible : Visibility.Collapsed;
+        _grid.RowDefinitions[0].Height = new GridLength(HasHeader ? 38 : 0);
+        _body.Margin = new Thickness(16, HasHeader ? 4 : 16, 16, 18);
         _resize.Visibility = widget.Locked ? Visibility.Collapsed : Visibility.Visible;
         _title.Text = widget.Title;
-        Title = "Belie widget · " + widget.Title;
+        Title = "Belie widget · " + widget.DisplayTitle;
         var appearance = widget.Kind + "\n" + widget.Content + "\n" + widget.FontSize + "\n" + widget.Alignment + "\n" + widget.ImageFit;
         if (widget.Kind == DesktopWidgetKind.Image)
             appearance += "\n" + (File.Exists(widget.Content) ? File.GetLastWriteTimeUtc(widget.Content).Ticks.ToString() : "missing");

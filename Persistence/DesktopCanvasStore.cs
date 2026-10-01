@@ -11,6 +11,8 @@ internal sealed class DesktopWidget
     public Guid Id { get; set; } = Guid.NewGuid();
     public DesktopWidgetKind Kind { get; set; }
     public string Title { get; set; } = "New note";
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string DisplayTitle => string.IsNullOrWhiteSpace(Title) ? "Untitled " + Kind.ToString().ToLowerInvariant() : Title;
     public string Content { get; set; } = "";
     public DateTimeOffset Target { get; set; } = DateTimeOffset.Now.AddDays(7);
     public double X { get; set; } = 160;
@@ -22,6 +24,7 @@ internal sealed class DesktopWidget
     public string FontFamily { get; set; } = "Segoe UI";
     public double FontSize { get; set; } = 16;
     public bool Bold { get; set; }
+    public bool Italic { get; set; }
     public WidgetTextAlignment Alignment { get; set; }
     public string TextColor { get; set; } = "#F1F2EE";
     public string BackgroundColor { get; set; } = "#1D201E";
@@ -29,6 +32,8 @@ internal sealed class DesktopWidget
     public double CornerRadius { get; set; } = 12;
     public bool ShowHeader { get; set; } = true;
     public bool ShowBorder { get; set; } = true;
+    public string BorderColor { get; set; } = "#738579";
+    public double BorderWidth { get; set; } = 1;
     public bool ShowBackground { get; set; } = true;
     public bool GlassEffect { get; set; }
     public WidgetImageFit ImageFit { get; set; }
@@ -36,7 +41,8 @@ internal sealed class DesktopWidget
     public DesktopWidget Duplicate()
     {
         var copy = (DesktopWidget)MemberwiseClone();
-        copy.Id = Guid.NewGuid(); copy.Title += " copy";
+        copy.Id = Guid.NewGuid();
+        if (!string.IsNullOrWhiteSpace(copy.Title)) copy.Title += " copy";
         copy.X += 24; copy.Y += 24;
         return copy;
     }
@@ -95,6 +101,8 @@ internal sealed class DesktopCanvasStore
             widget.CornerRadius = Clamp(widget.CornerRadius, 0, 60, 12);
             widget.TextColor ??= "#F1F2EE";
             widget.BackgroundColor ??= "#1D201E";
+            widget.BorderColor ??= "#738579";
+            widget.BorderWidth = Clamp(widget.BorderWidth, 0, 6, 1);
             if (!Enum.IsDefined(widget.Alignment)) widget.Alignment = WidgetTextAlignment.Left;
             if (!Enum.IsDefined(widget.ImageFit)) widget.ImageFit = WidgetImageFit.Fit;
         }
