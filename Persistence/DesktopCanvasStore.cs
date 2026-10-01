@@ -5,7 +5,6 @@ namespace WallpaperProfiles.Persistence;
 internal enum DesktopWidgetKind { Note, Countdown, Image, Link, Sketch }
 internal enum WidgetTextAlignment { Left, Center, Right }
 internal enum WidgetImageFit { Fit, Fill, Stretch }
-internal enum BoardWallpaperMode { Normal, Timed, Rotating, RotatingTimed }
 
 internal sealed class DesktopWidget
 {
@@ -97,76 +96,6 @@ internal sealed class DesktopCanvasDocument
 {
     public bool Enabled { get; set; }
     public List<DesktopWidget> Widgets { get; set; } = new();
-    public List<DesktopBoard> Boards { get; set; } = new();
-    public Guid? ActiveBoardId { get; set; }
-    public bool AutoSwitchBoards { get; set; }
-    public DateTime? ManualBoardUntil { get; set; }
-    [System.Text.Json.Serialization.JsonIgnore]
-    public DesktopBoard? ActiveBoard => Boards.FirstOrDefault(board => board.Id == ActiveBoardId);
-    [System.Text.Json.Serialization.JsonIgnore]
-    public IEnumerable<DesktopWidget> AllWidgets => Boards.Count == 0 ? Widgets : Boards.SelectMany(board => board.Widgets);
-    public void InitializeBoards()
-    {
-        Boards ??= new(); Widgets ??= new();
-        if (Boards.Count == 0) Boards.Add(new DesktopBoard { Id = Guid.Empty, Name = "Chill", Widgets = Widgets });
-        foreach (var board in Boards)
-        {
-            if (board == null) throw new InvalidDataException("The canvas contains an invalid board.");
-            board.Widgets ??= new(); board.Name ??= "New board"; board.WallpaperPath ??= "";
-            board.OverrideWallpaperPath ??= "";
-            if (board.WallpaperMode.HasValue && !Enum.IsDefined(board.WallpaperMode.Value)) board.WallpaperMode = null;
-            if (board.RotationMinutes.HasValue) board.RotationMinutes = Math.Clamp(board.RotationMinutes.Value, 1, 1440);
-        }
-        var active = ActiveBoard ?? Boards[0];
-        ActiveBoardId = active.Id; Widgets = active.Widgets;
-    }
-    public void SwitchBoard(Guid id, DateTime now, bool manual = true)
-    {
-        var board = Boards.FirstOrDefault(item => item.Id == id) ?? throw new InvalidOperationException("This board was removed.");
-        ActiveBoardId = board.Id; Widgets = board.Widgets;
-        ManualBoardUntil = manual && AutoSwitchBoards ? NextBoardBoundary(now) : null;
-    }
-    public DateTime? NextBoardBoundary(DateTime now)
-        => Boards.Where(board => board.SwitchAt.HasValue).Select(board =>
-        {
-            var next = now.Date.Add(board.SwitchAt!.Value.ToTimeSpan());
-            return next <= now ? next.AddDays(1) : next;
-        }).OrderBy(next => next).Cast<DateTime?>().FirstOrDefault();
-    public bool ApplyBoardSchedule(DateTime now)
-    {
-        if (!AutoSwitchBoards || ManualBoardUntil > now) return false;
-        var scheduled = Boards.Where(board => board.SwitchAt.HasValue).OrderBy(board => board.SwitchAt).ToArray();
-        if (scheduled.Length == 0) return false;
-        var board = scheduled.LastOrDefault(item => item.SwitchAt!.Value <= TimeOnly.FromDateTime(now)) ?? scheduled[^1];
-        if (ActiveBoardId == board.Id) return false;
-        SwitchBoard(board.Id, now, manual: false);
-        return true;
-    }
-}
-
-internal sealed class DesktopBoard
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string Name { get; set; } = "New board";
-    public string WallpaperPath { get; set; } = "";
-    public WallpaperProfiles.Models.FitMode WallpaperFit { get; set; } = WallpaperProfiles.Models.FitMode.Fill;
-    public WallpaperProfiles.Models.WallpaperProfile? Scene { get; set; }
-    public BoardWallpaperMode? WallpaperMode { get; set; }
-    public int? RotationMinutes { get; set; }
-    public bool? RotationRandom { get; set; }
-    public string OverrideWallpaperPath { get; set; } = "";
-    public TimeOnly OverrideStart { get; set; } = new(20, 0);
-    public TimeOnly OverrideEnd { get; set; } = new(8, 0);
-    [System.Text.Json.Serialization.JsonIgnore]
-    public BoardWallpaperMode EffectiveWallpaperMode => WallpaperMode ?? (Scene?.SlideshowIntervalMinutes > 0 ? BoardWallpaperMode.Rotating : BoardWallpaperMode.Normal);
-    public bool IsWallpaperOverrideActive(DateTime now)
-    {
-        if (EffectiveWallpaperMode is not (BoardWallpaperMode.Timed or BoardWallpaperMode.RotatingTimed) || OverrideStart == OverrideEnd || string.IsNullOrWhiteSpace(OverrideWallpaperPath)) return false;
-        var time = TimeOnly.FromDateTime(now);
-        return OverrideStart < OverrideEnd ? time >= OverrideStart && time < OverrideEnd : time >= OverrideStart || time < OverrideEnd;
-    }
-    public TimeOnly? SwitchAt { get; set; }
-    public List<DesktopWidget> Widgets { get; set; } = new();
 }
 
 internal sealed class DesktopCanvasStore
@@ -176,15 +105,30 @@ internal sealed class DesktopCanvasStore
 
     public DesktopCanvasDocument Load()
     {
-        if (!File.Exists(FilePath)) { var empty = new DesktopCanvasDocument(); empty.InitializeBoards(); return empty; }
+        if (!File.Exists(FilePath)) return new DesktopCanvasDocument();
         using var stream = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         var document = JsonSerializer.Deserialize<DesktopCanvasDocument>(stream, JsonOptions.Shared)
             ?? throw new InvalidDataException("The desktop canvas could not be read.");
-        document.InitializeBoards();
-        if (document.Boards.Select(board => board.Id).Distinct().Count() != document.Boards.Count)
-            throw new InvalidDataException("The canvas contains duplicate boards.");
+        stream.Position = 0;
+        using var json = JsonDocument.Parse(stream);
+        document.Widgets ??= new();
+        if (TryGetSavedBoards(json.RootElement, out var boards))
+        {
+            var existing = document.Widgets.Where(widget => widget != null).Select(widget => widget.Id).ToHashSet();
+            foreach (var board in boards.EnumerateArray())
+            {
+                if (!board.TryGetProperty("Widgets", out var saved) || saved.ValueKind != JsonValueKind.Array) continue;
+                foreach (var widget in saved.Deserialize<List<DesktopWidget>>(JsonOptions.Shared) ?? new())
+                {
+                    if (widget == null) throw new InvalidDataException("The canvas contains an invalid widget.");
+                    if (!existing.Add(widget.Id)) continue;
+                    widget.Enabled = false;
+                    document.Widgets.Add(widget);
+                }
+            }
+        }
         var seen = new HashSet<Guid>();
-        foreach (var widget in document.AllWidgets)
+        foreach (var widget in document.Widgets)
         {
             if (widget == null || !seen.Add(widget.Id)) throw new InvalidDataException("The canvas contains an invalid widget.");
             if (!Enum.IsDefined(widget.Kind)) throw new InvalidDataException("Unknown widget type.");
@@ -216,6 +160,8 @@ internal sealed class DesktopCanvasStore
 
     private static double Clamp(double value, double min, double max, double fallback)
         => double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
+    private static bool TryGetSavedBoards(JsonElement root, out JsonElement boards)
+        => (root.TryGetProperty("Boards", out boards) || root.TryGetProperty("boards", out boards)) && boards.ValueKind == JsonValueKind.Array;
 
     public void Save(DesktopCanvasDocument document)
         => WithWriteLock(() => SaveCore(document));
@@ -239,8 +185,17 @@ internal sealed class DesktopCanvasStore
 
     private void SaveCore(DesktopCanvasDocument document)
     {
-        document.InitializeBoards();
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+        if (File.Exists(FilePath))
+        {
+            using var previous = JsonDocument.Parse(File.ReadAllText(FilePath));
+            if (TryGetSavedBoards(previous.RootElement, out _))
+            {
+                var backup = FilePath + ".boards-backup.json";
+                if (File.Exists(backup)) backup = FilePath + ".boards-backup-" + Guid.NewGuid().ToString("N") + ".json";
+                File.Copy(FilePath, backup);
+            }
+        }
         var temporary = FilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
@@ -257,7 +212,7 @@ internal sealed class DesktopCanvasStore
         var found = false;
         Update(document =>
         {
-            var widget = document.AllWidgets.FirstOrDefault(w => w.Id == id);
+            var widget = document.Widgets.FirstOrDefault(w => w.Id == id);
             if (widget == null) return;
             widget.X = x; widget.Y = y; widget.Width = width; widget.Height = height;
             found = true;
@@ -265,5 +220,5 @@ internal sealed class DesktopCanvasStore
         return found;
     }
     public void UpdateWidget(Guid id, Action<DesktopWidget> update)
-        => Update(document => { var widget = document.AllWidgets.FirstOrDefault(item => item.Id == id); if (widget != null) update(widget); });
+        => Update(document => { var widget = document.Widgets.FirstOrDefault(item => item.Id == id); if (widget != null) update(widget); });
 }

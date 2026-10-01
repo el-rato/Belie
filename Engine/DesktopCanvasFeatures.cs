@@ -9,9 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Ink;
 using System.Windows.Media;
-using Microsoft.Win32;
 using WallpaperProfiles.Persistence;
-using WallpaperProfiles.Models;
 using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
@@ -23,45 +21,6 @@ namespace WallpaperProfiles.Engine;
 
 internal static class DesktopCanvasFeatures
 {
-    public static DesktopBoard CopyBoard(DesktopBoard source, string name)
-    {
-        var copy = new DesktopBoard { Name = name, WallpaperPath = source.WallpaperPath, WallpaperFit = source.WallpaperFit, Scene = source.Scene == null ? null : CopyScene(source.Scene),
-            WallpaperMode = source.WallpaperMode, RotationMinutes = source.RotationMinutes, RotationRandom = source.RotationRandom,
-            OverrideWallpaperPath = source.OverrideWallpaperPath, OverrideStart = source.OverrideStart, OverrideEnd = source.OverrideEnd };
-        foreach (var widget in source.Widgets)
-        {
-            var item = widget.Duplicate(); item.Title = widget.Title; item.X = widget.X; item.Y = widget.Y;
-            copy.Widgets.Add(item);
-        }
-        return copy;
-    }
-    public static WallpaperProfile CopyScene(WallpaperProfile source)
-    {
-        var copy = JsonSerializer.Deserialize<WallpaperProfile>(JsonSerializer.Serialize(source, JsonOptions.Shared), JsonOptions.Shared)!;
-        copy.Id = Guid.NewGuid(); copy.Schedule = new(); copy.EventTriggers = new(); return copy;
-    }
-    public static WallpaperProfile SceneForBoard(DesktopBoard board, DateTime? now = null)
-    {
-        var scene = board.Scene == null ? new WallpaperProfile() : CopyScene(board.Scene);
-        scene.Name = board.Name; scene.FolderPath = board.WallpaperPath; scene.FitMode = board.WallpaperFit;
-        if (board.EffectiveWallpaperMode is BoardWallpaperMode.Rotating or BoardWallpaperMode.RotatingTimed)
-        { scene.SlideshowIntervalMinutes = Math.Clamp(board.RotationMinutes ?? Math.Max(1, scene.SlideshowIntervalMinutes), 1, 1440); scene.SlideshowRandom = board.RotationRandom ?? scene.SlideshowRandom; }
-        else scene.SlideshowIntervalMinutes = 0;
-        if (board.IsWallpaperOverrideActive(now ?? DateTime.Now) && File.Exists(board.OverrideWallpaperPath))
-        { scene.FolderPath = board.OverrideWallpaperPath; scene.SlideshowIntervalMinutes = 0; }
-        return scene;
-    }
-    public static string WallpaperKey(DesktopBoard board, DateTime? now = null) => board.Id + "|" + board.WallpaperPath + "|" + board.WallpaperFit + "|" + JsonSerializer.Serialize(board.Scene, JsonOptions.Shared)
-        + $"|{board.EffectiveWallpaperMode}|{board.RotationMinutes}|{board.RotationRandom}|{board.OverrideWallpaperPath}|{board.IsWallpaperOverrideActive(now ?? DateTime.Now) && File.Exists(board.OverrideWallpaperPath)}";
-
-    public static string CaptureWallpaper(DesktopCanvasStore store, Guid boardId)
-    {
-        using var desktop = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop");
-        var path = desktop?.GetValue("WallPaper") as string ?? "";
-        if (!File.Exists(path)) throw new InvalidOperationException("Choose a wallpaper image to save this board.");
-        return CopyAsset(store, path, "boards", boardId);
-    }
-
     private static string CopyAsset(DesktopCanvasStore store, string path, string folder, Guid id)
     {
         var directory = Path.Combine(store.FilePath + ".assets", folder);

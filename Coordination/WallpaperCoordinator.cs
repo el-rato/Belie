@@ -39,11 +39,6 @@ internal sealed class WallpaperCoordinator : IDisposable
     private ResolutionSource _source = ResolutionSource.Schedule;
     private readonly Dictionary<Guid, ActiveEvent> _activeEvents = new();
     private string _summary = "Starting…";
-    private DesktopCanvasStore? _canvas;
-    private DispatcherTimer? _canvasTimer;
-    private string _canvasKey = "";
-    private bool _canvasOwnsWallpaper;
-    private string _canvasBoardName = "";
 
     public event Action? StateChanged;
 
@@ -76,40 +71,6 @@ internal sealed class WallpaperCoordinator : IDisposable
     public bool AmbientIsMuted => _scene.IsMuted;
     public void ToggleAmbientMuted() => _scene.ToggleMuted();
     public void CheckNow() => Evaluate("periodic check");
-
-    public void AttachCanvas(DesktopCanvasStore canvas)
-    {
-        _canvas = canvas;
-        _canvasTimer?.Stop();
-        _canvasTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _canvasTimer.Tick += (_, _) => RefreshCanvasBoard();
-        RefreshCanvasBoard(); _canvasTimer.Start();
-    }
-    private void RefreshCanvasBoard()
-    {
-        try
-        {
-            var document = _canvas!.Load();
-            if (!document.Enabled) return;
-            if (document.ApplyBoardSchedule(LocalNow))
-            { _canvas.Update(latest => latest.ApplyBoardSchedule(LocalNow)); document = _canvas.Load(); }
-            var board = document.ActiveBoard!;
-            var key = DesktopCanvasFeatures.WallpaperKey(board, LocalNow);
-            if (key == _canvasKey) return;
-            var scene = DesktopCanvasFeatures.SceneForBoard(board, LocalNow);
-            if (string.IsNullOrWhiteSpace(board.WallpaperPath) && board.Id != Guid.Empty)
-            {
-                _canvasKey = key; _slideshow.Stop(); _live.Stop(); _iconSafeLive.Stop(); _scene.Dispose();
-                _canvasOwnsWallpaper = true; _canvasBoardName = board.Name; UpdateSummary(); return;
-            }
-            if (!File.Exists(scene.FolderPath) && !Directory.Exists(scene.FolderPath)) return;
-            _canvasKey = key;
-            _canvasOwnsWallpaper = true; _canvasBoardName = board.Name;
-            _scene.Apply(scene); _applyWallpaper(scene);
-            RecordActivity(board.Name, "Desktop board switched"); UpdateSummary();
-        }
-        catch (Exception ex) { Logger.Error("Applying desktop board failed; saved boards were preserved.", ex); }
-    }
 
     public void Init()
     {
@@ -151,7 +112,6 @@ internal sealed class WallpaperCoordinator : IDisposable
     public void SwitchManually(Guid profileId, TimeSpan? duration = null)
     {
         if (!_profiles.Any(p => p.Id == profileId)) return;
-        _canvasOwnsWallpaper = false;
         _resolver.SetManual(profileId, duration);
         if (duration.HasValue)
         {
@@ -186,7 +146,6 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     public void ResumeAutomatic()
     {
-        _canvasOwnsWallpaper = false;
         _resolver.ClearManual();
         Paused = false;
         RecordActivity(DescribeProfile(_currentId), "Returned to automatic rules");
@@ -235,7 +194,6 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     public LiveHandoff? CaptureLiveHandoff()
     {
-        if (_canvasOwnsWallpaper) return null;
         var current = _profiles.FirstOrDefault(p => p.Id == _currentId);
         if (current == null || current.IconFriendlyLive || !WallpaperEngine.IsLiveFile(current.FolderPath))
         {
@@ -262,7 +220,6 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     private void Evaluate(string reason, bool forceReapply = false)
     {
-        if (_canvasOwnsWallpaper) { UpdateSummary(); return; }
         var now = _timeProvider.GetLocalNow().DateTime;
         var manualBefore = _resolver.GetManualOverride(_profiles);
         var decision = _resolver.Resolve(now, _profiles, SnapshotActiveEvents(), _fallbackProfileId);
@@ -392,8 +349,6 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     private void UpdateSummary()
     {
-        if (_canvasOwnsWallpaper)
-        { _summary = "Active board: " + _canvasBoardName; StateChanged?.Invoke(); return; }
         var state = Paused ? "PAUSED" : "auto";
         var sourceText = _source switch
         {
@@ -426,7 +381,6 @@ internal sealed class WallpaperCoordinator : IDisposable
     public void Dispose()
     {
         _tickTimer.Stop();
-        _canvasTimer?.Stop();
         _triggers.Dispose();
         _slideshow.Dispose();
         _live.Dispose();

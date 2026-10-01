@@ -97,7 +97,6 @@ internal partial class App : System.Windows.Application
 
             _coordinator = new WallpaperCoordinator(profileStore, settingsStore, settings);
             _coordinator.Init();
-            _coordinator.AttachCanvas(new DesktopCanvasStore(DesktopCanvasProcess.DefaultFile));
 
             try { DesktopCanvasProcess.Start(DesktopCanvasProcess.DefaultFile); }
             catch (Exception ex) { Logger.Error("Restoring desktop widgets failed.", ex); }

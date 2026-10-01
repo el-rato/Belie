@@ -40,7 +40,7 @@ internal static class DesktopCanvasProcess
     public static void Start(string file)
     {
         var document = new DesktopCanvasStore(file).Load();
-        if (!document.Enabled || (!document.Widgets.Any(w => w.Enabled) && !document.AutoSwitchBoards && string.IsNullOrWhiteSpace(document.ActiveBoard?.WallpaperPath)) || IsRunning(file)) return;
+        if (!document.Enabled || !document.Widgets.Any(w => w.Enabled) || IsRunning(file)) return;
         var exe = Environment.ProcessPath ?? throw new InvalidOperationException("Belie's executable was not found.");
         var canvasFile = Path.GetFullPath(file);
         using var currentProcess = Process.GetCurrentProcess();
@@ -85,15 +85,9 @@ internal sealed class DesktopCanvasHost : IDisposable
     private readonly Dictionary<Guid, DesktopWidgetWindow> _windows = new();
     private readonly Func<DesktopWidget, DesktopWidgetWindow> _createWindow;
     private bool _disposed;
-    private string _boardWallpaper = "";
     private readonly HashSet<Guid> _linksRefreshing = new();
     private readonly Dictionary<Guid, DateTimeOffset> _linkAttempts = new();
     private readonly Dictionary<Guid, string> _linkSources = new();
-    private readonly SceneController _boardScene = new();
-    private readonly SlideshowController _boardSlideshow = new();
-    private readonly LiveWallpaperController _boardLive = new();
-    private readonly IconSafeLiveController _boardIconLive = new();
-    private bool _ownsWallpaper;
 
     public DesktopCanvasHost(string file, Func<DesktopWidget, DesktopWidgetWindow>? createWindow = null)
     {
@@ -121,32 +115,8 @@ internal sealed class DesktopCanvasHost : IDisposable
         {
             if (_stop.WaitOne(0)) { System.Windows.Application.Current.Shutdown(); return; }
             var document = _store.Load();
-            if (document.Enabled && document.ApplyBoardSchedule(DateTime.Now))
-            {
-                _store.Update(latest => latest.ApplyBoardSchedule(DateTime.Now));
-                document = _store.Load();
-            }
-            if (!document.Enabled || (!document.Widgets.Any(w => w.Enabled) && !document.AutoSwitchBoards && string.IsNullOrWhiteSpace(document.ActiveBoard?.WallpaperPath)))
+            if (!document.Enabled || !document.Widgets.Any(w => w.Enabled))
             { System.Windows.Application.Current.Shutdown(); return; }
-            var board = document.ActiveBoard!;
-            var mainRunning = EventWaitHandle.TryOpenExisting(@"Local\Belie.Canvas.Open", out var mainEvent);
-            mainEvent?.Dispose();
-            var wallpaperKey = DesktopCanvasFeatures.WallpaperKey(board) + "|" + mainRunning;
-            if (_boardWallpaper != wallpaperKey && _store.FilePath.Equals(DesktopCanvasProcess.DefaultFile, StringComparison.OrdinalIgnoreCase))
-            {
-                _boardWallpaper = wallpaperKey;
-                if (_ownsWallpaper)
-                { _boardSlideshow.Stop(); _boardLive.Stop(); _boardIconLive.Stop(); _boardScene.Dispose(); _ownsWallpaper = false; }
-                var scene = DesktopCanvasFeatures.SceneForBoard(board);
-                if (!mainRunning && (File.Exists(scene.FolderPath) || Directory.Exists(scene.FolderPath)))
-                {
-                    LiveHostProcess.StopRunning();
-                    _boardScene.Apply(scene); _ownsWallpaper = true;
-                    if (WallpaperEngine.IsLiveFile(scene.FolderPath))
-                    { if (scene.IconFriendlyLive) _boardIconLive.Start(scene); else _boardLive.Start(scene); }
-                    else _boardSlideshow.Start(scene);
-                }
-            }
             var enabled = document.Widgets.Where(w => w.Enabled).ToDictionary(w => w.Id);
             foreach (var id in _windows.Keys.Where(id => !enabled.ContainsKey(id)).ToArray())
             {
@@ -193,7 +163,6 @@ internal sealed class DesktopCanvasHost : IDisposable
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
-        _boardSlideshow.Dispose(); _boardLive.Dispose(); _boardIconLive.Dispose(); _boardScene.Dispose();
         _changeWait.Unregister(null);
         _changed.Dispose();
         foreach (var window in _windows.Values.ToArray()) window.Close();
@@ -354,7 +323,7 @@ internal sealed class DesktopWidgetWindow : Window
             {
                 _store.Update(document =>
                 {
-                    var saved = document.AllWidgets.FirstOrDefault(w => w.Id == _widget.Id);
+                    var saved = document.Widgets.FirstOrDefault(w => w.Id == _widget.Id);
                     if (saved != null) saved.Enabled = false;
                 });
                 Close();
