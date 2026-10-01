@@ -40,7 +40,7 @@ internal static class DesktopCanvasProcess
     public static void Start(string file)
     {
         var document = new DesktopCanvasStore(file).Load();
-        if (!document.Enabled || !document.Widgets.Any(w => w.Enabled) || IsRunning(file)) return;
+        if (!document.Enabled || (!document.Widgets.Any(w => w.Enabled) && !document.AutoSwitchBoards && string.IsNullOrWhiteSpace(document.ActiveBoard?.WallpaperPath)) || IsRunning(file)) return;
         var exe = Environment.ProcessPath ?? throw new InvalidOperationException("Belie's executable was not found.");
         var canvasFile = Path.GetFullPath(file);
         using var currentProcess = Process.GetCurrentProcess();
@@ -85,6 +85,15 @@ internal sealed class DesktopCanvasHost : IDisposable
     private readonly Dictionary<Guid, DesktopWidgetWindow> _windows = new();
     private readonly Func<DesktopWidget, DesktopWidgetWindow> _createWindow;
     private bool _disposed;
+    private string _boardWallpaper = "";
+    private readonly HashSet<Guid> _linksRefreshing = new();
+    private readonly Dictionary<Guid, DateTimeOffset> _linkAttempts = new();
+    private readonly Dictionary<Guid, string> _linkSources = new();
+    private readonly SceneController _boardScene = new();
+    private readonly SlideshowController _boardSlideshow = new();
+    private readonly LiveWallpaperController _boardLive = new();
+    private readonly IconSafeLiveController _boardIconLive = new();
+    private bool _ownsWallpaper;
 
     public DesktopCanvasHost(string file, Func<DesktopWidget, DesktopWidgetWindow>? createWindow = null)
     {
@@ -112,8 +121,32 @@ internal sealed class DesktopCanvasHost : IDisposable
         {
             if (_stop.WaitOne(0)) { System.Windows.Application.Current.Shutdown(); return; }
             var document = _store.Load();
-            if (!document.Enabled || !document.Widgets.Any(w => w.Enabled))
+            if (document.Enabled && document.ApplyBoardSchedule(DateTime.Now))
+            {
+                _store.Update(latest => latest.ApplyBoardSchedule(DateTime.Now));
+                document = _store.Load();
+            }
+            if (!document.Enabled || (!document.Widgets.Any(w => w.Enabled) && !document.AutoSwitchBoards && string.IsNullOrWhiteSpace(document.ActiveBoard?.WallpaperPath)))
             { System.Windows.Application.Current.Shutdown(); return; }
+            var board = document.ActiveBoard!;
+            var mainRunning = EventWaitHandle.TryOpenExisting(@"Local\Belie.Canvas.Open", out var mainEvent);
+            mainEvent?.Dispose();
+            var wallpaperKey = DesktopCanvasFeatures.WallpaperKey(board) + "|" + mainRunning;
+            if (_boardWallpaper != wallpaperKey && _store.FilePath.Equals(DesktopCanvasProcess.DefaultFile, StringComparison.OrdinalIgnoreCase))
+            {
+                _boardWallpaper = wallpaperKey;
+                if (_ownsWallpaper)
+                { _boardSlideshow.Stop(); _boardLive.Stop(); _boardIconLive.Stop(); _boardScene.Dispose(); _ownsWallpaper = false; }
+                var scene = DesktopCanvasFeatures.SceneForBoard(board);
+                if (!mainRunning && (File.Exists(scene.FolderPath) || Directory.Exists(scene.FolderPath)))
+                {
+                    LiveHostProcess.StopRunning();
+                    _boardScene.Apply(scene); _ownsWallpaper = true;
+                    if (WallpaperEngine.IsLiveFile(scene.FolderPath))
+                    { if (scene.IconFriendlyLive) _boardIconLive.Start(scene); else _boardLive.Start(scene); }
+                    else _boardSlideshow.Start(scene);
+                }
+            }
             var enabled = document.Widgets.Where(w => w.Enabled).ToDictionary(w => w.Id);
             foreach (var id in _windows.Keys.Where(id => !enabled.ContainsKey(id)).ToArray())
             {
@@ -133,9 +166,26 @@ internal sealed class DesktopCanvasHost : IDisposable
                 else window.Update(widget);
                 window.RefreshCountdown();
                 window.EnsureDesktop();
+                if (widget.Kind == DesktopWidgetKind.Link && !_linksRefreshing.Contains(widget.Id)
+                    && (!_linkSources.TryGetValue(widget.Id, out var source) || source != widget.Content + "|" + widget.LeetCodeUsername
+                        || !_linkAttempts.TryGetValue(widget.Id, out var attempted) || DateTimeOffset.UtcNow - attempted > TimeSpan.FromMinutes(5))
+                    && (!widget.LinkUpdatedAt.HasValue || DateTimeOffset.UtcNow - widget.LinkUpdatedAt > TimeSpan.FromMinutes(15)
+                        || widget.IsLeetCode && widget.PotdDate != DateOnly.FromDateTime(DateTime.UtcNow)))
+                {
+                    _linksRefreshing.Add(widget.Id); _linkAttempts[widget.Id] = DateTimeOffset.UtcNow;
+                    _linkSources[widget.Id] = widget.Content + "|" + widget.LeetCodeUsername;
+                    RefreshLink(widget);
+                }
             }
         }
         catch (Exception ex) { Logger.Error("Refreshing desktop widgets failed; the saved canvas was preserved.", ex); }
+    }
+
+    private async void RefreshLink(DesktopWidget widget)
+    {
+        try { await Task.Run(() => DesktopLinkService.RefreshAsync(_store, widget)); }
+        catch (Exception ex) { Logger.Error("Refreshing link card failed.", ex); }
+        finally { _linksRefreshing.Remove(widget.Id); }
     }
 
     public void Dispose()
@@ -143,6 +193,7 @@ internal sealed class DesktopCanvasHost : IDisposable
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
+        _boardSlideshow.Dispose(); _boardLive.Dispose(); _boardIconLive.Dispose(); _boardScene.Dispose();
         _changeWait.Unregister(null);
         _changed.Dispose();
         foreach (var window in _windows.Values.ToArray()) window.Close();
@@ -186,6 +237,8 @@ internal sealed class DesktopWidgetWindow : Window
     private double _resizeWidth, _resizeHeight;
     private bool _resizeDirty;
     private string _appearance = "";
+    private Guid _contentWidget;
+    private DesktopSketch? _sketch;
     private bool HasHeader => _widget.ShowHeader && !string.IsNullOrWhiteSpace(_widget.Title);
 
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
@@ -287,7 +340,7 @@ internal sealed class DesktopWidgetWindow : Window
         Content = _card;
         _card.MouseLeftButtonDown += (_, e) =>
         {
-            if (HasHeader || _widget.Locked || _widget.Kind == DesktopWidgetKind.Link) return;
+            if (HasHeader || _widget.Locked || _widget.Kind is DesktopWidgetKind.Link or DesktopWidgetKind.Sketch) return;
             _dragStart = System.Windows.Forms.Cursor.Position; _startX = _widget.X; _startY = _widget.Y;
             _card.CaptureMouse(); e.Handled = true;
         };
@@ -301,7 +354,7 @@ internal sealed class DesktopWidgetWindow : Window
             {
                 _store.Update(document =>
                 {
-                    var saved = document.Widgets.FirstOrDefault(w => w.Id == _widget.Id);
+                    var saved = document.AllWidgets.FirstOrDefault(w => w.Id == _widget.Id);
                     if (saved != null) saved.Enabled = false;
                 });
                 Close();
@@ -309,6 +362,18 @@ internal sealed class DesktopWidgetWindow : Window
             catch (Exception ex) { Logger.Error("Hiding widget failed.", ex); }
         };
         menu.Items.Add(open); menu.Items.Add(hide); ContextMenu = menu;
+        AllowDrop = true;
+        DragOver += (_, e) => { e.Effects = System.Windows.DragDropEffects.Copy; e.Handled = true; };
+        Drop += (_, e) =>
+        {
+            try
+            {
+                var widgets = DesktopCanvasFeatures.ReadDrop(e.Data); var cursor = System.Windows.Forms.Cursor.Position;
+                DesktopCanvasFeatures.SaveDrop(_store, widgets, cursor.X, cursor.Y);
+            }
+            catch (Exception ex) { ToolTip = ex.Message; }
+            e.Handled = true;
+        };
         SourceInitialized += (_, _) =>
         {
             _handle = new WindowInteropHelper(this).Handle;
@@ -393,11 +458,16 @@ internal sealed class DesktopWidgetWindow : Window
         _title.Text = widget.Title;
         Title = "Belie widget · " + widget.DisplayTitle;
         var appearance = widget.Kind + "\n" + widget.Content + "\n" + widget.FontSize + "\n" + widget.Alignment + "\n" + widget.ImageFit;
+        if (widget.Kind == DesktopWidgetKind.Link)
+            appearance += $"|{widget.LinkPageTitle}|{widget.LinkDescription}|{widget.LinkCustomDescription}|{widget.LeetCodeUsername}|{widget.LinkUpdatedAt}|{DateTime.UtcNow.Date}";
+        if (widget.Kind == DesktopWidgetKind.Sketch)
+            appearance = $"Sketch|{widget.Id}|{widget.Locked}|{widget.TextColor}";
         if (widget.Kind == DesktopWidgetKind.Image)
             appearance += "\n" + (File.Exists(widget.Content) ? File.GetLastWriteTimeUtc(widget.Content).Ticks.ToString() : "missing");
-        if (_appearance != appearance)
+        if (_appearance != appearance || _contentWidget != widget.Id)
         {
             _appearance = appearance;
+            _contentWidget = widget.Id;
             switch (widget.Kind)
             {
                 case DesktopWidgetKind.Note:
@@ -416,21 +486,69 @@ internal sealed class DesktopWidgetWindow : Window
                             WidgetImageFit.Stretch => Stretch.Fill, _ => Stretch.Uniform } };
                     break;
                 case DesktopWidgetKind.Link:
+                    _body.Content = LinkCard(widget);
+                    break;
+                case DesktopWidgetKind.Sketch:
+                    var sketchId = widget.Id;
+                    _sketch = new DesktopSketch(widget, (drawing, width, height) =>
+                    {
+                        try { _store.UpdateWidget(sketchId, saved => { saved.Drawing = drawing; saved.DrawingWidth = width; saved.DrawingHeight = height; }); }
+                        catch (Exception ex) { Logger.Error("Saving sketch failed.", ex); }
+                    }, () => { _dragStart = System.Windows.Forms.Cursor.Position; _startX = _widget.X; _startY = _widget.Y; },
+                    () =>
+                    {
+                        if (_dragStart is not { } start) return;
+                        var cursor = System.Windows.Forms.Cursor.Position;
+                        _widget.X = _startX + cursor.X - start.X; _widget.Y = _startY + cursor.Y - start.Y; Place();
+                    }, () => { _dragStart = null; SaveLayout(); });
+                    _body.Content = _sketch;
+                    break;
+            }
+        }
+        if (widget.Kind == DesktopWidgetKind.Sketch) _sketch?.UpdateDrawing(widget);
+        RefreshCountdown();
+        Place();
+    }
+
+    private FrameworkElement LinkCard(DesktopWidget widget)
+    {
+        var panel = new StackPanel();
+        void Text(string text, double size, double opacity = 1)
+            => panel.Children.Add(new TextBlock { Text = text, FontSize = size, Opacity = opacity, TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 7) });
+        if (DesktopWidget.TryGetLink(widget.Content, out var address))
+        {
+            Text(address!.Host.ToUpperInvariant(), 10, .65);
+            if (widget.IsLeetCode)
+            {
+                var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                Text($"{widget.PotdStreak(today)} day verified POTD streak", widget.FontSize);
+                Text($"{widget.ActivityStreak} day activity streak · {widget.LeetCodeUsername}", 12, .8);
+                Text(string.IsNullOrWhiteSpace(widget.PotdTitle) ? "Problem of the day" : widget.PotdTitle, Math.Min(widget.FontSize, 18));
+                Text(widget.PotdDate != today ? "Fetching today's challenge…" : widget.PotdCompletions.Contains(today) ? "Completed today ✓" : "Today's POTD is open", 12);
+                Text("Public accepted submissions · UTC days · recent verified history", 10, .6);
+            }
+            else
+            {
+                var fallback = Uri.UnescapeDataString(address.AbsolutePath.Trim('/')).Replace('-', ' ').Replace('_', ' ');
+                Text(string.IsNullOrWhiteSpace(widget.LinkPageTitle) ? (fallback.Length == 0 ? address.Host : fallback) : widget.LinkPageTitle, widget.FontSize);
+                var description = string.IsNullOrWhiteSpace(widget.LinkCustomDescription) ? widget.LinkDescription : widget.LinkCustomDescription;
+                Text(string.IsNullOrWhiteSpace(description) ? "Your shortcut to " + address.Host : description, 12, .8);
+            }
+            if (!string.IsNullOrWhiteSpace(widget.LinkStatus)) Text(widget.LinkStatus, 10, .65);
+            if (widget.LinkUpdatedAt is { } updated) Text("Updated " + updated.LocalDateTime.ToString("MMM d · HH:mm"), 10, .55);
+        }
                     var valid = DesktopWidget.TryGetLink(widget.Content, out var uri);
-                    var button = new Button { Content = valid ? "Open " + uri!.Host + " ↗" : "Link unavailable", IsEnabled = valid,
+                    var button = new Button { Content = valid ? widget.IsLeetCode ? "Open today's challenge ↗" : "Open ↗" : "Link unavailable", IsEnabled = valid,
                         HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center,
                         Padding = new Thickness(12), ToolTip = widget.Content, FontSize = widget.FontSize };
                     button.Click += (_, _) =>
                     {
-                        try { if (DesktopWidget.TryGetLink(_widget.Content, out var link)) Process.Start(new ProcessStartInfo(link!.AbsoluteUri) { UseShellExecute = true }); }
+                        try { if (DesktopWidget.TryGetLink(_widget.IsLeetCode && !string.IsNullOrWhiteSpace(_widget.PotdUrl) ? _widget.PotdUrl : _widget.Content, out var link)) Process.Start(new ProcessStartInfo(link!.AbsoluteUri) { UseShellExecute = true }); }
                         catch (Exception ex) { Logger.Error("Opening widget link failed.", ex); }
                     };
-                    _body.Content = button;
-                    break;
-            }
-        }
-        RefreshCountdown();
-        Place();
+        panel.Children.Add(button);
+        return new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     }
 
     public void RefreshCountdown()

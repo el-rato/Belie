@@ -201,6 +201,53 @@ public sealed class ActivityAndSceneTests
         Assert.False(legacy.AmbientMuted);
     }
 
+    [Fact]
+    public void CanvasBoard_HoldsItsWallpaperUntilAnotherBoardOrManualProfileIsChosen()
+    {
+        using var fixture = new CoordinatorFixture();
+        var directory = Path.GetDirectoryName(fixture.ProfileDirectory)!;
+        var wallpaper = Path.Combine(directory, "wallpaper.png"); File.WriteAllText(wallpaper, "test image");
+        var canvas = new DesktopCanvasStore(Path.Combine(directory, "canvas.json"));
+        var chill = new DesktopBoard { Name = "Chill", WallpaperPath = wallpaper, SwitchAt = new TimeOnly(8, 0),
+            Scene = new WallpaperProfile { FolderPath = wallpaper, SlideshowIntervalMinutes = 15, SlideshowRandom = true } };
+        var dark = DesktopCanvasFeatures.CopyBoard(chill, "Dark"); dark.SwitchAt = TimeOnly.MinValue;
+        canvas.Save(new DesktopCanvasDocument { Enabled = true, Boards = new() { chill, dark }, ActiveBoardId = chill.Id, AutoSwitchBoards = true });
+        fixture.Coordinator.AttachCanvas(canvas);
+        Assert.Equal("Active board: Chill", fixture.Coordinator.Summary);
+        fixture.Clock.Advance(TimeSpan.FromHours(1));
+        fixture.Coordinator.CheckNow();
+        Assert.Equal("Active board: Chill", fixture.Coordinator.Summary);
+        fixture.Coordinator.SwitchManually(fixture.Temporary.Id);
+        Assert.Equal(fixture.Temporary.Id, fixture.Coordinator.ActiveProfileId);
+        Assert.DoesNotContain("Active board", fixture.Coordinator.Summary);
+        canvas.Update(document => document.SwitchBoard(dark.Id, fixture.Clock.GetLocalNow().DateTime));
+        typeof(WallpaperCoordinator).GetMethod("RefreshCanvasBoard", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(fixture.Coordinator, null);
+        Assert.Equal("Active board: Dark", fixture.Coordinator.Summary);
+        Assert.Null(fixture.Coordinator.CaptureLiveHandoff());
+        Assert.Equal(15, DesktopCanvasFeatures.SceneForBoard(canvas.Load().ActiveBoard!).SlideshowIntervalMinutes);
+        Assert.True(DesktopCanvasFeatures.SceneForBoard(canvas.Load().ActiveBoard!).SlideshowRandom);
+    }
+
+    [Fact]
+    public void CanvasTimedWallpaper_AppliesItsWindowAndReturnsToRotation_OnTheSameBoard()
+    {
+        using var fixture = new CoordinatorFixture();
+        var directory = Path.GetDirectoryName(fixture.ProfileDirectory)!;
+        var alternate = Path.Combine(directory, "night.png"); File.WriteAllText(alternate, "test image");
+        var canvas = new DesktopCanvasStore(Path.Combine(directory, "timed-canvas.json"));
+        var board = new DesktopBoard { Name = "Study", WallpaperPath = directory, WallpaperMode = BoardWallpaperMode.RotatingTimed,
+            RotationMinutes = 7, OverrideWallpaperPath = alternate, OverrideStart = new TimeOnly(10, 0), OverrideEnd = new TimeOnly(11, 0), Widgets = new() { new DesktopWidget() } };
+        canvas.Save(new DesktopCanvasDocument { Enabled = true, Boards = new() { board }, ActiveBoardId = board.Id });
+        fixture.Coordinator.AttachCanvas(canvas);
+        Assert.Equal(directory, fixture.AppliedProfiles.Last().FolderPath); Assert.Equal(7, fixture.AppliedProfiles.Last().SlideshowIntervalMinutes);
+        var refresh = typeof(WallpaperCoordinator).GetMethod("RefreshCanvasBoard", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        fixture.Clock.Advance(TimeSpan.FromHours(1)); refresh.Invoke(fixture.Coordinator, null);
+        Assert.Equal(alternate, fixture.AppliedProfiles.Last().FolderPath); Assert.Equal(0, fixture.AppliedProfiles.Last().SlideshowIntervalMinutes);
+        fixture.Clock.Advance(TimeSpan.FromHours(1)); refresh.Invoke(fixture.Coordinator, null);
+        Assert.Equal(directory, fixture.AppliedProfiles.Last().FolderPath); Assert.Equal(7, fixture.AppliedProfiles.Last().SlideshowIntervalMinutes);
+        Assert.Equal(board.Id, canvas.Load().ActiveBoardId); Assert.Single(canvas.Load().Widgets);
+    }
+
     private static ScheduleRule DailyRule(int startHour, int startMinute, int endHour, int endMinute) => new()
     {
         DaysOfWeek = Enum.GetValues<DayOfWeek>().ToHashSet(),
@@ -218,6 +265,7 @@ public sealed class ActivityAndSceneTests
         public ProfileStore Profiles { get; }
         public SettingsStore SettingsStore { get; }
         public WallpaperCoordinator Coordinator { get; }
+        public List<WallpaperProfile> AppliedProfiles { get; } = new();
 
         public CoordinatorFixture()
         {
@@ -225,7 +273,7 @@ public sealed class ActivityAndSceneTests
             foreach (var profile in new[] { Default, Work, Temporary }) Profiles.Save(profile);
             SettingsStore = new SettingsStore(Path.Combine(_dir, "settings.json"));
             var settings = new AppSettings { PreferredProfileId = Default.Id.ToString(), LastActiveProfileId = Default.Id.ToString() };
-            Coordinator = new WallpaperCoordinator(Profiles, SettingsStore, settings, Clock, _ => { });
+            Coordinator = new WallpaperCoordinator(Profiles, SettingsStore, settings, Clock, profile => AppliedProfiles.Add(profile));
             Coordinator.Init();
         }
         public void Dispose() { Coordinator.Dispose(); Directory.Delete(_dir, recursive: true); }
