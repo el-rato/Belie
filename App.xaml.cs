@@ -22,6 +22,7 @@ internal partial class App : System.Windows.Application
     private DesktopCanvasHost? _widgetHost;
     private EventWaitHandle? _activateEvent;
     private EventWaitHandle? _canvasActivateEvent;
+    private EventWaitHandle? _exitEvent;
     private volatile bool _sessionEnding;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -89,6 +90,7 @@ internal partial class App : System.Windows.Application
             }
 
             var settingsStore = new SettingsStore(AppPaths.SettingsFile);
+            _exitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Exit");
             _canvasActivateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Canvas.Open");
             var settings = settingsStore.Load();
             var profileStore = new ProfileStore(AppPaths.ProfilesDir);
@@ -141,12 +143,17 @@ internal partial class App : System.Windows.Application
 
     private void WatchForActivationRequests()
     {
-        while (_activateEvent != null && _canvasActivateEvent != null)
+        while (_activateEvent != null && _canvasActivateEvent != null && _exitEvent != null)
         {
             try
             {
-                var request = WaitHandle.WaitAny(new WaitHandle[] { _activateEvent, _canvasActivateEvent });
-                Dispatcher.Invoke(() => { OpenMainWindow(); if (request == 1) _main?.OpenCanvas(); });
+                var request = WaitHandle.WaitAny(new WaitHandle[] { _activateEvent, _canvasActivateEvent, _exitEvent });
+                Dispatcher.Invoke(() =>
+                {
+                    if (request == 2) { ExitApplication(); return; }
+                    OpenMainWindow(); if (request == 1) _main?.OpenCanvas();
+                });
+                if (request == 2) return;
             }
             catch
             {
@@ -168,6 +175,8 @@ internal partial class App : System.Windows.Application
 
     private void ExitApplication()
     {
+        try { DesktopCanvasProcess.Start(DesktopCanvasProcess.DefaultFile); }
+        catch (Exception ex) { Logger.Error("Keeping desktop widgets running after tray exit failed.", ex); }
         try
         {
             _tray?.Dispose();
@@ -223,6 +232,12 @@ internal partial class App : System.Windows.Application
     {
         for (var i = 0; i < args.Count; i++)
         {
+            if (args[i].Equals("--exit", StringComparison.OrdinalIgnoreCase))
+            {
+                if (EventWaitHandle.TryOpenExisting(@"Local\Belie.Exit", out var exit))
+                { using (exit) exit.Set(); }
+                return true;
+            }
             if (args[i].Equals("--live-host", StringComparison.OrdinalIgnoreCase))
             {
                 // Detached host started by a previous instance on exit: keep playing the
