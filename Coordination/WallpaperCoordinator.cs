@@ -62,6 +62,7 @@ internal sealed class WallpaperCoordinator : IDisposable
     public bool Paused { get; private set; }
 
     public string Summary => _summary;
+    public DateTime LocalNow => _timeProvider.GetLocalNow().DateTime;
     public string AmbientStatus => _scene.AudioStatus;
     public bool HasAmbientAudio => _scene.HasAudio;
     public bool AmbientIsMuted => _scene.IsMuted;

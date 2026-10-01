@@ -39,7 +39,10 @@ internal partial class MainWindow : Window
     private LibraryWindow? _libraryView;
 
     private readonly DispatcherTimer _pathDebounce;
+    private readonly DispatcherTimer _dashboardTimer;
     private int _pathVersion;
+
+    private sealed record OverrideDuration(string Label, TimeSpan Duration);
 
     public MainWindow(WallpaperCoordinator coordinator, ProfileStore store, SettingsStore settingsStore, LibraryStore? libraryStore = null)
     {
@@ -64,10 +67,29 @@ internal partial class MainWindow : Window
             _pathDebounce.Start();
         };
 
+        OverrideDurationCombo.ItemsSource = new[]
+        {
+            new OverrideDuration("15 minutes", TimeSpan.FromMinutes(15)),
+            new OverrideDuration("30 minutes", TimeSpan.FromMinutes(30)),
+            new OverrideDuration("1 hour", TimeSpan.FromHours(1)),
+            new OverrideDuration("2 hours", TimeSpan.FromHours(2))
+        };
+        OverrideDurationCombo.SelectedIndex = 2;
+        _dashboardTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _dashboardTimer.Tick += (_, _) => RefreshDashboard();
+        DashboardPane.IsVisibleChanged += (_, _) => _dashboardTimer.IsEnabled = DashboardPane.IsVisible;
+
         Loaded += OnLoaded;
         Closing += OnClosing;
-        Closed += (_, _) => _libraryView?.Close();
-        _coordinator.StateChanged += RefreshActiveGlow;
+        Closed += (_, _) =>
+        {
+            _dashboardTimer.Stop();
+            _pathDebounce.Stop();
+            _coordinator.StateChanged -= CoordinatorStateChanged;
+            _libraryView?.Close();
+        };
+        _coordinator.StateChanged += CoordinatorStateChanged;
+        RefreshDashboard();
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
@@ -79,6 +101,7 @@ internal partial class MainWindow : Window
         {
             Select(_railEntries[0].Id);
         }
+        ShowDashboard();
     }
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -136,8 +159,10 @@ internal partial class MainWindow : Window
     {
         ProfilePane.Visibility = Visibility.Visible;
         LibraryPane.Visibility = Visibility.Collapsed;
+        DashboardPane.Visibility = Visibility.Collapsed;
         ProfilesNavButton.Background = ThemeBrush("AccentSubtleBrush");
         LibraryNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+        DashboardNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         WorkspaceTitle.Text = "/  Wallpaper profiles";
     }
 
@@ -158,9 +183,11 @@ internal partial class MainWindow : Window
                 _libraryView = view;
             }
             ProfilePane.Visibility = Visibility.Collapsed;
+            DashboardPane.Visibility = Visibility.Collapsed;
             LibraryPane.Visibility = Visibility.Visible;
             LibraryNavButton.Background = ThemeBrush("AccentSubtleBrush");
             ProfilesNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+            DashboardNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
             WorkspaceTitle.Text = "/  Wallpaper library";
         }
         catch (Exception ex)
@@ -169,6 +196,96 @@ internal partial class MainWindow : Window
             System.Windows.MessageBox.Show(this, $"The wallpaper library could not be opened:\n{ex.Message}",
                 "Library unavailable", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void ShowDashboard_Click(object sender, RoutedEventArgs e) => ShowDashboard();
+
+    private void ShowDashboard()
+    {
+        DashboardPane.Visibility = Visibility.Visible;
+        ProfilePane.Visibility = Visibility.Collapsed;
+        LibraryPane.Visibility = Visibility.Collapsed;
+        DashboardNavButton.Background = ThemeBrush("AccentSubtleBrush");
+        ProfilesNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+        LibraryNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+        WorkspaceTitle.Text = "/  Activity";
+        RefreshDashboard();
+    }
+
+    private void CoordinatorStateChanged()
+    {
+        RefreshActiveGlow();
+        RefreshDashboard();
+    }
+
+    private void RefreshDashboard()
+    {
+        var snapshot = _coordinator.GetActivitySnapshot();
+        var now = _coordinator.LocalNow;
+        ActiveProfileText.Text = snapshot.ActiveProfile?.Name ?? "No profile active";
+        ActivationReasonText.Text = snapshot.Reason;
+        AmbientStatusText.Text = _coordinator.AmbientStatus;
+        AmbientMuteButton.IsEnabled = _coordinator.HasAmbientAudio;
+        AmbientMuteButton.Content = _coordinator.AmbientIsMuted ? "Unmute ambient" : "Mute ambient";
+        AutomationModeText.Text = snapshot.Paused ? "Paused" : "Running";
+        AutomationHintText.Text = snapshot.Paused ? "Automatic changes are paused. Manual choices still work."
+            : "Schedules and event triggers are enabled.";
+        PauseAutomationButton.Content = snapshot.Paused ? "Resume automation" : "Pause automation";
+        NextScheduleText.Text = snapshot.NextScheduleAtLocal is { } next ? FormatWhen(next, now) : "No schedules";
+        NextScheduleHint.Text = snapshot.NextScheduleAtLocal == null ? "Add a schedule to a profile to automate your day."
+            : (snapshot.NextScheduledProfile != null ? snapshot.NextScheduledProfile + " is scheduled at this time. " : "No profile is scheduled at this time. ")
+              + "Overrides and events can take priority.";
+
+        if (!ReferenceEquals(OverrideProfileCombo.ItemsSource, _coordinator.Profiles))
+        {
+            var id = OverrideProfileCombo.SelectedValue as Guid? ?? _coordinator.ActiveProfileId ?? _selectedId;
+            OverrideProfileCombo.ItemsSource = _coordinator.Profiles;
+            OverrideProfileCombo.SelectedItem = _coordinator.Profiles.FirstOrDefault(p => p.Id == id) ?? _coordinator.Profiles.FirstOrDefault();
+        }
+        OverrideProfileCombo.IsEnabled = _coordinator.Profiles.Count > 0;
+        StartOverrideButton.IsEnabled = OverrideProfileCombo.SelectedItem is WallpaperProfile;
+        ResumeAutomaticButton.IsEnabled = snapshot.Paused || snapshot.ManualOverride != null;
+        if (snapshot.ManualOverride is { } manual)
+        {
+            var name = _coordinator.Profiles.FirstOrDefault(p => p.Id == manual.ProfileId)?.Name ?? "Profile";
+            var endText = manual.EndsAtLocal is { } end ? "until " + FormatWhen(end, now) : "until you return to automatic rules";
+            var remaining = manual.IsTimed && manual.EndsAtLocal.HasValue
+                ? $" · {Math.Max(0, (int)Math.Ceiling((manual.EndsAtLocal.Value - now).TotalMinutes))} min left" : "";
+            OverrideStatusText.Text = name + " · " + endText + remaining
+                + (snapshot.Paused ? " · automation is paused" : "");
+        }
+        else OverrideStatusText.Text = "No manual override is active.";
+        var recent = RecentActivityList.ItemsSource as IReadOnlyList<WallpaperCoordinator.ActivityEntry>;
+        if (recent == null || recent.Count != snapshot.Recent.Count || recent.FirstOrDefault() != snapshot.Recent.FirstOrDefault())
+            RecentActivityList.ItemsSource = snapshot.Recent;
+        NoActivityText.Visibility = snapshot.Recent.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static string FormatWhen(DateTime time, DateTime now)
+        => (time.Date == now.Date ? "Today" : time.Date == now.Date.AddDays(1) ? "Tomorrow" : time.ToString("ddd, d MMM")) + " at " + time.ToString("t");
+
+    private void OverrideProfile_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (StartOverrideButton != null) StartOverrideButton.IsEnabled = OverrideProfileCombo.SelectedItem is WallpaperProfile;
+    }
+
+    private void StartOverride_Click(object sender, RoutedEventArgs e)
+    {
+        if (OverrideProfileCombo.SelectedItem is WallpaperProfile profile && OverrideDurationCombo.SelectedItem is OverrideDuration duration)
+            _coordinator.SwitchManually(profile.Id, duration.Duration);
+    }
+
+    private void PauseAutomation_Click(object sender, RoutedEventArgs e) => _coordinator.TogglePaused();
+    private void ResumeAutomatic_Click(object sender, RoutedEventArgs e) => _coordinator.ResumeAutomatic();
+    private void AmbientMute_Click(object sender, RoutedEventArgs e) => _coordinator.ToggleAmbientMuted();
+
+    private void CreateScene_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: string name }) return;
+        var preset = ScenePresets.Create(name, _selected?.FolderPath ?? "");
+        for (var suffix = 2; _coordinator.Profiles.Any(p => p.Name.Equals(preset.Name, StringComparison.CurrentCultureIgnoreCase)); suffix++)
+            preset.Name = name + " " + suffix;
+        AddProfile(template: preset);
     }
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -286,6 +403,8 @@ internal partial class MainWindow : Window
             ? $"Schedule: {_selected.Schedule.Count} rule(s)" : "Schedule: none";
         TriggerSummary.Text = _selected.EventTriggers.Count > 0
             ? $"Triggers: {string.Join(", ", _selected.EventTriggers.Select(t => t.Describe()))}" : "Triggers: none";
+        SceneSummary.Text = (_selected.SceneAccent.Length > 0 ? "Scene accent: " + _selected.SceneAccent : "Default accent")
+            + (_selected.AmbientAudioPath.Length > 0 ? " · ambient: " + Path.GetFileNameWithoutExtension(_selected.AmbientAudioPath) : " · no ambient track");
     }
 
     private void RefreshActiveGlow()
@@ -629,9 +748,9 @@ internal partial class MainWindow : Window
         }
     }
 
-    private void AddProfile(WallpaperAsset? asset = null)
+    private void AddProfile(WallpaperAsset? asset = null, WallpaperProfile? template = null)
     {
-        var model = new WallpaperProfile { Name = asset?.Name ?? "", FolderPath = asset?.FilePath ?? "" };
+        var model = template ?? new WallpaperProfile { Name = asset?.Name ?? "", FolderPath = asset?.FilePath ?? "" };
         var editor = new ProfileEditorWindow(model, isNew: true) { Owner = this };
         if (editor.ShowDialog() == true && editor.Result != null)
         {
