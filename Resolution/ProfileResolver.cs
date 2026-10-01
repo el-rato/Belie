@@ -10,6 +10,7 @@ internal enum ResolutionSource
     Schedule,
     Fallback,
     Retained,
+    Restored,
 }
 
 internal sealed record ManualSwitch(Guid ProfileId, DateTime AtLocal, DateTimeOffset? UntilUtc = null);
@@ -113,7 +114,7 @@ internal sealed class ProfileResolver
     public static DateTime? NextBoundary(DateTime afterLocal, IReadOnlyList<WallpaperProfile> profiles)
     {
         DateTime? best = null;
-        for (var offset = -1; offset <= 8; offset++)
+        for (var offset = 0; offset <= 8; offset++)
         {
             var day = DateOnly.FromDateTime(afterLocal).AddDays(offset);
             foreach (var profile in profiles)
@@ -121,19 +122,18 @@ internal sealed class ProfileResolver
                 foreach (var rule in profile.Schedule)
                 {
                     if (rule.StartTime == rule.EndTime) continue;
-                    if (!rule.DaysOfWeek.Contains(day.DayOfWeek))
-                    {
-                        continue;
-                    }
                     var start = day.ToDateTime(rule.StartTime);
-                    var endDay = rule.EndTime > rule.StartTime ? day : day.AddDays(1);
-                    var end = endDay.ToDateTime(rule.EndTime);
-                    foreach (var transition in new[] { start, end })
+                    var end = day.ToDateTime(rule.EndTime);
+                    // Day changes also affect the existing day-based overnight rules.
+                    foreach (var transition in new[] { day.ToDateTime(TimeOnly.MinValue), start, end })
                     {
                         if (transition <= afterLocal)
                         {
                             continue;
                         }
+                        var before = transition.AddTicks(-1);
+                        if (rule.Matches(before.DayOfWeek, TimeOnly.FromDateTime(before))
+                            == rule.Matches(transition.DayOfWeek, TimeOnly.FromDateTime(transition))) continue;
                         if (best == null || transition < best)
                         {
                             best = transition;

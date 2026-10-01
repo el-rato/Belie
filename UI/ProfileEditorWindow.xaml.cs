@@ -28,6 +28,7 @@ internal partial class ProfileEditorWindow : Window
 
     private readonly DispatcherTimer _pathDebounce;
     private int _pathVersion;
+    private bool _closed;
 
     public WallpaperProfile? Result { get; private set; }
 
@@ -60,6 +61,7 @@ internal partial class ProfileEditorWindow : Window
         };
         FolderBox.TextChanged += (_, _) =>
         {
+            ++_pathVersion;
             _pathDebounce.Stop();
             _pathDebounce.Start();
         };
@@ -76,8 +78,13 @@ internal partial class ProfileEditorWindow : Window
         TriggersList.ItemsSource = _triggers;
 
         RefreshHints();
-        // The TextChanged hook was wired after the initial Text assignment, so validate once now.
-        ValidatePath();
+        Loaded += (_, _) => ValidatePath();
+        Closed += (_, _) =>
+        {
+            _closed = true;
+            ++_pathVersion;
+            _pathDebounce.Stop();
+        };
     }
 
     // ============ Path validation & preview ============
@@ -98,8 +105,20 @@ internal partial class ProfileEditorWindow : Window
         if (dialog.ShowDialog(this) == true) AudioPathBox.Text = dialog.FileName;
     }
 
+    private sealed record ColorDialogOwner(IntPtr Handle) : System.Windows.Forms.IWin32Window;
+
+    private void ChooseAccent_Click(object sender, RoutedEventArgs e)
+    {
+        using var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true };
+        if (SceneController.TryParseAccent(SceneAccentBox.Text, out var color))
+            dialog.Color = System.Drawing.Color.FromArgb(color.R, color.G, color.B);
+        if (dialog.ShowDialog(new ColorDialogOwner(new WindowInteropHelper(this).Handle)) == System.Windows.Forms.DialogResult.OK)
+            SceneAccentBox.Text = $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
+    }
+
     private async void ValidatePath()
     {
+        if (_closed) return;
         var path = FolderBox.Text.Trim();
         var version = ++_pathVersion;
 
@@ -111,7 +130,7 @@ internal partial class ProfileEditorWindow : Window
         }
 
         var info = await Task.Run(() => PathInspector.Inspect(path));
-        if (version != _pathVersion)
+        if (_closed || version != _pathVersion)
         {
             return;
         }
@@ -161,7 +180,7 @@ internal partial class ProfileEditorWindow : Window
         var image = info.FirstMedia is null
             ? null
             : await Task.Run(() => ThumbnailLoader.Load(info.FirstMedia, 640));
-        if (version != _pathVersion)
+        if (_closed || version != _pathVersion)
         {
             return;
         }

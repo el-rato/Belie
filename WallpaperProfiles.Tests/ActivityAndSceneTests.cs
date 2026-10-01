@@ -79,6 +79,20 @@ public sealed class ActivityAndSceneTests
         Assert.Null(ProfileResolver.NextBoundary(new DateTime(2026, 10, 1, 8, 0, 0), new[] { profile }));
     }
 
+    [Theory]
+    [InlineData(27, 23, 28, 0)]
+    [InlineData(28, 23, 29, 0)]
+    [InlineData(28, 5, 28, 6)]
+    public void OvernightCheckpoint_AgreesWithDayBasedScheduleRules(int day, int hour, int nextDay, int nextHour)
+    {
+        var profile = new WallpaperProfile { Schedule = new() { new ScheduleRule
+        {
+            DaysOfWeek = new() { DayOfWeek.Monday }, StartTime = new TimeOnly(22, 0), EndTime = new TimeOnly(6, 0)
+        } } };
+        Assert.Equal(new DateTime(2026, 9, nextDay, nextHour, 0, 0),
+            ProfileResolver.NextBoundary(new DateTime(2026, 9, day, hour, 0, 0), new[] { profile }));
+    }
+
     [Fact]
     public void Coordinator_TemporaryChoice_PreservesDefaultAndReturnsWithoutMatchingRules()
     {
@@ -179,7 +193,7 @@ public sealed class ActivityAndSceneTests
         Assert.Equal(35, loaded.AmbientVolume);
         var legacyId = Guid.NewGuid();
         File.WriteAllText(Path.Combine(fixture.ProfileDirectory, legacyId + ".json"),
-            "{\"id\":\"" + legacyId + "\",\"name\":\"Legacy\"}");
+            "{\"Id\":\"" + legacyId + "\",\"Name\":\"Legacy\"}");
         var legacy = fixture.Profiles.LoadAll().Single(p => p.Id == legacyId);
         Assert.Equal("", legacy.SceneAccent);
         Assert.Equal("", legacy.AmbientAudioPath);

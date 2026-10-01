@@ -35,7 +35,22 @@ Turn profiles into complete desktop environments, with a library for discovery a
 - [x] Build and run automated checks (25 passing tests, including the WPF gallery flow).
 - [ ] Manual Windows gallery and profile-selection check.
 
-Phase 1 is implemented. The rendered gallery layout was inspected, and the automated WPF check covers paging, tag search, collection and favorite filters, editing and saving metadata, missing-file selection, thumbnail loading, and choosing media. A manual check in the running app remains. Phase 2 is next.
+Phase 1 is implemented. The rendered gallery layout was inspected, and the automated WPF check covers paging, tag search, collection and favorite filters, editing and saving metadata, missing-file selection, thumbnail loading, and choosing media. A manual check in the running app remains.
+
+## Phases 2 and 3 checklist
+
+- [x] Activity navigation with active profile, activation reason, upcoming schedule checkpoint, and recent switches.
+- [x] Timed overrides for 15 minutes, 30 minutes, 1 hour, and 2 hours; return to automation and pause/resume controls.
+- [x] Backward-compatible scene fields and Focus, Gaming, and Evening starter presets in the existing profile editor.
+- [x] Optional Belie accent color with a color picker and restoration of the default theme.
+- [x] Optional local ambient audio with looping playback, volume, and mute controls.
+- [x] Scene settings applied through the coordinator for manual, scheduled, and triggered switches.
+- [x] Inspect rendered dashboard, navigation, and scene editor layouts.
+- [x] Build and run 45 passing tests, including override expiry, schedule boundaries, pause/resume, persistence, theme restoration, UI navigation, and ambient playback loops.
+- [x] Verify testhost exits cleanly after fixing pending profile-preview updates during editor shutdown.
+- [ ] Manual Windows check with existing wallpaper profiles and a chosen ambient track.
+
+Phases 2 and 3 are implemented together. Recent activity is kept for the current session; starter presets use locally chosen media. Phase 4, per-monitor setups, is next.
 
 ## Later acceptance scenarios
 

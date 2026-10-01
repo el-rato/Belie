@@ -52,8 +52,9 @@
                 <StackPanel DockPanel.Dock="Top" Margin="18,24,18,18">
                     <TextBlock Text="WORKSPACE" Style="{StaticResource HintText}" FontSize="10" Margin="0,0,0,10"/>
                     <Button x:Name="DashboardNavButton" Content="Activity" Click="ShowDashboard_Click" HorizontalContentAlignment="Left" Margin="0,0,0,6"/>
+                    <Button x:Name="CanvasNavButton" Content="Desktop canvas" Click="ShowCanvas_Click" HorizontalContentAlignment="Left" Margin="0,0,0,6"/>
                     <Button x:Name="ProfilesNavButton" Content="Profiles" Click="ShowProfiles_Click" HorizontalContentAlignment="Left"
-                            Background="{StaticResource AccentSubtleBrush}" Margin="0,0,0,6"/>
+                            Background="{DynamicResource AccentSubtleBrush}" Margin="0,0,0,6"/>
                     <Button x:Name="LibraryNavButton" Content="Wallpaper library" Click="OpenLibrary_Click" HorizontalContentAlignment="Left"
                             ToolTip="Browse and organize images and videos" Margin="0,0,0,22"/>
                     <TextBlock Text="Your collection" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,16"/>
@@ -114,7 +115,7 @@
                         <local:MonitorThumbnail x:Name="PreviewMon" ShowName="False" BezelWidth="{Binding ActualWidth, ElementName=PreviewFrame}"
                                                 BezelHeight="256" IsActive="False"/>
                         <Border x:Name="DropOverlay" CornerRadius="8" Background="{StaticResource BgBrush}" Opacity="0.97" Visibility="Collapsed">
-                            <Border BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="6" Margin="16" Background="{StaticResource AccentSubtleBrush}">
+                            <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" CornerRadius="6" Margin="16" Background="{DynamicResource AccentSubtleBrush}">
                                 <TextBlock Text="Drop an image, video, or folder" FontWeight="SemiBold" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                         </Border>
@@ -286,6 +287,8 @@
                 </ItemsControl>
             </StackPanel>
         </ScrollViewer>
+
+        <ContentControl x:Name="CanvasPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed"/>
 
         <Border Grid.ColumnSpan="2" Grid.Row="2" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
             <DockPanel Margin="20,12">

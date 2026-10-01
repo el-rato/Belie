@@ -19,7 +19,9 @@ internal partial class App : System.Windows.Application
     private WallpaperCoordinator? _coordinator;
     private TrayIconManager? _tray;
     private MainWindow? _main;
+    private DesktopCanvasHost? _widgetHost;
     private EventWaitHandle? _activateEvent;
+    private EventWaitHandle? _canvasActivateEvent;
     private volatile bool _sessionEnding;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -51,6 +53,15 @@ internal partial class App : System.Windows.Application
             AppPaths.EnsureDirectories();
             Logger.Init(AppPaths.LogsDir);
 
+            if (e.Args.Any(a => a.Equals("--widget-host", StringComparison.OrdinalIgnoreCase)))
+            {
+                var fileIndex = Array.FindIndex(e.Args, a => a.Equals("--canvas-file", StringComparison.OrdinalIgnoreCase));
+                var file = fileIndex >= 0 && fileIndex + 1 < e.Args.Length ? e.Args[fileIndex + 1] : DesktopCanvasProcess.DefaultFile;
+                try { _widgetHost = new DesktopCanvasHost(file); }
+                catch (Exception ex) { Logger.Error("Starting desktop widgets failed.", ex); Shutdown(); }
+                return;
+            }
+
             if (HandleCommandLine(e.Args))
             {
                 Shutdown();
@@ -64,7 +75,10 @@ internal partial class App : System.Windows.Application
                 // Focus the running instance's window instead of nagging with a dialog.
                 try
                 {
-                    _activateEvent.Set();
+                    if (e.Args.Any(a => a.Equals("--desktop-canvas", StringComparison.OrdinalIgnoreCase))
+                        && EventWaitHandle.TryOpenExisting(@"Local\Belie.Canvas.Open", out var canvasEvent))
+                    { using (canvasEvent) canvasEvent.Set(); }
+                    else _activateEvent.Set();
                 }
                 catch
                 {
@@ -75,11 +89,15 @@ internal partial class App : System.Windows.Application
             }
 
             var settingsStore = new SettingsStore(AppPaths.SettingsFile);
+            _canvasActivateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Canvas.Open");
             var settings = settingsStore.Load();
             var profileStore = new ProfileStore(AppPaths.ProfilesDir);
 
             _coordinator = new WallpaperCoordinator(profileStore, settingsStore, settings);
             _coordinator.Init();
+
+            try { DesktopCanvasProcess.Start(DesktopCanvasProcess.DefaultFile); }
+            catch (Exception ex) { Logger.Error("Restoring desktop widgets failed.", ex); }
 
             var startMinimized = settings.StartMinimizedToTray
                 || e.Args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
@@ -108,6 +126,8 @@ internal partial class App : System.Windows.Application
             {
                 OpenMainWindow();
             }
+            if (e.Args.Any(a => a.Equals("--desktop-canvas", StringComparison.OrdinalIgnoreCase)))
+            { OpenMainWindow(); _main.OpenCanvas(); }
             Logger.Info(startMinimized ? "Started minimized to tray." : "Started with main window visible.");
         }
         catch (Exception ex)
@@ -121,11 +141,12 @@ internal partial class App : System.Windows.Application
 
     private void WatchForActivationRequests()
     {
-        while (_activateEvent != null && _activateEvent.WaitOne())
+        while (_activateEvent != null && _canvasActivateEvent != null)
         {
             try
             {
-                Dispatcher.Invoke(OpenMainWindow);
+                var request = WaitHandle.WaitAny(new WaitHandle[] { _activateEvent, _canvasActivateEvent });
+                Dispatcher.Invoke(() => { OpenMainWindow(); if (request == 1) _main?.OpenCanvas(); });
             }
             catch
             {
@@ -160,6 +181,8 @@ internal partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         Logger.Info("Shutting down.");
+        _widgetHost?.Dispose();
+        _widgetHost = null;
         // Hand the live wallpaper over to a detached host process so it keeps playing
         // after this process is gone (skipped when the session itself is ending).
         var handoff = _sessionEnding ? null : _coordinator?.CaptureLiveHandoff();

@@ -10,8 +10,10 @@ namespace WallpaperProfiles.Engine;
 internal sealed class SceneController : IDisposable
 {
     private static readonly string[] AccentKeys = { "SceneAccentColor", "SceneAccentHoverColor", "SceneAccentPressedColor", "SceneAccentSubtleColor" };
+    private static readonly string[] AccentBrushKeys = { "AccentBrush", "AccentHoverBrush", "AccentPressedBrush", "AccentSubtleBrush" };
     private readonly ResourceDictionary? _resources;
     private Color[]? _originalColors;
+    private object?[]? _originalBrushes;
     private MediaPlayer? _player;
     private string _audioName = "";
     private string _status = "No ambient track";
@@ -23,8 +25,22 @@ internal sealed class SceneController : IDisposable
     public string AudioStatus => _ready ? (IsMuted ? "Muted" : "Playing") + " · " + _audioName : _status;
 
     public SceneController(ResourceDictionary? resources = null)
-        => _resources = resources ?? (System.Windows.Application.Current?.Dispatcher.CheckAccess() == true
+    {
+        var root = resources ?? (System.Windows.Application.Current?.Dispatcher.CheckAccess() == true
             ? System.Windows.Application.Current.Resources : null);
+        _resources = root == null ? null : FindAccentResources(root);
+    }
+
+    private static ResourceDictionary? FindAccentResources(ResourceDictionary resources)
+    {
+        if (resources.Keys.Cast<object>().Contains(AccentKeys[0])) return resources;
+        foreach (var merged in resources.MergedDictionaries.Reverse())
+        {
+            var found = FindAccentResources(merged);
+            if (found != null) return found;
+        }
+        return null;
+    }
 
     public static bool TryParseAccent(string? value, out Color color)
     {
@@ -109,10 +125,17 @@ internal sealed class SceneController : IDisposable
             return;
         }
         _originalColors ??= AccentKeys.Select(key => (Color)_resources[key]).ToArray();
-        _resources[AccentKeys[0]] = color;
-        _resources[AccentKeys[1]] = Mix(color, Colors.White, 0.2);
-        _resources[AccentKeys[2]] = Mix(color, Colors.Black, 0.15);
-        _resources[AccentKeys[3]] = Mix(color, Color.FromRgb(23, 25, 24), 0.82);
+        _originalBrushes ??= AccentBrushKeys.Select(key => _resources.Contains(key) ? _resources[key] : null).ToArray();
+        SetAccentColor(0, color);
+        SetAccentColor(1, Mix(color, Colors.White, 0.2));
+        SetAccentColor(2, Mix(color, Colors.Black, 0.15));
+        SetAccentColor(3, Mix(color, Color.FromRgb(23, 25, 24), 0.82));
+    }
+
+    private void SetAccentColor(int index, Color color)
+    {
+        _resources![AccentKeys[index]] = color;
+        _resources[AccentBrushKeys[index]] = new SolidColorBrush(color);
     }
 
     private static Color Mix(Color color, Color target, double amount) => Color.FromRgb(
@@ -123,8 +146,14 @@ internal sealed class SceneController : IDisposable
     private void RestoreAccent()
     {
         if (_resources == null || _originalColors == null) return;
-        for (var i = 0; i < AccentKeys.Length; i++) _resources[AccentKeys[i]] = _originalColors[i];
+        for (var i = 0; i < AccentKeys.Length; i++)
+        {
+            _resources[AccentKeys[i]] = _originalColors[i];
+            if (_originalBrushes?[i] is { } brush) _resources[AccentBrushKeys[i]] = brush;
+            else _resources.Remove(AccentBrushKeys[i]);
+        }
         _originalColors = null;
+        _originalBrushes = null;
     }
 
     private void StopAudio()

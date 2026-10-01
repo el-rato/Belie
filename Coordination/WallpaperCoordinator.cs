@@ -105,7 +105,7 @@ internal sealed class WallpaperCoordinator : IDisposable
         var profile = _profiles.FirstOrDefault(p => p.Id == id);
         if (profile != null)
         {
-            Activate(profile, ResolutionSource.Schedule);
+            Activate(profile, ResolutionSource.Restored);
         }
     }
 
@@ -134,6 +134,7 @@ internal sealed class WallpaperCoordinator : IDisposable
         Logger.Info(Paused ? "Scheduling paused by user." : "Scheduling resumed by user.");
         if (!Paused)
         {
+            RecordActivity(DescribeProfile(_currentId), "Automation resumed");
             Evaluate("resumed");
         }
         else
@@ -225,9 +226,11 @@ internal sealed class WallpaperCoordinator : IDisposable
         if (manualBefore != null && _resolver.GetManualOverride(_profiles) == null)
             RecordActivity(DescribeProfile(manualBefore.ProfileId), "Manual override ended");
         // Pausing freezes automatic changes; an explicit manual switch still works.
-        if (Paused && decision.Source != ResolutionSource.Manual && !forceReapply)
+        if (Paused && decision.Source != ResolutionSource.Manual)
         {
-            UpdateSummary();
+            var held = _profiles.FirstOrDefault(p => p.Id == _currentId);
+            if (forceReapply && held != null) Activate(held, _source == ResolutionSource.Manual ? ResolutionSource.Retained : _source);
+            else UpdateSummary();
             return;
         }
         if (decision.ProfileId is Guid id)
@@ -322,6 +325,7 @@ internal sealed class WallpaperCoordinator : IDisposable
             .OrderByDescending(e => e.Trigger.Priority).ThenByDescending(e => e.SinceUtc).FirstOrDefault()?.Trigger.Describe() ?? "active condition"),
         ResolutionSource.Fallback => "Your default profile — no schedule or event is active",
         ResolutionSource.Retained => "No automatic rule matched — keeping the current wallpaper",
+        ResolutionSource.Restored => "Restored your previous profile",
         _ => "Active schedule rule"
     };
 
@@ -352,6 +356,7 @@ internal sealed class WallpaperCoordinator : IDisposable
             ResolutionSource.Event => "event",
             ResolutionSource.Fallback => "default",
             ResolutionSource.Retained => "unchanged",
+            ResolutionSource.Restored => "restored",
             _ => "schedule",
         };
         var next = ProfileResolver.NextBoundary(_timeProvider.GetLocalNow().DateTime, _profiles);

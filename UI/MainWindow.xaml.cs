@@ -157,10 +157,12 @@ internal partial class MainWindow : Window
 
     private void ShowProfiles()
     {
+        CanvasPane.Visibility = Visibility.Collapsed;
+        CanvasNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         ProfilePane.Visibility = Visibility.Visible;
         LibraryPane.Visibility = Visibility.Collapsed;
         DashboardPane.Visibility = Visibility.Collapsed;
-        ProfilesNavButton.Background = ThemeBrush("AccentSubtleBrush");
+        ProfilesNavButton.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "AccentSubtleBrush");
         LibraryNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         DashboardNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         WorkspaceTitle.Text = "/  Wallpaper profiles";
@@ -168,6 +170,8 @@ internal partial class MainWindow : Window
 
     private void OpenLibrary_Click(object sender, RoutedEventArgs e)
     {
+        CanvasPane.Visibility = Visibility.Collapsed;
+        CanvasNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         try
         {
             if (_libraryView == null)
@@ -185,7 +189,7 @@ internal partial class MainWindow : Window
             ProfilePane.Visibility = Visibility.Collapsed;
             DashboardPane.Visibility = Visibility.Collapsed;
             LibraryPane.Visibility = Visibility.Visible;
-            LibraryNavButton.Background = ThemeBrush("AccentSubtleBrush");
+            LibraryNavButton.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "AccentSubtleBrush");
             ProfilesNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
             DashboardNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
             WorkspaceTitle.Text = "/  Wallpaper library";
@@ -202,15 +206,34 @@ internal partial class MainWindow : Window
 
     private void ShowDashboard()
     {
+        CanvasPane.Visibility = Visibility.Collapsed;
+        CanvasNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         DashboardPane.Visibility = Visibility.Visible;
         ProfilePane.Visibility = Visibility.Collapsed;
         LibraryPane.Visibility = Visibility.Collapsed;
-        DashboardNavButton.Background = ThemeBrush("AccentSubtleBrush");
+        DashboardNavButton.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "AccentSubtleBrush");
         ProfilesNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         LibraryNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         WorkspaceTitle.Text = "/  Activity";
         RefreshDashboard();
     }
+
+    private void ShowCanvas_Click(object sender, RoutedEventArgs e)
+    {
+        CanvasPane.Content ??= new DesktopCanvasView();
+        CanvasPane.Visibility = Visibility.Visible;
+        ProfilePane.Visibility = Visibility.Collapsed;
+        LibraryPane.Visibility = Visibility.Collapsed;
+        DashboardPane.Visibility = Visibility.Collapsed;
+        CanvasNavButton.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "AccentSubtleBrush");
+        ProfilesNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+        LibraryNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+        DashboardNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+        WorkspaceTitle.Text = "/  Desktop canvas";
+    }
+
+    internal void OpenCanvas() => Dispatcher.BeginInvoke(DispatcherPriority.Background,
+        new Action(() => ShowCanvas_Click(this, new RoutedEventArgs())));
 
     private void CoordinatorStateChanged()
     {
@@ -382,8 +405,8 @@ internal partial class MainWindow : Window
         {
             if (entry.Id == id)
             {
-                entry.Card.BorderBrush = ThemeBrush("AccentBrush");
-                entry.Card.Background = ThemeBrush("AccentSubtleBrush");
+                entry.Card.SetResourceReference(Border.BorderBrushProperty, "AccentBrush");
+                entry.Card.SetResourceReference(Border.BackgroundProperty, "AccentSubtleBrush");
             }
             else
             {
