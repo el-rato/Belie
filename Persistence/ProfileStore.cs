@@ -88,6 +88,9 @@ internal sealed class ProfileStore
     {
         profile.Name ??= "";
         profile.FolderPath ??= "";
+        profile.SceneAccent ??= "";
+        profile.AmbientAudioPath ??= "";
+        profile.AmbientVolume = Math.Clamp(profile.AmbientVolume, 0, 100);
         profile.SlideshowIntervalMinutes = Math.Clamp(profile.SlideshowIntervalMinutes, 0, 1440);
         profile.Schedule ??= new List<ScheduleRule>();
         profile.EventTriggers ??= new List<EventTrigger>();

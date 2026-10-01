@@ -12,12 +12,21 @@ internal sealed class WallpaperCoordinator : IDisposable
 {
     public sealed record Snapshot(IReadOnlyList<WallpaperProfile> Profiles, Guid? ActiveProfileId, bool Paused, string Summary);
 
+    public sealed record ActivityEntry(DateTime AtLocal, string ProfileName, string Reason);
+
+    public sealed record ActivitySnapshot(WallpaperProfile? ActiveProfile, string Reason, bool Paused,
+        DateTime? NextScheduleAtLocal, string? NextScheduledProfile, ManualOverrideStatus? ManualOverride,
+        IReadOnlyList<ActivityEntry> Recent);
+
     private sealed record ActiveEvent(Guid ProfileId, EventTrigger Trigger, DateTime SinceUtc);
 
     private readonly ProfileStore _store;
     private readonly SettingsStore _settingsStore;
     private readonly AppSettings _settings;
-    private readonly ProfileResolver _resolver = new();
+    private readonly ProfileResolver _resolver;
+    private readonly TimeProvider _timeProvider;
+    private readonly List<ActivityEntry> _recent = new();
+    private readonly SceneController _scene = new();
     private readonly SlideshowController _slideshow = new();
     private readonly LiveWallpaperController _live = new();
     private readonly IconSafeLiveController _iconSafeLive = new();
@@ -32,11 +41,14 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     public event Action? StateChanged;
 
-    public WallpaperCoordinator(ProfileStore store, SettingsStore settingsStore, AppSettings settings)
+    public WallpaperCoordinator(ProfileStore store, SettingsStore settingsStore, AppSettings settings, TimeProvider? timeProvider = null)
     {
         _store = store;
         _settingsStore = settingsStore;
         _settings = settings;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        _resolver = new ProfileResolver(_timeProvider);
+        _scene.StateChanged += () => StateChanged?.Invoke();
         _triggers = new TriggerManager();
         _triggers.TriggerStateChanged += OnTriggerStateChanged;
         _tickTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
@@ -50,6 +62,10 @@ internal sealed class WallpaperCoordinator : IDisposable
     public bool Paused { get; private set; }
 
     public string Summary => _summary;
+    public string AmbientStatus => _scene.AudioStatus;
+    public bool HasAmbientAudio => _scene.HasAudio;
+    public bool AmbientIsMuted => _scene.IsMuted;
+    public void ToggleAmbientMuted() => _scene.ToggleMuted();
 
     public void Init()
     {
@@ -88,12 +104,21 @@ internal sealed class WallpaperCoordinator : IDisposable
         }
     }
 
-    public void SwitchManually(Guid profileId)
+    public void SwitchManually(Guid profileId, TimeSpan? duration = null)
     {
-        _resolver.SetManual(profileId);
-        _fallbackProfileId = profileId;
-        _settings.PreferredProfileId = profileId.ToString();
-        SaveSettingsSafe();
+        if (!_profiles.Any(p => p.Id == profileId)) return;
+        _resolver.SetManual(profileId, duration);
+        if (duration.HasValue)
+        {
+            // A temporary choice must return to the existing default when no rule matches.
+            _fallbackProfileId ??= _currentId;
+        }
+        else
+        {
+            _fallbackProfileId = profileId;
+            _settings.PreferredProfileId = profileId.ToString();
+            SaveSettingsSafe();
+        }
         Logger.Info($"Manual switch requested -> {DescribeProfile(profileId)}.");
         Evaluate("manual switch", forceReapply: true);
     }
@@ -108,8 +133,17 @@ internal sealed class WallpaperCoordinator : IDisposable
         }
         else
         {
+            RecordActivity(DescribeProfile(_currentId), "Automation paused");
             UpdateSummary();
         }
+    }
+
+    public void ResumeAutomatic()
+    {
+        _resolver.ClearManual();
+        Paused = false;
+        RecordActivity(DescribeProfile(_currentId), "Returned to automatic rules");
+        Evaluate("returned to automation");
     }
 
     public void ProfilesEdited()
@@ -128,6 +162,7 @@ internal sealed class WallpaperCoordinator : IDisposable
         {
             Logger.Warn("Active profile was deleted; leaving wallpaper unchanged until the next automatic choice.");
             _currentId = null;
+            _scene.Dispose();
             _settings.LastActiveProfileId = "";
             settingsChanged = true;
         }
@@ -136,10 +171,17 @@ internal sealed class WallpaperCoordinator : IDisposable
             SaveSettingsSafe();
         }
         Evaluate("profiles changed", forceReapply: true);
-        StateChanged?.Invoke();
     }
 
     public Snapshot GetSnapshot() => new(_profiles, _currentId, Paused, _summary);
+
+    public ActivitySnapshot GetActivitySnapshot()
+    {
+        var next = ProfileResolver.NextBoundary(_timeProvider.GetLocalNow().DateTime, _profiles);
+        return new ActivitySnapshot(_profiles.FirstOrDefault(p => p.Id == _currentId), ActivationReason(), Paused,
+            next, next.HasValue ? ProfileResolver.ScheduledProfileAt(next.Value, _profiles)?.Name : null,
+            _resolver.GetManualOverride(_profiles), _recent.ToArray());
+    }
 
     /// <summary>What the smooth live overlay is currently playing, for the exit handoff.</summary>
     public sealed record LiveHandoff(string MediaPath, FitMode FitMode, bool Muted);
@@ -172,7 +214,17 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     private void Evaluate(string reason, bool forceReapply = false)
     {
-        var decision = _resolver.Resolve(DateTime.Now, _profiles, SnapshotActiveEvents(), _fallbackProfileId);
+        var now = _timeProvider.GetLocalNow().DateTime;
+        var manualBefore = _resolver.GetManualOverride(_profiles);
+        var decision = _resolver.Resolve(now, _profiles, SnapshotActiveEvents(), _fallbackProfileId);
+        if (manualBefore != null && _resolver.GetManualOverride(_profiles) == null)
+            RecordActivity(DescribeProfile(manualBefore.ProfileId), "Manual override ended");
+        // Pausing freezes automatic changes; an explicit manual switch still works.
+        if (Paused && decision.Source != ResolutionSource.Manual && !forceReapply)
+        {
+            UpdateSummary();
+            return;
+        }
         if (decision.ProfileId is Guid id)
         {
             var profile = _profiles.FirstOrDefault(p => p.Id == id);
@@ -188,8 +240,17 @@ internal sealed class WallpaperCoordinator : IDisposable
             }
             else
             {
+                if (_source != decision.Source)
+                {
+                    _source = decision.Source;
+                    RecordActivity(profile.Name, ActivationReason());
+                }
                 _source = decision.Source;
             }
+        }
+        else if (_currentId != null)
+        {
+            _source = ResolutionSource.Retained;
         }
         UpdateSummary();
     }
@@ -209,6 +270,7 @@ internal sealed class WallpaperCoordinator : IDisposable
         WallpaperEngine.NextApplyGeneration();
         _currentId = profile.Id;
         _source = source;
+        _scene.Apply(profile);
         if (WallpaperEngine.IsLiveFile(profile.FolderPath))
         {
             // Live wallpaper: either the smooth overlay (covers the desktop icons) or the
@@ -230,16 +292,33 @@ internal sealed class WallpaperCoordinator : IDisposable
             _iconSafeLive.Stop();
             _slideshow.Start(profile);
         }
-        _settings.LastActiveProfileId = profile.Id.ToString();
-        if (source == ResolutionSource.Manual)
+        var temporary = source == ResolutionSource.Manual && _resolver.GetManualOverride(_profiles)?.IsTimed == true;
+        if (!temporary) _settings.LastActiveProfileId = profile.Id.ToString();
+        if (source == ResolutionSource.Manual && !temporary)
         {
             _fallbackProfileId = profile.Id;
             _settings.PreferredProfileId = profile.Id.ToString();
         }
         SaveSettingsSafe();
         Logger.Info($"Active profile is now '{profile.Name}' (via {source}).");
+        RecordActivity(profile.Name, ActivationReason());
         UpdateSummary();
-        StateChanged?.Invoke();
+    }
+
+    private string ActivationReason() => _currentId == null ? "Choose a profile to get started." : _source switch
+    {
+        ResolutionSource.Manual => _resolver.GetManualOverride(_profiles)?.IsTimed == true ? "Temporary manual override" : "Manual choice",
+        ResolutionSource.Event => "Event trigger: " + (_activeEvents.Values.Where(e => e.ProfileId == _currentId)
+            .OrderByDescending(e => e.Trigger.Priority).ThenByDescending(e => e.SinceUtc).FirstOrDefault()?.Trigger.Describe() ?? "active condition"),
+        ResolutionSource.Fallback => "Your default profile — no schedule or event is active",
+        ResolutionSource.Retained => "No automatic rule matched — keeping the current wallpaper",
+        _ => "Active schedule rule"
+    };
+
+    private void RecordActivity(string profileName, string reason)
+    {
+        _recent.Insert(0, new ActivityEntry(_timeProvider.GetLocalNow().DateTime, profileName, reason));
+        if (_recent.Count > 20) _recent.RemoveAt(_recent.Count - 1);
     }
 
     private void SaveSettingsSafe()
@@ -262,13 +341,16 @@ internal sealed class WallpaperCoordinator : IDisposable
             ResolutionSource.Manual => "manual",
             ResolutionSource.Event => "event",
             ResolutionSource.Fallback => "default",
+            ResolutionSource.Retained => "unchanged",
             _ => "schedule",
         };
-        var next = ProfileResolver.NextBoundary(DateTime.Now, _profiles);
+        var next = ProfileResolver.NextBoundary(_timeProvider.GetLocalNow().DateTime, _profiles);
         var boundaryText = next.HasValue ? $" | next boundary {next.Value:g}" : "";
         var liveText = _profiles.FirstOrDefault(p => p.Id == _currentId) is { } current
             && WallpaperEngine.IsLiveFile(current.FolderPath) ? " | live" : "";
         _summary = $"Active: {DescribeProfile(_currentId)} ({sourceText}) | Mode: {state}{liveText}{boundaryText}";
+        _tickTimer.Interval = _resolver.GetManualOverride(_profiles)?.IsTimed == true ? TimeSpan.FromSeconds(1) : TimeSpan.FromSeconds(20);
+        StateChanged?.Invoke();
     }
 
     private string DescribeProfile(Guid? id)
@@ -288,5 +370,6 @@ internal sealed class WallpaperCoordinator : IDisposable
         _slideshow.Dispose();
         _live.Dispose();
         _iconSafeLive.Dispose();
+        _scene.Dispose();
     }
 }

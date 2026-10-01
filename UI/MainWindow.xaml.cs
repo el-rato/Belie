@@ -7,7 +7,6 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using WallpaperProfiles.Autostart;
@@ -17,15 +16,10 @@ using WallpaperProfiles.Infrastructure;
 using WallpaperProfiles.Models;
 using WallpaperProfiles.Persistence;
 using Brush = System.Windows.Media.Brush;
-using Cursors = System.Windows.Input.Cursors;
 using DragDropEffects = System.Windows.DragDropEffects;
 using DragEventArgs = System.Windows.DragEventArgs;
-using FontFamily = System.Windows.Media.FontFamily;
-using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
-using Orientation = System.Windows.Controls.Orientation;
 using Path = System.IO.Path;
-using Rectangle = System.Windows.Shapes.Rectangle;
 
 namespace WallpaperProfiles.UI;
 
@@ -36,21 +30,25 @@ internal partial class MainWindow : Window
     private readonly WallpaperCoordinator _coordinator;
     private readonly ProfileStore _store;
     private readonly SettingsStore _settingsStore;
+    private readonly LibraryStore _libraryStore;
     private AppSettings _settings;
 
     private readonly List<RailEntry> _railEntries = new();
     private Guid? _selectedId;
     private WallpaperProfile? _selected;
+    private LibraryWindow? _libraryView;
 
     private readonly DispatcherTimer _pathDebounce;
     private int _pathVersion;
 
-    public MainWindow(WallpaperCoordinator coordinator, ProfileStore store, SettingsStore settingsStore)
+    public MainWindow(WallpaperCoordinator coordinator, ProfileStore store, SettingsStore settingsStore, LibraryStore? libraryStore = null)
     {
         InitializeComponent();
+        ((System.Windows.Controls.Image)PreviewMon.FindName("ScreenImage")).Stretch = Stretch.Uniform;
         _coordinator = coordinator;
         _store = store;
         _settingsStore = settingsStore;
+        _libraryStore = libraryStore ?? new LibraryStore(Path.Combine(AppPaths.BaseDir, "library.json"));
         _settings = settingsStore.Load();
         TrySetAppIcon();
 
@@ -68,6 +66,7 @@ internal partial class MainWindow : Window
 
         Loaded += OnLoaded;
         Closing += OnClosing;
+        Closed += (_, _) => _libraryView?.Close();
         _coordinator.StateChanged += RefreshActiveGlow;
     }
 
@@ -125,6 +124,74 @@ internal partial class MainWindow : Window
 
     private System.Windows.Media.Brush ThemeBrush(string key) => (System.Windows.Media.Brush)FindResource(key);
 
+    private void NewProfile_Click(object sender, RoutedEventArgs e)
+    {
+        ShowProfiles();
+        AddProfile();
+    }
+
+    private void ShowProfiles_Click(object sender, RoutedEventArgs e) => ShowProfiles();
+
+    private void ShowProfiles()
+    {
+        ProfilePane.Visibility = Visibility.Visible;
+        LibraryPane.Visibility = Visibility.Collapsed;
+        ProfilesNavButton.Background = ThemeBrush("AccentSubtleBrush");
+        LibraryNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+        WorkspaceTitle.Text = "/  Wallpaper profiles";
+    }
+
+    private void OpenLibrary_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_libraryView == null)
+            {
+                var sources = _libraryStore.Exists ? Array.Empty<string>() : _coordinator.Profiles.Select(p => p.FolderPath).ToArray();
+                var view = new LibraryWindow(_libraryStore, sources);
+                LibraryPane.Content = view.CreateInlineContent(asset =>
+                {
+                    ShowProfiles();
+                    if (_selected != null) FolderBox.Text = asset.FilePath;
+                    else AddProfile(asset);
+                }, ShowProfiles);
+                _libraryView = view;
+            }
+            ProfilePane.Visibility = Visibility.Collapsed;
+            LibraryPane.Visibility = Visibility.Visible;
+            LibraryNavButton.Background = ThemeBrush("AccentSubtleBrush");
+            ProfilesNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+            WorkspaceTitle.Text = "/  Wallpaper library";
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Opening wallpaper library failed.", ex);
+            System.Windows.MessageBox.Show(this, $"The wallpaper library could not be opened:\n{ex.Message}",
+                "Library unavailable", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (RailStack != null && SearchEmpty != null)
+        {
+            FilterRail();
+        }
+    }
+
+    private void FilterRail()
+    {
+        var query = SearchBox.Text.Trim();
+        var visible = 0;
+        foreach (var entry in _railEntries)
+        {
+            var matches = entry.Monitor.ProfileName.Contains(query, StringComparison.CurrentCultureIgnoreCase);
+            entry.Card.Visibility = matches ? Visibility.Visible : Visibility.Collapsed;
+            if (matches) visible++;
+        }
+        SearchEmpty.Visibility = visible == 0 && query.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     // ============ Rail ============
 
     private void BuildRail()
@@ -150,8 +217,8 @@ internal partial class MainWindow : Window
             var monitor = new MonitorThumbnail
             {
                 Width = 188,
-                BezelWidth = 90,
-                BezelHeight = 58,
+                BezelWidth = 64,
+                BezelHeight = 44,
                 ShowName = true,
                 ProfileName = profile.Name,
                 HasRules = profile.Schedule.Count > 0 || profile.EventTriggers.Count > 0,
@@ -171,56 +238,7 @@ internal partial class MainWindow : Window
             _ = LoadRailThumbAsync(profile, monitor);
         }
 
-        var addCard = new Grid
-        {
-            Margin = new Thickness(0, 2, 0, 4),
-            Height = 42,
-            Cursor = Cursors.Hand,
-        };
-        var dashed = new Rectangle
-        {
-            Stroke = ThemeBrush("BorderBrush"),
-            StrokeThickness = 1.5,
-            Fill = ThemeBrush("SurfaceBrush"),
-            RadiusX = 6,
-            RadiusY = 6,
-        };
-        var plus = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        plus.Children.Add(new TextBlock
-        {
-            Text = "\uE710",
-            FontFamily = (FontFamily)FindResource("IconFont"),
-            FontSize = 12,
-            Foreground = ThemeBrush("TextSecondaryBrush"),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 7, 0),
-        });
-        plus.Children.Add(new TextBlock
-        {
-            Text = "New profile",
-            Foreground = ThemeBrush("TextSecondaryBrush"),
-            FontSize = 12,
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        addCard.Children.Add(dashed);
-        addCard.Children.Add(plus);
-        addCard.MouseEnter += (_, _) =>
-        {
-            dashed.Stroke = ThemeBrush("BorderStrongBrush");
-            dashed.Fill = ThemeBrush("SurfaceHoverBrush");
-        };
-        addCard.MouseLeave += (_, _) =>
-        {
-            dashed.Stroke = ThemeBrush("BorderBrush");
-            dashed.Fill = ThemeBrush("SurfaceBrush");
-        };
-        addCard.MouseLeftButtonUp += (_, _) => AddProfile();
-        RailStack.Children.Add(addCard);
+        FilterRail();
     }
 
     private static async Task LoadRailThumbAsync(WallpaperProfile profile, MonitorThumbnail monitor)
@@ -242,6 +260,7 @@ internal partial class MainWindow : Window
         {
             return;
         }
+        ShowProfiles();
         foreach (var entry in _railEntries)
         {
             if (entry.Id == id)
@@ -453,9 +472,10 @@ internal partial class MainWindow : Window
 
     // ============ Editing ============
 
-    private bool CollectFields()
+    private bool CollectFields(WallpaperProfile? target = null)
     {
-        if (_selected == null)
+        var profile = target ?? _selected;
+        if (profile == null)
         {
             return false;
         }
@@ -474,14 +494,44 @@ internal partial class MainWindow : Window
             return false;
         }
 
-        _selected.Name = name;
-        _selected.FolderPath = FolderBox.Text.Trim();
-        _selected.FitMode = (FitMode)(FitCombo.SelectedItem ?? FitMode.Fill);
-        _selected.SlideshowIntervalMinutes = interval;
-        _selected.SlideshowRandom = RandomBox.IsChecked == true;
-        _selected.VideoMuted = VideoMuteBox.IsChecked != false;
-        _selected.IconFriendlyLive = IconSafeBox.IsChecked == true;
+        profile.Name = name;
+        profile.FolderPath = FolderBox.Text.Trim();
+        profile.FitMode = (FitMode)(FitCombo.SelectedItem ?? FitMode.Fill);
+        profile.SlideshowIntervalMinutes = interval;
+        profile.SlideshowRandom = RandomBox.IsChecked == true;
+        profile.VideoMuted = VideoMuteBox.IsChecked != false;
+        profile.IconFriendlyLive = IconSafeBox.IsChecked == true;
         return true;
+    }
+
+    private void Duplicate_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected == null) return;
+
+        var copy = System.Text.Json.JsonSerializer.Deserialize<WallpaperProfile>(
+            System.Text.Json.JsonSerializer.Serialize(_selected))!;
+        if (!CollectFields(copy)) return;
+
+        copy.Id = Guid.NewGuid();
+        var baseName = copy.Name + " copy";
+        copy.Name = baseName;
+        for (var suffix = 2; _coordinator.Profiles.Any(p =>
+                 string.Equals(p.Name, copy.Name, StringComparison.CurrentCultureIgnoreCase)); suffix++)
+        {
+            copy.Name = $"{baseName} {suffix}";
+        }
+        foreach (var rule in copy.Schedule)
+        {
+            rule.Id = Guid.NewGuid();
+            rule.CreatedAtUtc = DateTime.UtcNow;
+        }
+        foreach (var trigger in copy.EventTriggers) trigger.Id = Guid.NewGuid();
+
+        if (!TrySaveProfile(copy)) return;
+        _coordinator.ProfilesEdited();
+        SearchBox.Clear();
+        BuildRail();
+        Select(copy.Id);
     }
 
     private bool TrySaveProfile(WallpaperProfile profile)
@@ -579,9 +629,10 @@ internal partial class MainWindow : Window
         }
     }
 
-    private void AddProfile()
+    private void AddProfile(WallpaperAsset? asset = null)
     {
-        var editor = new ProfileEditorWindow(new WallpaperProfile(), isNew: true) { Owner = this };
+        var model = new WallpaperProfile { Name = asset?.Name ?? "", FolderPath = asset?.FilePath ?? "" };
+        var editor = new ProfileEditorWindow(model, isNew: true) { Owner = this };
         if (editor.ShowDialog() == true && editor.Result != null)
         {
             if (!TrySaveProfile(editor.Result))
@@ -589,6 +640,7 @@ internal partial class MainWindow : Window
                 return;
             }
             _coordinator.ProfilesEdited();
+            SearchBox.Clear();
             BuildRail();
             Select(editor.Result.Id);
         }

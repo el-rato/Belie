@@ -24,7 +24,28 @@ public class WallpaperProfile
     /// </summary>
     public bool IconFriendlyLive { get; set; }
 
+    public string SceneAccent { get; set; } = "";
+
+    public string AmbientAudioPath { get; set; } = "";
+
+    public int AmbientVolume { get; set; } = 30;
+
+    public bool AmbientMuted { get; set; }
+
     public List<ScheduleRule> Schedule { get; set; } = new();
 
     public List<EventTrigger> EventTriggers { get; set; } = new();
+}
+
+internal static class ScenePresets
+{
+    public static readonly string[] Names = { "Focus", "Gaming", "Evening" };
+
+    public static WallpaperProfile Create(string name, string wallpaperPath = "") => name switch
+    {
+        "Focus" => new WallpaperProfile { Name = name, FolderPath = wallpaperPath, SceneAccent = "#B7CDBC", AmbientVolume = 25 },
+        "Gaming" => new WallpaperProfile { Name = name, FolderPath = wallpaperPath, SceneAccent = "#ADBDF4", AmbientVolume = 15, AmbientMuted = true },
+        "Evening" => new WallpaperProfile { Name = name, FolderPath = wallpaperPath, SceneAccent = "#D8B995", AmbientVolume = 35 },
+        _ => throw new ArgumentException("Unknown starter scene.", nameof(name))
+    };
 }

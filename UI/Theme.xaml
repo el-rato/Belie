@@ -1,28 +1,33 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:local="clr-namespace:WallpaperProfiles.UI">
 
     <!-- ============ Palette (graphite + muted mineral accents) ============ -->
-    <Color x:Key="BgColor">#11151B</Color>
-    <SolidColorBrush x:Key="BgBrush" Color="#11151B"/>
-    <SolidColorBrush x:Key="SurfaceBrush" Color="#171C24"/>
-    <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#1D232D"/>
-    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#252D38"/>
-    <SolidColorBrush x:Key="BorderBrush" Color="#2B333E"/>
-    <SolidColorBrush x:Key="BorderStrongBrush" Color="#414C5A"/>
-    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#EDF0F4"/>
-    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#ADB6C1"/>
-    <SolidColorBrush x:Key="TextTertiaryBrush" Color="#8994A1"/>
-    <SolidColorBrush x:Key="AccentBrush" Color="#83ADB7"/>
-    <SolidColorBrush x:Key="AccentHoverBrush" Color="#9ABDC5"/>
-    <SolidColorBrush x:Key="AccentPressedBrush" Color="#648F9A"/>
-    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#24343B"/>
+    <Color x:Key="BgColor">#171918</Color>
+    <SolidColorBrush x:Key="BgBrush" Color="#171918"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#1D201E"/>
+    <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#242825"/>
+    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#2D332F"/>
+    <SolidColorBrush x:Key="BorderBrush" Color="#343B36"/>
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#59645D"/>
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F1F2EE"/>
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#BBC3BC"/>
+    <SolidColorBrush x:Key="TextTertiaryBrush" Color="#9AA69D"/>
+    <Color x:Key="SceneAccentColor">#D2E3D6</Color>
+    <Color x:Key="SceneAccentHoverColor">#E3EDE5</Color>
+    <Color x:Key="SceneAccentPressedColor">#AFCCB8</Color>
+    <Color x:Key="SceneAccentSubtleColor">#2C3930</Color>
+    <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource SceneAccentColor}"/>
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="{DynamicResource SceneAccentHoverColor}"/>
+    <SolidColorBrush x:Key="AccentPressedBrush" Color="{DynamicResource SceneAccentPressedColor}"/>
+    <SolidColorBrush x:Key="AccentSubtleBrush" Color="{DynamicResource SceneAccentSubtleColor}"/>
     <SolidColorBrush x:Key="SignalBrush" Color="#C69A5A"/>
     <SolidColorBrush x:Key="DangerBrush" Color="#D08A86"/>
     <SolidColorBrush x:Key="GoodBrush" Color="#87B493"/>
 
-    <FontFamily x:Key="AppFont">Segoe UI Variable Display, Segoe UI</FontFamily>
+    <FontFamily x:Key="AppFont">Segoe UI</FontFamily>
     <FontFamily x:Key="IconFont">Segoe MDL2 Assets</FontFamily>
-    <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
+    <FontFamily x:Key="MonoFont">Consolas</FontFamily>
 
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
@@ -32,14 +37,12 @@
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
         <Setter Property="FontSize" Value="13"/>
-        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
         <Setter Property="UseLayoutRounding" Value="True"/>
     </Style>
 
-    <Style TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-        <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
-    </Style>
+    <Style TargetType="{x:Type local:ProfileEditorWindow}" BasedOn="{StaticResource {x:Type Window}}"/>
+    <Style TargetType="{x:Type local:LibraryWindow}" BasedOn="{StaticResource {x:Type Window}}"/>
 
     <Style x:Key="FieldLabel" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
@@ -73,7 +76,7 @@
 
     <!-- ============ Buttons ============ -->
     <Style TargetType="Button">
-        <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
@@ -237,8 +240,7 @@
                     <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5">
-                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
-                                      VerticalAlignment="Center"/>
+                        <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
@@ -354,7 +356,7 @@
                                 Background="{StaticResource SurfaceBrush}"
                                 BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
                                 VerticalAlignment="Center">
-                            <Path x:Name="Check" Data="M2,5.5 L5,8.5 L10,2.5" Stroke="#FFFFFF" StrokeThickness="1.8"
+                            <Path x:Name="Check" Data="M2,5.5 L5,8.5 L10,2.5" Stroke="#171918" StrokeThickness="1.8"
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                                   Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"
                                   Visibility="Collapsed" Margin="0,1,0,0"/>
@@ -560,11 +562,11 @@
     </Style>
 
     <Style x:Key="ProfileCard" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderBrush" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="8"/>
-        <Setter Property="Padding" Value="6"/>
+        <Setter Property="Padding" Value="10"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Style.Triggers>

@@ -1,0 +1,327 @@
+using System.ComponentModel;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
+using WallpaperProfiles.Engine;
+using WallpaperProfiles.Infrastructure;
+using WallpaperProfiles.Models;
+using WallpaperProfiles.Persistence;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+
+namespace WallpaperProfiles.UI;
+
+internal partial class LibraryWindow : Window
+{
+    private const int PageSize = 48;
+    private readonly LibraryStore _store;
+    private List<WallpaperAsset> _assets;
+    private CancellationTokenSource? _thumbnailCancellation;
+    private bool _ready;
+    private bool _refreshing;
+    private bool _busy;
+    private bool _closed;
+    private int _page;
+    private Action<WallpaperAsset>? _inlineSelection;
+    private Action? _inlineBack;
+
+    private Window DialogOwner => Window.GetWindow(LibraryRoot) ?? this;
+
+    public FrameworkElement CreateInlineContent(Action<WallpaperAsset> selection, Action back)
+    {
+        _inlineSelection = selection;
+        _inlineBack = back;
+        BackButton.Visibility = Visibility.Visible;
+        LibraryTitle.Visibility = Visibility.Collapsed;
+        LibraryCloseButton.Visibility = Visibility.Collapsed;
+        var root = (FrameworkElement)Content;
+        Content = null;
+        return root;
+    }
+
+    public WallpaperAsset? Result { get; private set; }
+
+    private sealed record CollectionChoice(string Label, string? Name);
+
+    public LibraryWindow(LibraryStore store, IEnumerable<string> initialSources)
+    {
+        _store = store;
+        _assets = store.Load();
+        InitializeComponent();
+        Closed += (_, _) =>
+        {
+            _closed = true;
+            _thumbnailCancellation?.Cancel();
+            _thumbnailCancellation?.Dispose();
+        };
+        var sources = initialSources.Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+        async void InitializeLibrary(object sender, RoutedEventArgs e)
+        {
+            if (_ready) return;
+            _ready = true;
+            RefreshCollections();
+            RefreshGallery();
+            if (sources.Length > 0) await ImportAsync(sources);
+        }
+        Loaded += InitializeLibrary;
+        LibraryRoot.Loaded += InitializeLibrary;
+    }
+
+    private sealed class GalleryEntry : INotifyPropertyChanged
+    {
+        public WallpaperAsset Asset { get; }
+        public bool Exists { get; }
+        public string Placeholder => Exists ? "Preview unavailable" : "File missing";
+        public string Caption => (Asset.IsFavorite ? "★ · " : "")
+            + (WallpaperEngine.IsVideoFile(Asset.FilePath) ? "Video" : "Image")
+            + (Asset.Collection.Length > 0 ? " · " + Asset.Collection : "");
+        private ImageSource? _thumbnail;
+        public ImageSource? Thumbnail
+        {
+            get => _thumbnail;
+            set
+            {
+                _thumbnail = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Thumbnail)));
+            }
+        }
+        public event PropertyChangedEventHandler? PropertyChanged;
+        public GalleryEntry(WallpaperAsset asset)
+        {
+            Asset = asset;
+            Exists = File.Exists(asset.FilePath);
+        }
+    }
+
+    private void RefreshCollections()
+    {
+        _refreshing = true;
+        var selected = (CollectionFilter.SelectedItem as CollectionChoice)?.Name;
+        var collections = _assets.Select(a => a.Collection).Where(c => c.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(c => c, StringComparer.CurrentCultureIgnoreCase).ToArray();
+        var filters = new[] { new CollectionChoice("All collections", null) }
+            .Concat(collections.Select(c => new CollectionChoice(c, c))).ToArray();
+        CollectionFilter.ItemsSource = filters;
+        CollectionFilter.SelectedItem = filters.FirstOrDefault(c => string.Equals(c.Name, selected, StringComparison.OrdinalIgnoreCase)) ?? filters[0];
+        AssetCollectionBox.ToolTip = collections.Length > 0 ? "Existing collections: " + string.Join(", ", collections) : "Type a name to create a collection.";
+        _refreshing = false;
+    }
+
+    private void Filter_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_ready || _refreshing) return;
+        _page = 0;
+        RefreshGallery();
+    }
+
+    private void RefreshGallery(string? selectPath = null)
+    {
+        if (!_ready || _closed) return;
+        _thumbnailCancellation?.Cancel();
+        _thumbnailCancellation?.Dispose();
+        _thumbnailCancellation = new CancellationTokenSource();
+        var token = _thumbnailCancellation.Token;
+        var search = SearchBox.Text.Trim();
+        var collection = (CollectionFilter.SelectedItem as CollectionChoice)?.Name;
+        var matches = _assets.Where(a =>
+                (FavoritesFilter.IsChecked != true || a.IsFavorite)
+                && (collection == null || a.Collection.Equals(collection, StringComparison.OrdinalIgnoreCase))
+                && (search.Length == 0 || a.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                    || a.Collection.Contains(search, StringComparison.OrdinalIgnoreCase)
+                    || a.Tags.Any(t => t.Contains(search, StringComparison.OrdinalIgnoreCase))))
+            .OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        var pageCount = Math.Max(1, (matches.Count + PageSize - 1) / PageSize);
+        _page = Math.Clamp(_page, 0, pageCount - 1);
+        if (selectPath != null)
+        {
+            var index = matches.FindIndex(a => a.FilePath.Equals(selectPath, StringComparison.OrdinalIgnoreCase));
+            if (index >= 0) _page = index / PageSize;
+        }
+        var entries = matches.Skip(_page * PageSize).Take(PageSize).Select(a => new GalleryEntry(a)).ToArray();
+        Gallery.ItemsSource = entries;
+        Gallery.SelectedItem = entries.FirstOrDefault(a => a.Asset.FilePath.Equals(selectPath, StringComparison.OrdinalIgnoreCase));
+        ShowSelection();
+        EmptyText.Text = _assets.Count == 0 ? "Your library is ready for its first wallpaper.\nImport files or a folder to begin." : "No wallpapers match these filters.";
+        EmptyText.Visibility = matches.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        StatusText.Text = $"{matches.Count} shown · {_assets.Count} in library";
+        PageText.Text = $"Page {_page + 1} of {pageCount}";
+        PreviousButton.IsEnabled = _page > 0;
+        NextButton.IsEnabled = _page + 1 < pageCount;
+        _ = LoadThumbnailsAsync(entries, token);
+    }
+
+    private async Task LoadThumbnailsAsync(GalleryEntry[] entries, CancellationToken token)
+    {
+        // Limit both visible thumbnails and concurrent image/video decoding.
+        using var slots = new SemaphoreSlim(3);
+        try
+        {
+            await Task.WhenAll(entries.Where(a => a.Exists).Select(async entry =>
+            {
+                await slots.WaitAsync(token);
+                try
+                {
+                    token.ThrowIfCancellationRequested();
+                    var image = await Task.Run(() => ThumbnailLoader.Load(entry.Asset.FilePath, 400), token);
+                    if (!token.IsCancellationRequested && !_closed) entry.Thumbnail = image;
+                }
+                finally { slots.Release(); }
+            }));
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { Logger.Error("Loading library thumbnails failed.", ex); }
+    }
+
+    private void Gallery_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) => ShowSelection();
+
+    private void ShowSelection()
+    {
+        if (Gallery.SelectedItem is not GalleryEntry entry)
+        {
+            DetailsPanel.Visibility = Visibility.Collapsed;
+            SelectionHint.Visibility = Visibility.Visible;
+            UseButton.IsEnabled = false;
+            return;
+        }
+        DetailsPanel.Visibility = Visibility.Visible;
+        SelectionHint.Visibility = Visibility.Collapsed;
+        AssetNameBox.Text = entry.Asset.Name;
+        TagsBox.Text = string.Join(", ", entry.Asset.Tags);
+        AssetCollectionBox.Text = entry.Asset.Collection;
+        FavoriteBox.IsChecked = entry.Asset.IsFavorite;
+        SourceText.Text = entry.Asset.FilePath;
+        MissingText.Visibility = entry.Exists ? Visibility.Collapsed : Visibility.Visible;
+        UseButton.IsEnabled = entry.Exists && !_busy;
+    }
+
+    private async Task ImportAsync(IEnumerable<string> sources)
+    {
+        if (_busy) return;
+        SetBusy(true);
+        StatusText.Text = "Importing wallpapers…";
+        try
+        {
+            var existing = _assets.ToArray();
+            var added = await Task.Run(() => LibraryStore.Import(existing, sources));
+            if (_closed) return;
+            if (added.Count > 0)
+            {
+                var updated = _assets.Concat(added).ToList();
+                await Task.Run(() => _store.Save(updated));
+                if (_closed) return;
+                _assets = updated;
+                RefreshCollections();
+                RefreshGallery();
+            }
+            StatusText.Text = added.Count > 0 ? $"Imported {added.Count} wallpaper(s) · {_assets.Count} in library"
+                : "No new wallpapers found. Existing entries and unsupported files were skipped.";
+        }
+        catch (Exception ex) { ReportError("Import failed", ex); }
+        finally { if (!_closed) SetBusy(false); }
+    }
+
+    private void SetBusy(bool busy)
+    {
+        _busy = busy;
+        ImportFilesButton.IsEnabled = !busy;
+        ImportFolderButton.IsEnabled = !busy;
+        Gallery.IsEnabled = !busy;
+        DetailsPanel.IsEnabled = !busy;
+        UseButton.IsEnabled = !busy && Gallery.SelectedItem is GalleryEntry entry && entry.Exists;
+    }
+
+    private async void ImportFiles_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var dialog = new OpenFileDialog
+        {
+            Title = "Import wallpapers", Multiselect = true,
+            Filter = "Wallpaper media|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.tif;*.tiff;*.jfif;*.mp4;*.m4v;*.mov;*.wmv;*.avi;*.mpg;*.mpeg;*.m2v;*.mkv;*.webm;*.3gp|All files|*.*"
+        };
+        if (dialog.ShowDialog(DialogOwner) == true) await ImportAsync(dialog.FileNames);
+    }
+
+    private async void ImportFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var folder = ModernFolderPicker.Pick(DialogOwner, "Import a wallpaper folder", null);
+        if (folder != null) await ImportAsync(new[] { folder });
+    }
+
+    private async void SaveDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || Gallery.SelectedItem is not GalleryEntry entry) return;
+        var name = AssetNameBox.Text.Trim();
+        if (name.Length == 0)
+        {
+            StatusText.Text = "Enter a name before saving.";
+            AssetNameBox.Focus();
+            return;
+        }
+        var replacement = new WallpaperAsset
+        {
+            FilePath = entry.Asset.FilePath, Name = name, IsFavorite = FavoriteBox.IsChecked == true,
+            Collection = AssetCollectionBox.Text.Trim(),
+            Tags = TagsBox.Text.Split(',').Select(t => t.Trim()).Where(t => t.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+        };
+        var updated = _assets.Select(a => ReferenceEquals(a, entry.Asset) ? replacement : a).ToList();
+        await SaveChangesAsync(updated, replacement.FilePath, "Details saved.");
+    }
+
+    private async void Remove_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || Gallery.SelectedItem is not GalleryEntry entry) return;
+        await SaveChangesAsync(_assets.Where(a => !ReferenceEquals(a, entry.Asset)).ToList(), null,
+            "Removed from library. Your original file and profiles are kept.");
+    }
+
+    private async Task SaveChangesAsync(List<WallpaperAsset> updated, string? selectPath, string success)
+    {
+        SetBusy(true);
+        try
+        {
+            await Task.Run(() => _store.Save(updated));
+            if (_closed) return;
+            _assets = updated;
+            RefreshCollections();
+            RefreshGallery(selectPath);
+            StatusText.Text = success;
+        }
+        catch (Exception ex) { ReportError("Save failed", ex); }
+        finally { if (!_closed) SetBusy(false); }
+    }
+
+    private void ReportError(string title, Exception ex)
+    {
+        Logger.Error(title + " in wallpaper library.", ex);
+        if (_closed) return;
+        StatusText.Text = "Changes could not be saved. Your previous library is kept.";
+        System.Windows.MessageBox.Show(DialogOwner, ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+    }
+
+    private void Use_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || Gallery.SelectedItem is not GalleryEntry entry) return;
+        if (!File.Exists(entry.Asset.FilePath))
+        {
+            RefreshGallery(entry.Asset.FilePath);
+            StatusText.Text = "This source file is missing. Restore it before using this wallpaper.";
+            return;
+        }
+        Result = entry.Asset;
+        if (_inlineSelection != null) _inlineSelection(entry.Asset);
+        else DialogResult = true;
+    }
+
+    private void Previous_Click(object sender, RoutedEventArgs e) { _page--; RefreshGallery(); }
+    private void Next_Click(object sender, RoutedEventArgs e) { _page++; RefreshGallery(); }
+    private void Close_Click(object sender, RoutedEventArgs e)
+    {
+        if (_inlineBack != null) _inlineBack();
+        else Close();
+    }
+    private void TitleBar_Drag(object sender, MouseButtonEventArgs e)
+    {
+        if (_inlineBack == null && e.LeftButton == MouseButtonState.Pressed) DragMove();
+    }
+}

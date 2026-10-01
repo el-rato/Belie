@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using Microsoft.Win32;
 using WallpaperProfiles.Infrastructure;
 using WallpaperProfiles.Models;
+using WallpaperProfiles.Engine;
 using Brush = System.Windows.Media.Brush;
 using DragDropEffects = System.Windows.DragDropEffects;
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -44,6 +45,12 @@ internal partial class ProfileEditorWindow : Window
         RandomOrderCheck.IsChecked = model.SlideshowRandom;
         VideoMuteCheck.IsChecked = model.VideoMuted;
         IconSafeCheck.IsChecked = model.IconFriendlyLive;
+        SceneAccentBox.Text = model.SceneAccent;
+        AudioPathBox.Text = model.AmbientAudioPath;
+        AmbientVolumeSlider.Value = model.AmbientVolume;
+        AmbientMuteBox.IsChecked = model.AmbientMuted;
+        PresetPanel.Visibility = isNew ? Visibility.Visible : Visibility.Collapsed;
+        PresetCombo.ItemsSource = ScenePresets.Names;
 
         _pathDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
         _pathDebounce.Tick += (_, _) =>
@@ -74,6 +81,22 @@ internal partial class ProfileEditorWindow : Window
     }
 
     // ============ Path validation & preview ============
+
+    private void Preset_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (PresetCombo.SelectedItem is not string name) return;
+        var preset = ScenePresets.Create(name);
+        NameBox.Text = preset.Name;
+        SceneAccentBox.Text = preset.SceneAccent;
+        AmbientVolumeSlider.Value = preset.AmbientVolume;
+        AmbientMuteBox.IsChecked = preset.AmbientMuted;
+    }
+
+    private void PickAudio_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Title = "Choose ambient audio", Filter = "Audio|*.mp3;*.wav;*.m4a;*.aac;*.wma;*.flac|All files|*.*" };
+        if (dialog.ShowDialog(this) == true) AudioPathBox.Text = dialog.FileName;
+    }
 
     private async void ValidatePath()
     {
@@ -331,6 +354,12 @@ internal partial class ProfileEditorWindow : Window
         }
 
         var folder = FolderBox.Text.Trim();
+        var accent = SceneAccentBox.Text.Trim();
+        if (accent.Length > 0 && !SceneController.TryParseAccent(accent, out _))
+        {
+            Warn("Enter a six-digit accent color such as #B7CDBC, or leave it blank for the default.");
+            return;
+        }
         if (folder.Length == 0)
         {
             Warn("Please choose a wallpaper image, video, or folder.");
@@ -424,6 +453,10 @@ internal partial class ProfileEditorWindow : Window
         _model.SlideshowRandom = RandomOrderCheck.IsChecked == true;
         _model.VideoMuted = VideoMuteCheck.IsChecked != false;
         _model.IconFriendlyLive = IconSafeCheck.IsChecked == true;
+        _model.SceneAccent = accent.ToUpperInvariant();
+        _model.AmbientAudioPath = AudioPathBox.Text.Trim();
+        _model.AmbientVolume = (int)Math.Round(AmbientVolumeSlider.Value);
+        _model.AmbientMuted = AmbientMuteBox.IsChecked == true;
         _model.Schedule = rules;
         _model.EventTriggers = triggers;
 

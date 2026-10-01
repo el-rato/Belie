@@ -27,6 +27,12 @@
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="18,16,18,8">
+                <StackPanel x:Name="PresetPanel" Margin="0,0,0,16">
+                    <TextBlock Text="Start with a scene" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox x:Name="PresetCombo" SelectionChanged="Preset_Changed"/>
+                    <TextBlock Text="Focus, Gaming, or Evening. Choose your own wallpaper and optional audio below."
+                               Style="{StaticResource HintText}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
                 <TextBlock Text="Profile name" Style="{StaticResource FieldLabel}"/>
                 <TextBox x:Name="NameBox"/>
 
@@ -92,6 +98,27 @@
                               ToolTip="Plays the video as the real desktop wallpaper at ~4 fps instead of a smooth overlay. Icons and taskbar stay fully visible."/>
                 </StackPanel>
 
+                <Border Style="{StaticResource CardBorder}" Margin="0,16,0,4">
+                    <StackPanel>
+                        <TextBlock Text="Scene mood" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
+                        <TextBlock Text="Belie accent (#RRGGBB, blank = default)" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="SceneAccentBox" MaxLength="7"/>
+                        <TextBlock Text="Ambient audio (optional)" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Browse" Click="PickAudio_Click" Margin="8,0,0,0"/>
+                            <TextBox x:Name="AudioPathBox"/>
+                        </DockPanel>
+                        <TextBlock Text="Use a local track. Audio loops while this scene is active; clear the path to remove it."
+                                   Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,7,0,12"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Volume" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <Slider Grid.Column="1" x:Name="AmbientVolumeSlider" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Value, ElementName=AmbientVolumeSlider, StringFormat={}{0:0}%}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        </Grid>
+                        <CheckBox x:Name="AmbientMuteBox" Content="Start ambient audio muted" Margin="0,12,0,0"/>
+                    </StackPanel>
+                </Border>
                 <Separator Margin="0,10,0,12"/>
                 <DockPanel Margin="0,0,0,8">
                     <Button DockPanel.Dock="Right" Padding="10,4" Click="AddRule_Click">
