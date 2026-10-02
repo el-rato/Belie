@@ -27,6 +27,7 @@ public sealed class LibraryWindowTests
             System.Windows.Application? app = null;
             try
             {
+                App.ConfigureRendering(liveWallpaper: false);
                 app = new System.Windows.Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 app.Resources.MergedDictionaries.Add(new ResourceDictionary
                 {

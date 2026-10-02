@@ -290,6 +290,7 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     private void ApplyWallpaper(WallpaperProfile profile)
     {
+        App.ConfigureRendering(WallpaperEngine.IsLiveFile(profile.FolderPath));
         // A detached live host (started when the app last exited) must never outlive an
         // activation: this profile is taking over the desktop now.
         LiveHostProcess.StopRunning();

@@ -19,6 +19,7 @@ internal partial class App : System.Windows.Application
     private WallpaperCoordinator? _coordinator;
     private TrayIconManager? _tray;
     private MainWindow? _main;
+    private Func<MainWindow>? _createMain;
     private DesktopCanvasHost? _widgetHost;
     private EventWaitHandle? _activateEvent;
     private EventWaitHandle? _canvasActivateEvent;
@@ -56,6 +57,7 @@ internal partial class App : System.Windows.Application
 
             if (e.Args.Any(a => a.Equals("--widget-host", StringComparison.OrdinalIgnoreCase)))
             {
+                ConfigureRendering(liveWallpaper: false);
                 var fileIndex = Array.FindIndex(e.Args, a => a.Equals("--canvas-file", StringComparison.OrdinalIgnoreCase));
                 var file = fileIndex >= 0 && fileIndex + 1 < e.Args.Length ? e.Args[fileIndex + 1] : DesktopCanvasProcess.DefaultFile;
                 try { _widgetHost = new DesktopCanvasHost(file); }
@@ -90,6 +92,7 @@ internal partial class App : System.Windows.Application
             }
 
             var settingsStore = new SettingsStore(AppPaths.SettingsFile);
+            ConfigureRendering(liveWallpaper: false);
             _exitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Exit");
             _canvasActivateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Canvas.Open");
             var settings = settingsStore.Load();
@@ -117,7 +120,7 @@ internal partial class App : System.Windows.Application
             var startMinimized = settings.StartMinimizedToTray
                 || e.Args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
 
-            _main = new MainWindow(_coordinator, profileStore, settingsStore);
+            _createMain = () => new MainWindow(_coordinator, profileStore, settingsStore);
             _tray = new TrayIconManager(
                 _coordinator.GetSnapshot,
                 OpenMainWindow,
@@ -142,7 +145,7 @@ internal partial class App : System.Windows.Application
                 OpenMainWindow();
             }
             if (e.Args.Any(a => a.Equals("--desktop-canvas", StringComparison.OrdinalIgnoreCase)))
-            { OpenMainWindow(); _main.OpenCanvas(); }
+            { OpenMainWindow(); _main?.OpenCanvas(); }
             Logger.Info(startMinimized ? "Started minimized to tray." : "Started with main window visible.");
         }
         catch (Exception ex)
@@ -177,6 +180,7 @@ internal partial class App : System.Windows.Application
 
     private void OpenMainWindow()
     {
+        _main ??= _createMain?.Invoke();
         if (_main == null)
         {
             return;
@@ -184,6 +188,15 @@ internal partial class App : System.Windows.Application
         _main.Show();
         _main.WindowState = WindowState.Normal;
         _main.Activate();
+    }
+
+    internal static void ConfigureRendering(bool liveWallpaper)
+    {
+        // Static UI and widgets do not need a GPU device and its driver allocations.
+        // Live wallpaper playback retains the hardware rendering path.
+        System.Windows.Media.RenderOptions.ProcessRenderMode = liveWallpaper
+            ? System.Windows.Interop.RenderMode.Default
+            : System.Windows.Interop.RenderMode.SoftwareOnly;
     }
 
     private void ExitApplication()
