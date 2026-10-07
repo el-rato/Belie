@@ -38,7 +38,11 @@
                 <local:MonitorThumbnail x:Name="EditorPreview" ShowName="False" IsActive="False"
                                         BezelWidth="{Binding ActualWidth, ElementName=WallpaperEditorFields}" BezelHeight="190" HorizontalAlignment="Center" Margin="0,16,0,0"/>
 
-                <TextBlock Text="Source" Style="{StaticResource FieldLabel}" Margin="0,16,0,6"/>
+                <DockPanel Margin="0,16,0,6">
+                    <Button x:Name="AddFromLibraryButton" DockPanel.Dock="Right" Content="+ Library" Padding="10,6"
+                            Click="AddFromLibrary_Click" ToolTip="Add wallpapers from your library to this profile"/>
+                    <TextBlock Text="Source" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0"/>
+                </DockPanel>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -71,6 +75,20 @@
                     <Ellipse x:Name="PathStatusDot" Width="8" Height="8" VerticalAlignment="Center"
                              Margin="0,0,6,0" Fill="{DynamicResource TextTertiaryBrush}"/>
                     <TextBlock x:Name="PathStatusText" Style="{StaticResource HintText}" Text="No location set"/>
+                </StackPanel>
+
+                <StackPanel x:Name="AdditionalWallpaperPanel" Visibility="Collapsed" Margin="0,12,0,0">
+                    <TextBlock x:Name="AdditionalWallpaperCount" Style="{StaticResource FieldLabel}"/>
+                    <ScrollViewer MaxHeight="115" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="AdditionalWallpaperList">
+                            <ItemsControl.ItemTemplate><DataTemplate>
+                                <DockPanel Margin="0,0,0,5">
+                                    <Button DockPanel.Dock="Right" Content="Remove" Tag="{Binding}" Click="RemoveProfileWallpaper_Click" Padding="8,3" FontSize="12" Margin="8,0,0,0"/>
+                                    <TextBlock Text="{Binding Name}" ToolTip="{Binding FilePath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
+                            </DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </StackPanel>
 
                 <Grid Margin="0,16,0,0">

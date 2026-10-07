@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Windows;
@@ -38,6 +39,7 @@ internal partial class MainWindow : Window
     private Guid? _selectedId;
     private WallpaperProfile? _selected;
     private LibraryWindow? _libraryView;
+    private readonly ObservableCollection<WallpaperAsset> _additionalWallpapers = new();
 
     private readonly DispatcherTimer _pathDebounce;
     private readonly DispatcherTimer _dashboardTimer;
@@ -69,6 +71,16 @@ internal partial class MainWindow : Window
         };
         FolderBox.TextChanged += (_, _) =>
         {
+            ++_pathVersion;
+            _pathDebounce.Stop();
+            _pathDebounce.Start();
+        };
+        AdditionalWallpaperList.ItemsSource = _additionalWallpapers;
+        _additionalWallpapers.CollectionChanged += (_, _) =>
+        {
+            AdditionalWallpaperPanel.Visibility = _additionalWallpapers.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            AdditionalWallpaperCount.Text = $"{_additionalWallpapers.Count} additional wallpaper(s)";
+            ++_pathVersion;
             _pathDebounce.Stop();
             _pathDebounce.Start();
         };
@@ -180,16 +192,14 @@ internal partial class MainWindow : Window
         {
             if (_libraryView == null)
             {
-                var sources = _libraryStore.Exists ? Array.Empty<string>() : _coordinator.Profiles.Select(p => p.FolderPath).ToArray();
+                var sources = _libraryStore.Exists ? Array.Empty<string>() : _coordinator.Profiles
+                    .SelectMany(p => new[] { p.FolderPath }.Concat(p.AdditionalWallpaperPaths)).ToArray();
                 var view = new LibraryWindow(_libraryStore, sources);
-                LibraryPane.Content = view.CreateInlineContent(asset =>
-                {
-                    ShowProfiles();
-                    if (_selected != null) FolderBox.Text = asset.FilePath;
-                    else AddProfile(asset);
-                }, ShowProfiles);
+                LibraryPane.Content = view.CreateInlineContent(asset => AddLibraryWallpapers(new[] { asset }),
+                    ShowProfiles, AddLibraryWallpapers);
                 _libraryView = view;
             }
+            _libraryView.SetTargetProfile(_selected?.Name);
             ProfilePane.Visibility = Visibility.Collapsed;
             DashboardPane.Visibility = Visibility.Collapsed;
             LibraryPane.Visibility = Visibility.Visible;
@@ -390,13 +400,13 @@ internal partial class MainWindow : Window
 
     private static async Task LoadRailThumbAsync(WallpaperProfile profile, MonitorThumbnail monitor)
     {
-        var isLive = WallpaperEngine.IsLiveFile(profile.FolderPath);
-        // Live sources (video/GIF) load through the video frame grabber / image decoder directly.
-        var image = await Task.Run(() => ThumbnailLoader.Load(
-            isLive ? profile.FolderPath : null, 320)
-            ?? ThumbnailLoader.FirstImage(profile.FolderPath, 320));
-        monitor.IsVideo = isLive;
-        monitor.ScreenSource = image;
+        var preview = await Task.Run(() =>
+        {
+            var first = WallpaperEngine.GetProfileMedia(profile).FirstOrDefault();
+            return (Path: first, Image: ThumbnailLoader.Load(first, 320));
+        });
+        monitor.IsVideo = preview.Path != null && WallpaperEngine.IsLiveFile(preview.Path);
+        monitor.ScreenSource = preview.Image;
     }
 
     private void Select(Guid id)
@@ -423,6 +433,9 @@ internal partial class MainWindow : Window
         }
 
         NameBox.Text = _selected.Name;
+        _additionalWallpapers.Clear();
+        foreach (var path in _selected.AdditionalWallpaperPaths)
+            _additionalWallpapers.Add(new WallpaperAsset { FilePath = path, Name = Path.GetFileNameWithoutExtension(path) });
         FolderBox.Text = _selected.FolderPath;
         FitCombo.SelectedItem = _selected.FitMode;
         IntervalBox.Text = _selected.SlideshowIntervalMinutes.ToString(CultureInfo.InvariantCulture);
@@ -461,8 +474,32 @@ internal partial class MainWindow : Window
 
     private async void ValidatePath()
     {
+        if (Dispatcher.HasShutdownStarted) return;
+        try { await Dispatcher.InvokeAsync(ValidatePathAsync).Task.Unwrap(); }
+        catch (TaskCanceledException) when (Dispatcher.HasShutdownStarted) { }
+    }
+
+    private async Task ValidatePathAsync()
+    {
         var path = FolderBox.Text.Trim();
         var version = ++_pathVersion;
+
+        if (_additionalWallpapers.Count > 0)
+        {
+            var extraPaths = _additionalWallpapers.Select(a => a.FilePath).ToList();
+            var media = await Task.Run(() => WallpaperEngine.GetProfileMedia(new WallpaperProfile
+                { FolderPath = path, AdditionalWallpaperPaths = extraPaths }));
+            if (version != _pathVersion) return;
+            var missing = extraPaths.Count(source => !File.Exists(source));
+            SetPathStatus(media.Count > 0 ? "GoodBrush" : "DangerBrush",
+                $"{media.Count} available wallpapers" + (missing > 0 ? $" · {missing} missing" : ""));
+            var first = media.FirstOrDefault();
+            var thumbnail = await Task.Run(() => ThumbnailLoader.Load(first, 900));
+            if (version != _pathVersion) return;
+            PreviewMon.ScreenSource = thumbnail;
+            PreviewMon.IsVideo = first != null && WallpaperEngine.IsLiveFile(first);
+            return;
+        }
 
         if (path.Length == 0)
         {
@@ -656,6 +693,9 @@ internal partial class MainWindow : Window
 
         profile.Name = name;
         profile.FolderPath = FolderBox.Text.Trim();
+        profile.AdditionalWallpaperPaths = _additionalWallpapers.Select(a => a.FilePath)
+            .Where(path => !path.Equals(profile.FolderPath, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         profile.FitMode = (FitMode)(FitCombo.SelectedItem ?? FitMode.Fill);
         profile.SlideshowIntervalMinutes = interval;
         profile.SlideshowRandom = RandomBox.IsChecked == true;
@@ -692,6 +732,38 @@ internal partial class MainWindow : Window
         SearchBox.Clear();
         BuildRail();
         Select(copy.Id);
+    }
+
+    private void AddLibraryWallpapers(IReadOnlyList<WallpaperAsset> assets)
+    {
+        if (assets.Count == 0) return;
+        ShowProfiles();
+        if (_selected == null)
+        {
+            AddProfile(template: new WallpaperProfile { Name = assets[0].Name, FolderPath = assets[0].FilePath,
+                AdditionalWallpaperPaths = assets.Skip(1).Select(a => a.FilePath).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                SlideshowIntervalMinutes = assets.Count > 1 ? 5 : 0 });
+            return;
+        }
+        var firstMultipleSelection = _additionalWallpapers.Count == 0 && !Directory.Exists(FolderBox.Text.Trim());
+        var known = _additionalWallpapers.Select(a => a.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var source = FolderBox.Text.Trim();
+        if (source.Length > 0) known.Add(source);
+        foreach (var asset in assets)
+        {
+            if (!known.Add(asset.FilePath)) continue;
+            if (FolderBox.Text.Trim().Length == 0) FolderBox.Text = asset.FilePath;
+            else _additionalWallpapers.Add(asset);
+        }
+        if (firstMultipleSelection && _additionalWallpapers.Count > 0 && IntervalBox.Text.Trim() == "0") IntervalBox.Text = "5";
+        if (_additionalWallpapers.Count > 0)
+            AdditionalWallpaperCount.Text = $"{_additionalWallpapers.Count} additional wallpaper(s) · Save to keep changes";
+        ValidatePath();
+    }
+
+    private void RemoveProfileWallpaper_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button { Tag: WallpaperAsset asset }) _additionalWallpapers.Remove(asset);
     }
 
     private bool TrySaveProfile(WallpaperProfile profile)
@@ -769,6 +841,7 @@ internal partial class MainWindow : Window
         Logger.Info($"Deleted profile '{_selected.Name}'.");
         _selected = null;
         _selectedId = null;
+        _additionalWallpapers.Clear();
         _coordinator.ProfilesEdited();
         BuildRail();
         if (_railEntries.Count > 0)
@@ -792,7 +865,7 @@ internal partial class MainWindow : Window
     private void AddProfile(WallpaperAsset? asset = null, WallpaperProfile? template = null)
     {
         var model = template ?? new WallpaperProfile { Name = asset?.Name ?? "", FolderPath = asset?.FilePath ?? "" };
-        var editor = new ProfileEditorWindow(model, isNew: true) { Owner = this };
+        var editor = new ProfileEditorWindow(model, isNew: true, libraryStore: _libraryStore) { Owner = this };
         if (editor.ShowDialog() == true && editor.Result != null)
         {
             if (!TrySaveProfile(editor.Result))
@@ -812,7 +885,8 @@ internal partial class MainWindow : Window
         {
             return;
         }
-        var editor = new ProfileEditorWindow(_selected, isNew: false) { Owner = this };
+        if (!CollectFields()) return;
+        var editor = new ProfileEditorWindow(_selected, isNew: false, libraryStore: _libraryStore) { Owner = this };
         ((System.Windows.Controls.TabControl)editor.FindName("EditorTabs")).SelectedIndex =
             ((sender as System.Windows.Controls.Button)?.Tag as string) switch { "Mood" => 1, "Rules" => 2, _ => 0 };
         if (editor.ShowDialog() == true)

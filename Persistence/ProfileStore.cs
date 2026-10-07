@@ -88,6 +88,9 @@ internal sealed class ProfileStore
     {
         profile.Name ??= "";
         profile.FolderPath ??= "";
+        profile.AdditionalWallpaperPaths = (profile.AdditionalWallpaperPaths ?? new())
+            .Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => path.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         profile.SceneAccent ??= "";
         profile.AmbientAudioPath ??= "";
         profile.AmbientVolume = Math.Clamp(profile.AmbientVolume, 0, 100);

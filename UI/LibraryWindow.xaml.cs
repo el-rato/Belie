@@ -22,13 +22,18 @@ internal partial class LibraryWindow : Window
     private bool _closed;
     private int _page;
     private Action<WallpaperAsset>? _inlineSelection;
+    private Action<IReadOnlyList<WallpaperAsset>>? _inlineMultipleSelection;
+    private readonly HashSet<string> _pickedPaths = new(StringComparer.OrdinalIgnoreCase);
+    private string? _targetProfileName;
     private Action? _inlineBack;
 
     private Window DialogOwner => Window.GetWindow(LibraryRoot) ?? this;
 
-    public FrameworkElement CreateInlineContent(Action<WallpaperAsset> selection, Action back)
+    public FrameworkElement CreateInlineContent(Action<WallpaperAsset> selection, Action back,
+        Action<IReadOnlyList<WallpaperAsset>>? multipleSelection = null)
     {
         _inlineSelection = selection;
+        _inlineMultipleSelection = multipleSelection;
         _inlineBack = back;
         BackButton.Visibility = Visibility.Visible;
         LibraryTitle.Visibility = Visibility.Collapsed;
@@ -39,14 +44,25 @@ internal partial class LibraryWindow : Window
     }
 
     public WallpaperAsset? Result { get; private set; }
+    public IReadOnlyList<WallpaperAsset> SelectedAssets { get; private set; } = Array.Empty<WallpaperAsset>();
+
+    public void SetTargetProfile(string? name)
+    {
+        _targetProfileName = name;
+        UpdateLibrarySelection();
+    }
 
     private sealed record CollectionChoice(string Label, string? Name);
 
-    public LibraryWindow(LibraryStore store, IEnumerable<string> initialSources)
+    public LibraryWindow(LibraryStore store, IEnumerable<string> initialSources,
+        WallhavenClient? marketplaceClient = null, string? marketplaceDownloadFolder = null)
     {
         _store = store;
         _assets = store.Load();
+        _marketClient = marketplaceClient ?? new WallhavenClient();
+        _marketDownloadFolder = marketplaceDownloadFolder ?? Path.Combine(AppPaths.BaseDir, "wallpapers", "wallhaven");
         InitializeComponent();
+        InitializeMarketplace();
         UiAppearance.Attach(this);
         Closed += (_, _) =>
         {
@@ -86,10 +102,25 @@ internal partial class LibraryWindow : Window
             }
         }
         public event PropertyChangedEventHandler? PropertyChanged;
-        public GalleryEntry(WallpaperAsset asset)
+        private bool _isPicked;
+        private readonly Action<GalleryEntry> _pickedChanged;
+        public bool IsPicked
+        {
+            get => _isPicked;
+            set
+            {
+                if (_isPicked == value) return;
+                _isPicked = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPicked)));
+                _pickedChanged(this);
+            }
+        }
+        public GalleryEntry(WallpaperAsset asset, bool picked, Action<GalleryEntry> pickedChanged)
         {
             Asset = asset;
             Exists = File.Exists(asset.FilePath);
+            _isPicked = picked;
+            _pickedChanged = pickedChanged;
         }
     }
 
@@ -137,7 +168,9 @@ internal partial class LibraryWindow : Window
             var index = matches.FindIndex(a => a.FilePath.Equals(selectPath, StringComparison.OrdinalIgnoreCase));
             if (index >= 0) _page = index / PageSize;
         }
-        var entries = matches.Skip(_page * PageSize).Take(PageSize).Select(a => new GalleryEntry(a)).ToArray();
+        _pickedPaths.IntersectWith(_assets.Select(a => a.FilePath));
+        var entries = matches.Skip(_page * PageSize).Take(PageSize)
+            .Select(a => new GalleryEntry(a, _pickedPaths.Contains(a.FilePath), PickedChanged)).ToArray();
         Gallery.ItemsSource = entries;
         Gallery.SelectedItem = entries.FirstOrDefault(a => a.Asset.FilePath.Equals(selectPath, StringComparison.OrdinalIgnoreCase));
         ShowSelection();
@@ -191,6 +224,7 @@ internal partial class LibraryWindow : Window
             DetailsPanel.Visibility = Visibility.Collapsed;
             SelectionHint.Visibility = Visibility.Visible;
             UseButton.IsEnabled = false;
+            UpdateLibrarySelection();
             return;
         }
         DetailsPanel.Visibility = Visibility.Visible;
@@ -204,6 +238,7 @@ internal partial class LibraryWindow : Window
         SourceText.Text = entry.Asset.FilePath;
         MissingText.Visibility = entry.Exists ? Visibility.Collapsed : Visibility.Visible;
         UseButton.IsEnabled = entry.Exists && !_busy;
+        UpdateLibrarySelection();
     }
 
     private async Task ImportAsync(IEnumerable<string> sources)
@@ -237,9 +272,11 @@ internal partial class LibraryWindow : Window
         _busy = busy;
         ImportFilesButton.IsEnabled = !busy;
         ImportFolderButton.IsEnabled = !busy;
+        MarketplaceTab.IsEnabled = !busy;
         Gallery.IsEnabled = !busy;
         DetailsPanel.IsEnabled = !busy;
         UseButton.IsEnabled = !busy && Gallery.SelectedItem is GalleryEntry entry && entry.Exists;
+        UpdateLibrarySelection();
     }
 
     private async void ImportFiles_Click(object sender, RoutedEventArgs e)
@@ -314,15 +351,59 @@ internal partial class LibraryWindow : Window
 
     private void Use_Click(object sender, RoutedEventArgs e)
     {
-        if (_busy || Gallery.SelectedItem is not GalleryEntry entry) return;
-        if (!File.Exists(entry.Asset.FilePath))
+        if (_busy) return;
+        var assets = PickedAssets();
+        if (assets.Count == 0) return;
+        if (assets.Any(asset => !File.Exists(asset.FilePath)))
         {
-            RefreshGallery(entry.Asset.FilePath);
-            StatusText.Text = "This source file is missing. Restore it before using this wallpaper.";
+            StatusText.Text = "A selected source file is missing. Restore it or remove it from your selection.";
             return;
         }
-        Result = entry.Asset;
-        if (_inlineSelection != null) _inlineSelection(entry.Asset);
+        CommitLibrarySelection(assets);
+    }
+
+    private IReadOnlyList<WallpaperAsset> PickedAssets() => _pickedPaths.Count > 0
+        ? _assets.Where(a => _pickedPaths.Contains(a.FilePath)).ToArray()
+        : Gallery.SelectedItem is GalleryEntry entry ? new[] { entry.Asset } : Array.Empty<WallpaperAsset>();
+
+    private void PickedChanged(GalleryEntry entry)
+    {
+        if (entry.IsPicked) _pickedPaths.Add(entry.Asset.FilePath);
+        else _pickedPaths.Remove(entry.Asset.FilePath);
+        UpdateLibrarySelection();
+    }
+
+    private void UpdateLibrarySelection()
+    {
+        var selected = PickedAssets();
+        var addingToProfile = _inlineMultipleSelection != null || _targetProfileName != null;
+        UseButton.Visibility = selected.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        UseButton.IsEnabled = !_busy && selected.Count > 0 && selected.All(a => File.Exists(a.FilePath));
+        UseButton.Content = !addingToProfile ? "Use in profile"
+            : selected.Count > 1 ? $"Add {selected.Count} wallpapers" : "Add to profile";
+        LibrarySelectionText.Text = !addingToProfile ? (_pickedPaths.Count > 0 ? $"{_pickedPaths.Count} selected" : "")
+            : (_targetProfileName == null ? "Create a new profile" : "Adding to " + _targetProfileName)
+                + (_pickedPaths.Count > 0 ? $" · {_pickedPaths.Count} selected" : " · Select using the checkboxes");
+        ClearPickedButton.Visibility = _pickedPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ClearPickedButton.IsEnabled = !_busy;
+    }
+
+    private void ClearPicked_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        _pickedPaths.Clear();
+        foreach (var entry in Gallery.Items.OfType<GalleryEntry>()) entry.IsPicked = false;
+        UpdateLibrarySelection();
+    }
+
+    private void CommitLibrarySelection(IReadOnlyList<WallpaperAsset> assets)
+    {
+        SelectedAssets = assets;
+        Result = assets[0];
+        _pickedPaths.Clear();
+        foreach (var entry in Gallery.Items.OfType<GalleryEntry>()) entry.IsPicked = false;
+        if (_inlineMultipleSelection != null) _inlineMultipleSelection(assets);
+        else if (_inlineSelection != null) _inlineSelection(assets[0]);
         else DialogResult = true;
     }
 

@@ -99,6 +99,27 @@ internal static class WallpaperEngine
         return images;
     }
 
+    public static List<string> GetProfileMedia(WallpaperProfile profile)
+    {
+        var sources = GetImages(profile.FolderPath);
+        if (File.Exists(profile.FolderPath) && IsVideoFile(profile.FolderPath)) sources.Add(profile.FolderPath);
+        sources.AddRange(profile.AdditionalWallpaperPaths ?? new());
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>();
+        foreach (var source in sources)
+        {
+            try
+            {
+                if (!File.Exists(source) || !(IsImageFile(source) || IsVideoFile(source))) continue;
+                var path = Path.GetFullPath(source);
+                if (seen.Add(path)) result.Add(path);
+            }
+            catch (ArgumentException) { }
+            catch (NotSupportedException) { }
+        }
+        return result;
+    }
+
     /// <summary>
     /// Synchronous apply for command-line use (no UI to block).
     /// </summary>

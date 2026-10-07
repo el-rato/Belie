@@ -8,6 +8,8 @@ public class WallpaperProfile
 
     public string FolderPath { get; set; } = "";
 
+    public List<string> AdditionalWallpaperPaths { get; set; } = new();
+
     public FitMode FitMode { get; set; } = FitMode.Fill;
 
     public int SlideshowIntervalMinutes { get; set; }

@@ -145,7 +145,7 @@
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button x:Name="EditProfileButton" Content="Edit profile" Tag="Wallpaper" Click="EditRules_Click" Height="36" Margin="0,0,8,0" Padding="12,7" ToolTip="Edit this profile"/>
-                        <Button Content="Save" Click="Save_Click" Height="36" Margin="0,0,8,0" Padding="16,7" ToolTip="Save profile changes"/>
+                        <Button x:Name="SaveProfileButton" Content="Save" Click="Save_Click" Height="36" Margin="0,0,8,0" Padding="16,7" ToolTip="Save profile changes"/>
                         <Button Content="Apply" Style="{StaticResource PrimaryButton}" Click="ApplyNow_Click" Height="36" Padding="18,7"
                                 ToolTip="Save and apply this wallpaper right now"/>
                     </StackPanel>
@@ -173,6 +173,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="Source" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0"/>
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button x:Name="AddFromLibraryButton" Content="+ Library" Style="{StaticResource QuietButton}" Click="OpenLibrary_Click" ToolTip="Add wallpapers from any folder to this profile"/>
                         <Button Content="Folder" Style="{StaticResource QuietButton}" Click="Browse_Click" ToolTip="Choose a folder for a slideshow"/>
                         <Button Content="Image" Style="{StaticResource QuietButton}" Click="PickImage_Click" ToolTip="Choose a single image"/>
                         <Button Content="Video" Style="{StaticResource QuietButton}" Click="PickVideo_Click" ToolTip="Choose a live wallpaper video"/>
@@ -182,6 +183,19 @@
                 <StackPanel Orientation="Horizontal" Margin="0,9,0,18">
                     <Ellipse x:Name="PathStatusDot" Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,7,0" Fill="{DynamicResource TextTertiaryBrush}"/>
                     <TextBlock x:Name="PathStatusText" Style="{StaticResource HintText}" Text="No location set" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel x:Name="AdditionalWallpaperPanel" Visibility="Collapsed" Margin="0,0,0,14">
+                    <TextBlock x:Name="AdditionalWallpaperCount" Style="{StaticResource FieldLabel}"/>
+                    <ScrollViewer MaxHeight="115" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="AdditionalWallpaperList">
+                            <ItemsControl.ItemTemplate><DataTemplate>
+                                <DockPanel Margin="0,0,0,5">
+                                    <Button DockPanel.Dock="Right" Content="Remove" Tag="{Binding}" Click="RemoveProfileWallpaper_Click" Padding="8,3" FontSize="12" Margin="8,0,0,0"/>
+                                    <TextBlock Text="{Binding Name}" ToolTip="{Binding FilePath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
+                            </DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </StackPanel>
                 <DockPanel><TextBlock Text="Image fit" VerticalAlignment="Center" Margin="0,0,18,0"/><ComboBox x:Name="FitCombo" Width="180" HorizontalAlignment="Left" ItemsSource="{x:Static local:EnumLists.FitModes}" AutomationProperties.Name="Image fit"/></DockPanel>
                 </StackPanel></TabItem>

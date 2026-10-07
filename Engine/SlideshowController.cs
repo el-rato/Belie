@@ -13,9 +13,12 @@ internal sealed class SlideshowController : IDisposable
     private readonly Queue<string> _randomQueue = new();
     private string _lastApplied = "";
     private int _busy;
+    private readonly Action<string, WallpaperProfile> _applyMedia;
 
-    public SlideshowController()
+    public SlideshowController(Action<string, WallpaperProfile>? applyMedia = null)
     {
+        _applyMedia = applyMedia ?? ((path, profile) =>
+            _ = WallpaperEngine.SetWallpaperAsync(path, profile.FitMode, WallpaperEngine.ApplyGeneration));
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _timer.Tick += (_, _) => _ = AdvanceAndApplyAsync();
     }
@@ -25,7 +28,7 @@ internal sealed class SlideshowController : IDisposable
         Stop();
         _profile = profile;
         // Folder enumeration (potentially a network share) happens off the UI thread.
-        var fresh = await Task.Run(() => WallpaperEngine.GetImages(profile.FolderPath));
+        var fresh = await Task.Run(() => WallpaperEngine.GetProfileMedia(profile));
         if (!ReferenceEquals(_profile, profile))
         {
             return;
@@ -67,7 +70,7 @@ internal sealed class SlideshowController : IDisposable
             {
                 return;
             }
-            var fresh = await Task.Run(() => WallpaperEngine.GetImages(profile.FolderPath));
+            var fresh = await Task.Run(() => WallpaperEngine.GetProfileMedia(profile));
             if (!ReferenceEquals(_profile, profile))
             {
                 return;
@@ -155,7 +158,7 @@ internal sealed class SlideshowController : IDisposable
             return;
         }
         _lastApplied = _images[Math.Min(_index, _images.Count - 1)];
-        _ = WallpaperEngine.SetWallpaperAsync(_lastApplied, profile.FitMode, WallpaperEngine.ApplyGeneration);
+        _applyMedia(_lastApplied, profile);
     }
 
     public void Dispose() => Stop();

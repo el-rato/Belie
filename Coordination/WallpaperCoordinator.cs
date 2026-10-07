@@ -28,7 +28,8 @@ internal sealed class WallpaperCoordinator : IDisposable
     private readonly List<ActivityEntry> _recent = new();
     private readonly SceneController _scene = new();
     private readonly Action<WallpaperProfile> _applyWallpaper;
-    private readonly SlideshowController _slideshow = new();
+    private readonly SlideshowController _slideshow;
+    private string _currentMediaPath = "";
     private readonly LiveWallpaperController _live = new();
     private readonly IconSafeLiveController _iconSafeLive = new();
     private readonly TriggerManager _triggers;
@@ -51,6 +52,7 @@ internal sealed class WallpaperCoordinator : IDisposable
         _timeProvider = timeProvider ?? TimeProvider.System;
         _resolver = new ProfileResolver(_timeProvider);
         _applyWallpaper = applyWallpaper ?? ApplyWallpaper;
+        _slideshow = new SlideshowController(ApplyMedia);
         _scene.StateChanged += () => StateChanged?.Invoke();
         _triggers = new TriggerManager();
         _triggers.TriggerStateChanged += OnTriggerStateChanged;
@@ -196,7 +198,7 @@ internal sealed class WallpaperCoordinator : IDisposable
     public LiveHandoff? CaptureLiveHandoff()
     {
         var current = _profiles.FirstOrDefault(p => p.Id == _currentId);
-        if (current == null || current.IconFriendlyLive || !WallpaperEngine.IsLiveFile(current.FolderPath))
+        if (current == null || current.IconFriendlyLive || !WallpaperEngine.IsLiveFile(_currentMediaPath))
         {
             return null;
         }
@@ -290,34 +292,50 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     private void ApplyWallpaper(WallpaperProfile profile)
     {
-        App.ConfigureRendering(WallpaperEngine.IsLiveFile(profile.FolderPath));
         // A detached live host (started when the app last exited) must never outlive an
         // activation: this profile is taking over the desktop now.
         LiveHostProcess.StopRunning();
         _slideshow.Stop();
+        _currentMediaPath = "";
+        _live.Stop();
+        _iconSafeLive.Stop();
         // Invalidate any wallpaper apply still queued for the previous profile.
         WallpaperEngine.NextApplyGeneration();
-        if (WallpaperEngine.IsLiveFile(profile.FolderPath))
+        _slideshow.Start(profile);
+    }
+
+    private void ApplyMedia(string path, WallpaperProfile profile)
+    {
+        _currentMediaPath = path;
+        // GIFs discovered in a folder retain their existing static slideshow behavior.
+        var live = WallpaperEngine.IsLiveFile(path) && (!Directory.Exists(profile.FolderPath)
+            || profile.AdditionalWallpaperPaths.Contains(path, StringComparer.OrdinalIgnoreCase));
+        App.ConfigureRendering(live);
+        WallpaperEngine.NextApplyGeneration();
+        if (live)
         {
+            var media = new WallpaperProfile { FolderPath = path, FitMode = profile.FitMode,
+                VideoMuted = profile.VideoMuted, IconFriendlyLive = profile.IconFriendlyLive };
             // Live wallpaper: either the smooth overlay (covers the desktop icons) or the
             // icons-friendly mode that updates the real wallpaper itself.
             if (profile.IconFriendlyLive)
             {
                 _live.Stop();
-                _iconSafeLive.Start(profile);
+                _iconSafeLive.Start(media);
             }
             else
             {
                 _iconSafeLive.Stop();
-                _live.Start(profile);
+                _live.Start(media);
             }
         }
         else
         {
             _live.Stop();
             _iconSafeLive.Stop();
-            _slideshow.Start(profile);
+            _ = WallpaperEngine.SetWallpaperAsync(path, profile.FitMode, WallpaperEngine.ApplyGeneration);
         }
+        UpdateSummary();
     }
 
     private string ActivationReason() => _currentId == null ? "Choose a profile to get started." : _source switch
@@ -363,8 +381,7 @@ internal sealed class WallpaperCoordinator : IDisposable
         };
         var next = ProfileResolver.NextBoundary(_timeProvider.GetLocalNow().DateTime, _profiles);
         var boundaryText = next.HasValue ? $" | next boundary {next.Value:g}" : "";
-        var liveText = _profiles.FirstOrDefault(p => p.Id == _currentId) is { } current
-            && WallpaperEngine.IsLiveFile(current.FolderPath) ? " | live" : "";
+        var liveText = (_live.IsActive || _iconSafeLive.IsActive) ? " | live" : "";
         _summary = $"Active: {DescribeProfile(_currentId)} ({sourceText}) | Mode: {state}{liveText}{boundaryText}";
         _tickTimer.Interval = _resolver.GetManualOverride(_profiles)?.IsTimed == true ? TimeSpan.FromSeconds(1) : TimeSpan.FromSeconds(20);
         StateChanged?.Invoke();

@@ -6,6 +6,8 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Reflection;
+using System.Net.Http;
+using WallpaperProfiles.Infrastructure;
 using WallpaperProfiles.Coordination;
 using WallpaperProfiles.Models;
 using WallpaperProfiles.Persistence;
@@ -59,7 +61,10 @@ public sealed class LibraryWindowTests
                     Collection = "All collections", Tags = new() { "calm" }
                 });
                 store.Save(assets);
-                var window = new LibraryWindow(store, Array.Empty<string>()) { ShowInTaskbar = false, Opacity = 0 };
+                using var marketplaceHandler = new MarketplaceHandler(File.ReadAllBytes(imagePath));
+                using var marketplaceHttp = new HttpClient(marketplaceHandler);
+                var window = new LibraryWindow(store, Array.Empty<string>(), new WallhavenClient(marketplaceHttp, throttle: false),
+                    Path.Combine(dir, "downloads")) { ShowInTaskbar = false, Opacity = 0 };
                 var timeout = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
                 timeout.Tick += (_, _) =>
                 {
@@ -123,6 +128,8 @@ public sealed class LibraryWindowTests
                             using var output = File.Create(previewPath);
                             png.Save(output);
                         }
+                        await CheckMarketplaceAsync(window, store, marketplaceHandler);
+                        gallery.SelectedIndex = 0;
                         Click(window, "UseButton");
                     }
                     catch (Exception ex) { failure = ex; window.Close(); }
@@ -153,8 +160,138 @@ public sealed class LibraryWindowTests
     private static void Click(Window window, string name)
         => ((Button)window.FindName(name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
+    private static async Task CheckMarketplaceAsync(LibraryWindow window, LibraryStore store, MarketplaceHandler handler)
+    {
+        var gallery = (ListBox)window.FindName("MarketGallery");
+        var search = (TextBox)window.FindName("MarketSearchBox");
+        var status = (TextBlock)window.FindName("MarketStatusText");
+        bool Loading() => (bool)typeof(LibraryWindow).GetField("_marketLoading", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        Click(window, "MarketplaceTab");
+        await WaitUntil(() => !Loading());
+        Assert.Single(gallery.Items.Cast<object>());
+        Assert.Contains(handler.Requests, r => r.Contains("sorting=toplist") && r.Contains("topRange=1M"));
+        Click(window, "MarketNewestSortButton");
+        await WaitUntil(() => !Loading());
+        Assert.Contains("sorting=date_added", handler.Requests.Last(r => r.Contains("/search")));
+        Click(window, "MarketTopSortButton");
+        await WaitUntil(() => !Loading());
+        Assert.Contains("sorting=toplist", handler.Requests.Last(r => r.Contains("/search")));
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)window.FindName("LocalGalleryPane")).Visibility);
+        Click(window, "MarketLoadMoreButton");
+        await WaitUntil(() => !Loading());
+        Assert.Equal(2, gallery.Items.Count); // Duplicate IDs across pages are skipped.
+        Assert.Equal(Visibility.Collapsed, ((Button)window.FindName("MarketLoadMoreButton")).Visibility);
+        gallery.SelectedIndex = 0;
+        await WaitUntil(() => ((Button)window.FindName("MarketDownloadButton")).IsEnabled);
+        await WaitUntil(() => ((TextBlock)window.FindName("MarketPreviewStatus")).Text.Length == 0);
+        window.UpdateLayout();
+        var previewButton = (FrameworkElement)window.FindName("MarketExpandPreviewButton");
+        Assert.True(previewButton.ActualWidth > gallery.ActualWidth * 2);
+        var firstThumbnail = (FrameworkElement)gallery.ItemContainerGenerator.ContainerFromIndex(0);
+        var secondThumbnail = (FrameworkElement)gallery.ItemContainerGenerator.ContainerFromIndex(1);
+        Assert.Equal(firstThumbnail.TranslatePoint(new System.Windows.Point(), gallery).X,
+            secondThumbnail.TranslatePoint(new System.Windows.Point(), gallery).X);
+        RenderWorkspace(window, "marketplace-focus", 1000, 720);
+        window.Width = 900; window.Height = 650; window.UpdateLayout();
+        var compactDetails = (FrameworkElement)window.FindName("MarketDetails");
+        var compactDownload = (FrameworkElement)window.FindName("MarketDownloadButton");
+        Assert.InRange(compactDownload.TranslatePoint(new System.Windows.Point(), compactDetails).Y + compactDownload.ActualHeight,
+            1, compactDetails.ActualHeight);
+        RenderWorkspace(window, "marketplace-focus-compact", 900, 650);
+        window.Width = 1000; window.Height = 720; window.UpdateLayout();
+        Click(window, "MarketBackToGalleryButton");
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)window.FindName("MarketDetails")).Visibility);
+        Assert.Equal(2, gallery.Items.Count);
+
+        search.Text = "slow";
+        Click(window, "MarketSearchButton");
+        search.Text = "nature";
+        Click(window, "MarketSearchButton");
+        await WaitUntil(() => !Loading());
+        Assert.Single(gallery.Items.Cast<object>());
+        gallery.SelectedIndex = 0;
+        await WaitUntil(() => ((Button)window.FindName("MarketDownloadButton")).IsEnabled);
+        var tags = (ItemsControl)window.FindName("MarketTags");
+        Assert.Equal("nature", Assert.IsType<WallhavenTag>(tags.Items[0]).Name);
+        window.UpdateLayout();
+        Assert.Same(((ListBox)window.FindName("Gallery")).ItemContainerStyle, gallery.ItemContainerStyle);
+        var tagButton = VisualChildren(tags).OfType<Button>().First();
+        tagButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await WaitUntil(() => !Loading());
+        Assert.Equal("id:42", search.Text);
+        Assert.Contains(handler.Requests, r => r.Contains("q=id%3A42"));
+        gallery.SelectedIndex = 0;
+        await WaitUntil(() => ((Button)window.FindName("MarketDownloadButton")).IsEnabled);
+        CheckLargeMarketplacePreview(window);
+        var originalTags = tags.ItemsSource;
+        tags.ItemsSource = Enumerable.Range(1, 30).Select(i => new WallhavenTag(i, "Wallpaper tag " + i)).ToArray();
+        window.UpdateLayout();
+        var detailsPanel = (FrameworkElement)window.FindName("MarketDetails");
+        var downloadButton = (Button)window.FindName("MarketDownloadButton");
+        var downloadPosition = downloadButton.TranslatePoint(new System.Windows.Point(), detailsPanel);
+        Assert.InRange(downloadPosition.Y + downloadButton.ActualHeight, 1, detailsPanel.ActualHeight);
+        tags.ItemsSource = originalTags;
+        Click(window, "MarketDownloadButton");
+        await WaitUntil(() => ((Button)window.FindName("MarketUseButton")).Visibility == Visibility.Visible);
+        await WaitUntil(() => ((Button)window.FindName("LocalLibraryTab")).IsEnabled);
+        var asset = Assert.Single(store.Load(), a => a.Collection == "Wallhaven");
+        Assert.True(File.Exists(asset.FilePath));
+        Assert.Equal(new[] { "nature" }, asset.Tags);
+        Assert.Equal(Visibility.Visible, ((Button)window.FindName("MarketUseButton")).Visibility);
+        WallpaperAsset? chosen = null;
+        var selection = typeof(LibraryWindow).GetField("_inlineSelection", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        selection.SetValue(window, new Action<WallpaperAsset>(value => chosen = value));
+        Click(window, "MarketUseButton");
+        selection.SetValue(window, null);
+        Assert.Equal(asset.FilePath, chosen?.FilePath);
+        RenderWorkspace(window, "marketplace", 1000, 720);
+
+        search.Text = "rate";
+        Click(window, "MarketSearchButton");
+        await WaitUntil(() => !Loading());
+        Assert.Contains("Wait a minute", status.Text);
+        search.Text = "nature";
+        Click(window, "MarketSearchButton");
+        await WaitUntil(() => !Loading());
+        Assert.Single(gallery.Items.Cast<object>());
+        Click(window, "LocalLibraryTab");
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)window.FindName("LocalGalleryPane")).Visibility);
+    }
+
+    private static void CheckLargeMarketplacePreview(LibraryWindow library)
+    {
+        Exception? failure = null;
+        library.Dispatcher.BeginInvoke(new Action(async () =>
+        {
+            var preview = System.Windows.Application.Current.Windows.OfType<Window>()
+                .Single(w => w.Title.EndsWith(" · Preview", StringComparison.Ordinal));
+            try
+            {
+                await WaitUntil(() => VisualChildren(preview).OfType<TextBlock>().Any(t => t.Text.Contains("Full-size preview")));
+                preview.UpdateLayout();
+                var image = VisualChildren(preview).OfType<System.Windows.Controls.Image>().Single();
+                Assert.True(image.ActualWidth > 600, $"Preview width: {image.ActualWidth}; window: {preview.ActualWidth}");
+                Assert.True(image.ActualHeight > 300, $"Preview height: {image.ActualHeight}; window: {preview.ActualHeight}");
+                Assert.Equal(WindowState.Maximized, preview.WindowState);
+                var previewContent = (FrameworkElement)preview.Content;
+                RenderWorkspace(preview, "marketplace-expanded", (int)previewContent.ActualWidth, (int)previewContent.ActualHeight);
+                VisualChildren(preview).OfType<Button>().Single(b => b.Content is string text && text.StartsWith("Back to marketplace"))
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }
+            catch (Exception ex) { failure = ex; preview.Close(); }
+        }));
+        Click(library, "MarketExpandPreviewButton");
+        if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
     private static void CheckWorkspaceNavigation(string dir, LibraryStore libraryStore, string imagePath)
     {
+        var otherFolder = Path.Combine(dir, "different-folder");
+        Directory.CreateDirectory(otherFolder);
+        var secondWallpaper = Path.Combine(otherFolder, "sky.png");
+        File.Copy(imagePath, secondWallpaper);
+        libraryStore.Save(libraryStore.Load().Append(new WallpaperAsset { Name = "Sky beyond", FilePath = secondWallpaper }));
+        CheckEditorLibrary(libraryStore, imagePath, secondWallpaper);
         var profiles = new ProfileStore(Path.Combine(dir, "profiles"));
         var settings = new SettingsStore(Path.Combine(dir, "settings.json"));
         var profile = new WallpaperProfile { Name = "Focus", SlideshowIntervalMinutes = 5 };
@@ -231,6 +368,39 @@ public sealed class LibraryWindowTests
         Assert.Equal(imagePath, ((TextBox)main.FindName("FolderBox")).Text);
         Assert.Equal("Focus", ((TextBox)main.FindName("NameBox")).Text);
         Assert.Equal("", Assert.Single(profiles.LoadAll()).FolderPath);
+        Click(main, "AddFromLibraryButton");
+        var librarySearch = (TextBox)library.FindName("SearchBox");
+        gallery.SelectedIndex = -1;
+        main.UpdateLayout();
+        var firstPick = VisualChildren(gallery).OfType<CheckBox>().First(box => box.IsEnabled);
+        firstPick.IsChecked = true;
+        Click(library, "NextButton");
+        Assert.Contains("1 selected", ((TextBlock)library.FindName("LibrarySelectionText")).Text);
+        Assert.True(((Button)library.FindName("UseButton")).IsEnabled);
+        librarySearch.Text = "Sky beyond";
+        main.UpdateLayout();
+        VisualChildren(gallery).OfType<CheckBox>().Single().IsChecked = true;
+        Assert.Equal("Add 2 wallpapers", ((Button)library.FindName("UseButton")).Content);
+        Click(library, "UseButton");
+        Assert.Equal(imagePath, ((TextBox)main.FindName("FolderBox")).Text);
+        Assert.Single(((ItemsControl)main.FindName("AdditionalWallpaperList")).Items.Cast<object>());
+        Click(main, "SaveProfileButton");
+        Assert.Equal(new[] { secondWallpaper }, Assert.Single(profiles.LoadAll()).AdditionalWallpaperPaths);
+        profile = coordinator.Profiles.Single(p => p.Id == profile.Id);
+        main.UpdateLayout();
+        RenderWorkspace(main, "profile-wallpaper-list", 1040, 790);
+        var additions = (ItemsControl)main.FindName("AdditionalWallpaperList");
+        VisualChildren(additions).OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Click(main, "SaveProfileButton");
+        Assert.Empty(Assert.Single(profiles.LoadAll()).AdditionalWallpaperPaths);
+        Assert.True(File.Exists(secondWallpaper));
+        Click(main, "AddFromLibraryButton");
+        librarySearch.Text = "Sky beyond";
+        gallery.SelectedIndex = 0;
+        Click(library, "UseButton");
+        Click(main, "SaveProfileButton");
+        Assert.Equal(new[] { secondWallpaper }, Assert.Single(profiles.LoadAll()).AdditionalWallpaperPaths);
+        profile = coordinator.Profiles.Single(p => p.Id == profile.Id);
         var profileTabs = (TabControl)main.FindName("ProfileTabs");
         Assert.Equal(4, profileTabs.Items.Count);
         profileTabs.SelectedIndex = 1;
@@ -248,6 +418,74 @@ public sealed class LibraryWindowTests
         CheckActivityAndSceneControls(main, coordinator, clock, profile, imagePath);
         CheckDesktopCanvasPanel(main, dir, imagePath);
         library.Close();
+    }
+
+    private static void CheckEditorLibrary(LibraryStore store, string imagePath, string secondWallpaper)
+    {
+        Exception? failure = null;
+        var model = new WallpaperProfile { Name = "Picker check", SlideshowIntervalMinutes = 0 };
+        var editor = new ProfileEditorWindow(model, isNew: true, libraryStore: store)
+            { ShowInTaskbar = false, Opacity = 0 };
+        editor.Loaded += (_, _) =>
+        {
+            editor.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(async () =>
+            {
+                var picker = System.Windows.Application.Current.Windows.OfType<LibraryWindow>().Single(w => w.Owner == editor);
+                try
+                {
+                    await WaitUntil(() => ((Button)picker.FindName("ImportFilesButton")).IsEnabled);
+                    var gallery = (ListBox)picker.FindName("Gallery");
+                    var search = (TextBox)picker.FindName("SearchBox");
+                    foreach (var query in new[] { "Forest retreat", "Sky beyond" })
+                    {
+                        search.Text = query;
+                        picker.UpdateLayout();
+                        VisualChildren(gallery).OfType<CheckBox>().Single().IsChecked = true;
+                    }
+                    Assert.Equal("Add 2 wallpapers", ((Button)picker.FindName("UseButton")).Content);
+                    Assert.Contains("Picker check", ((TextBlock)picker.FindName("LibrarySelectionText")).Text);
+                    Click(picker, "UseButton");
+                }
+                catch (Exception ex) { failure = ex; picker.Close(); }
+            }));
+            try
+            {
+                Click(editor, "AddFromLibraryButton");
+                if (failure != null) throw failure;
+                Assert.Equal(imagePath, ((TextBox)editor.FindName("FolderBox")).Text);
+                Assert.Equal("5", ((TextBox)editor.FindName("IntervalBox")).Text);
+                Assert.Single(((ItemsControl)editor.FindName("AdditionalWallpaperList")).Items);
+                Assert.Empty(model.AdditionalWallpaperPaths);
+                Assert.Equal("", model.FolderPath);
+                RenderWorkspace(editor, "profile-editor-library", 680, 720);
+                typeof(ProfileEditorWindow).GetMethod("Save_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(editor, new object[] { editor, new RoutedEventArgs() });
+            }
+            catch (Exception ex) { failure = ex; editor.Close(); }
+        };
+        Assert.True(editor.ShowDialog());
+        if (failure != null) throw failure;
+        Assert.Equal(new[] { secondWallpaper }, model.AdditionalWallpaperPaths);
+        Assert.Equal(imagePath, model.FolderPath);
+
+        var cancelEditor = new ProfileEditorWindow(model, isNew: false, libraryStore: store)
+            { ShowInTaskbar = false, Opacity = 0 };
+        cancelEditor.Loaded += (_, _) =>
+        {
+            try
+            {
+                cancelEditor.UpdateLayout();
+                var list = (ItemsControl)cancelEditor.FindName("AdditionalWallpaperList");
+                VisualChildren(list).OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Empty(list.Items);
+            }
+            catch (Exception ex) { failure = ex; }
+            finally { cancelEditor.Close(); }
+        };
+        Assert.False(cancelEditor.ShowDialog());
+        if (failure != null) throw failure;
+        Assert.Equal(new[] { secondWallpaper }, model.AdditionalWallpaperPaths);
+        Assert.True(File.Exists(secondWallpaper));
     }
 
     private static void CheckAppearance(MainWindow main, WallpaperCoordinator coordinator, SettingsStore settings, WallpaperProfile profile)

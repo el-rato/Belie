@@ -1,6 +1,9 @@
 using System.IO;
 using WallpaperProfiles.Models;
 using WallpaperProfiles.Persistence;
+using WallpaperProfiles.Engine;
+using System.Reflection;
+using System.Collections.Concurrent;
 using Xunit;
 
 namespace WallpaperProfiles.Tests;
@@ -36,6 +39,7 @@ public class ProfileStoreTests : IDisposable
         {
             Name = "Work",
             FolderPath = @"C:\Images\Work",
+            AdditionalWallpaperPaths = new() { @"D:\Wallpapers\forest.png", @"C:\Downloads\sky.jpg" },
             FitMode = FitMode.Span,
             SlideshowIntervalMinutes = 15,
             SlideshowRandom = true,
@@ -56,6 +60,7 @@ public class ProfileStoreTests : IDisposable
 
         Assert.Equal(profile.Id, loaded.Id);
         Assert.Equal("Work", loaded.Name);
+        Assert.Equal(profile.AdditionalWallpaperPaths, loaded.AdditionalWallpaperPaths);
         Assert.Equal(FitMode.Span, loaded.FitMode);
         Assert.Equal(15, loaded.SlideshowIntervalMinutes);
         Assert.True(loaded.SlideshowRandom);
@@ -110,5 +115,59 @@ public class ProfileStoreTests : IDisposable
         Assert.True(store.Delete(profile.Id));
         Assert.False(store.Delete(profile.Id));
         Assert.Empty(store.LoadAll());
+    }
+
+    [Fact]
+    public void ProfileMedia_CombinesSourcesAcrossFolders_WithoutDuplicatesOrMissingFiles()
+    {
+        var folder = Path.Combine(_dir, "nature");
+        var other = Path.Combine(_dir, "downloads");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(other);
+        var first = Path.Combine(folder, "forest.png");
+        var second = Path.Combine(other, "sky.jpg");
+        var video = Path.Combine(other, "ocean.mp4");
+        File.WriteAllBytes(first, new byte[] { 1 });
+        File.WriteAllBytes(second, new byte[] { 2 });
+        File.WriteAllBytes(video, new byte[] { 3 });
+        var profile = new WallpaperProfile { FolderPath = folder,
+            AdditionalWallpaperPaths = new() { first, second, second.ToUpperInvariant(), video, Path.Combine(other, "missing.png") } };
+        CreateStore().Save(profile);
+        var loaded = Assert.Single(CreateStore().LoadAll());
+        Assert.Equal(new[] { first, second, video }, WallpaperEngine.GetProfileMedia(loaded));
+        Assert.Contains(Path.Combine(other, "missing.png"), loaded.AdditionalWallpaperPaths);
+    }
+
+    [Fact]
+    public async Task Slideshow_RotatesWallpaperList_AndSkipsRemovedFiles()
+    {
+        var first = Path.Combine(_dir, "forest.png");
+        var folder = Path.Combine(_dir, "other-folder");
+        Directory.CreateDirectory(folder);
+        var second = Path.Combine(folder, "sky.jpg");
+        var video = Path.Combine(folder, "ocean.mp4");
+        foreach (var path in new[] { first, second, video }) File.WriteAllBytes(path, new byte[] { 1 });
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var applied = new ConcurrentQueue<string>();
+        using var slideshow = new SlideshowController((path, _) => { applied.Enqueue(path); ready.TrySetResult(); });
+        slideshow.Start(new WallpaperProfile { FolderPath = first, AdditionalWallpaperPaths = new() { second, video }, SlideshowIntervalMinutes = 5 });
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        async Task Advance() => await (Task)typeof(SlideshowController)
+            .GetMethod("AdvanceAndApplyAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(slideshow, null)!;
+        await Advance();
+        await Advance();
+        File.Delete(second);
+        await Advance();
+        Assert.Equal(new[] { first, second, video, first }, applied.ToArray());
+    }
+
+    [Fact]
+    public void LegacyProfile_AndNullWallpaperList_LoadWithoutChangingSource()
+    {
+        var id = Guid.NewGuid();
+        File.WriteAllText(Path.Combine(_dir, id + ".json"), $$"""{"Id":"{{id}}","Name":"Legacy","FolderPath":"old-folder","AdditionalWallpaperPaths":null}""");
+        var profile = Assert.Single(CreateStore().LoadAll());
+        Assert.Empty(profile.AdditionalWallpaperPaths);
+        Assert.Equal("old-folder", profile.FolderPath);
     }
 }
