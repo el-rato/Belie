@@ -21,9 +21,9 @@ public sealed class DesktopCanvasTests
         fixture.Store.Save(document);
         var saved = fixture.Store.Load();
         Assert.True(saved.Enabled);
-        Assert.Equal(5, saved.Widgets.Count);
+        Assert.Equal(Enum.GetValues<DesktopWidgetKind>().Length, saved.Widgets.Count);
         Assert.False(saved.Widgets[1].Enabled);
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < document.Widgets.Count; i++)
         {
             Assert.Equal(document.Widgets[i].Id, saved.Widgets[i].Id);
             Assert.Equal(document.Widgets[i].Kind, saved.Widgets[i].Kind);
@@ -32,6 +32,24 @@ public sealed class DesktopCanvasTests
             Assert.True(saved.Widgets[i].Locked);
             Assert.Equal(document.Widgets[i].Target, saved.Widgets[i].Target);
         }
+    }
+
+    [Fact]
+    public void NowPlaying_CustomizationSurvivesLayoutEditsAndDuplication()
+    {
+        using var fixture = new CanvasFixture();
+        var widget = new DesktopWidget { Kind = DesktopWidgetKind.NowPlaying, MusicLayout = NowPlayingLayout.Minimal,
+            ShowAlbumArt = false, ShowPlaybackControls = false, ShowPlaybackProgress = false, MusicAccentColor = "#FF8855",
+            ShowBorder = false, ShowBackground = false, ShowHeader = false };
+        fixture.Store.Save(new DesktopCanvasDocument { Enabled = true, Widgets = new() { widget } });
+        fixture.Store.UpdateLayout(widget.Id, 400, 500, 420, 190);
+        var saved = Assert.Single(fixture.Store.Load().Widgets);
+        var copy = saved.Duplicate();
+        Assert.NotEqual(saved.Id, copy.Id);
+        Assert.Equal(NowPlayingLayout.Minimal, copy.MusicLayout);
+        Assert.Equal("#FF8855", copy.MusicAccentColor);
+        Assert.False(copy.ShowAlbumArt); Assert.False(copy.ShowPlaybackControls); Assert.False(copy.ShowPlaybackProgress);
+        Assert.False(copy.ShowBorder); Assert.False(copy.ShowBackground); Assert.False(copy.ShowHeader);
     }
 
     [Fact]

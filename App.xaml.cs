@@ -19,12 +19,14 @@ internal partial class App : System.Windows.Application
     private WallpaperCoordinator? _coordinator;
     private TrayIconManager? _tray;
     private MainWindow? _main;
+    private ProfileShortcutManager? _profileShortcuts;
     private Func<MainWindow>? _createMain;
     private DesktopCanvasHost? _widgetHost;
     private EventWaitHandle? _activateEvent;
     private EventWaitHandle? _canvasActivateEvent;
     private EventWaitHandle? _exitEvent;
     private volatile bool _sessionEnding;
+    internal static bool IsExiting { get; private set; }
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -47,6 +49,7 @@ internal partial class App : System.Windows.Application
         SessionEnding += (_, args) =>
         {
             _sessionEnding = true;
+            IsExiting = true;
             Logger.Warn($"Windows session ending ({args.ReasonSessionEnding}); shutting down.");
         };
 
@@ -113,6 +116,9 @@ internal partial class App : System.Windows.Application
                 catch (Exception ex) { Logger.Error("Updating profile widgets failed.", ex); }
             };
             _coordinator.Init();
+            _profileShortcuts = new ProfileShortcutManager(() => _coordinator.Profiles,
+                profileStore.Save, _coordinator.ProfilesEdited, id => _coordinator.SwitchManually(id));
+            _coordinator.StateChanged += _profileShortcuts.Reload;
 
             try { DesktopCanvasProcess.Start(DesktopCanvasProcess.DefaultFile); }
             catch (Exception ex) { Logger.Error("Restoring desktop widgets failed.", ex); }
@@ -120,7 +126,7 @@ internal partial class App : System.Windows.Application
             var startMinimized = settings.StartMinimizedToTray
                 || e.Args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
 
-            _createMain = () => new MainWindow(_coordinator, profileStore, settingsStore);
+            _createMain = () => new MainWindow(_coordinator, profileStore, settingsStore, profileShortcuts: _profileShortcuts);
             _tray = new TrayIconManager(
                 _coordinator.GetSnapshot,
                 OpenMainWindow,
@@ -201,6 +207,8 @@ internal partial class App : System.Windows.Application
 
     private void ExitApplication()
     {
+        if (_main != null && !_main.TryLeaveAllDrafts()) return;
+        IsExiting = true;
         try { DesktopCanvasProcess.Start(DesktopCanvasProcess.DefaultFile); }
         catch (Exception ex) { Logger.Error("Keeping desktop widgets running after tray exit failed.", ex); }
         try
@@ -216,6 +224,8 @@ internal partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         Logger.Info("Shutting down.");
+        if (_profileShortcuts != null && _coordinator != null) _coordinator.StateChanged -= _profileShortcuts.Reload;
+        _profileShortcuts?.Dispose();
         _widgetHost?.Dispose();
         _widgetHost = null;
         // Hand the live wallpaper over to a detached host process so it keeps playing

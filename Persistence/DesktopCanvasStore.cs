@@ -2,7 +2,8 @@ using System.Text.Json;
 
 namespace WallpaperProfiles.Persistence;
 
-internal enum DesktopWidgetKind { Note, Countdown, Image, Link, Sketch }
+internal enum DesktopWidgetKind { Note, Countdown, Image, Link, Sketch, NowPlaying }
+internal enum NowPlayingLayout { Horizontal, Stacked, Minimal }
 internal enum WidgetTextAlignment { Left, Center, Right }
 internal enum WidgetImageFit { Fit, Fill, Stretch }
 
@@ -38,6 +39,11 @@ internal sealed class DesktopWidget
     public double BorderWidth { get; set; } = 1;
     public bool ShowBackground { get; set; } = true;
     public bool GlassEffect { get; set; }
+    public NowPlayingLayout MusicLayout { get; set; }
+    public bool ShowAlbumArt { get; set; } = true;
+    public bool ShowPlaybackControls { get; set; } = true;
+    public bool ShowPlaybackProgress { get; set; } = true;
+    public string MusicAccentColor { get; set; } = "#A9C9B4";
     public WidgetImageFit ImageFit { get; set; }
     public string Drawing { get; set; } = "";
     public double DrawingWidth { get; set; } = 300;
@@ -148,6 +154,8 @@ internal sealed class DesktopCanvasStore
             widget.TextColor ??= "#F1F2EE";
             widget.BackgroundColor ??= "#1D201E";
             widget.BorderColor ??= "#738579";
+            widget.MusicAccentColor ??= "#A9C9B4";
+            if (!Enum.IsDefined(widget.MusicLayout)) widget.MusicLayout = NowPlayingLayout.Horizontal;
             widget.BorderWidth = Clamp(widget.BorderWidth, 0, 6, 1);
             widget.Drawing ??= ""; widget.LeetCodeUsername ??= ""; widget.PotdCompletions ??= new();
             widget.LinkDescription ??= ""; widget.LinkCustomDescription ??= ""; widget.LinkPageTitle ??= "";

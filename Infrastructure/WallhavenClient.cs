@@ -38,7 +38,7 @@ internal sealed class WallhavenClient
     }
 
     public async Task<WallhavenPage> SearchAsync(string query, string sorting, string minimumResolution,
-        int page, CancellationToken token)
+        int page, CancellationToken token, bool landscapeOnly = false)
     {
         if (page < 1) throw new ArgumentOutOfRangeException(nameof(page));
         if (sorting is not ("relevance" or "date_added" or "favorites" or "toplist"))
@@ -47,14 +47,23 @@ internal sealed class WallhavenClient
             throw new ArgumentException("Unsupported resolution.", nameof(minimumResolution));
         var url = "https://wallhaven.cc/api/v1/search?purity=100&categories=111&order=desc"
             + $"&q={Uri.EscapeDataString(query.Trim())}&sorting={sorting}&page={page}&topRange=1M"
-            + (minimumResolution.Length > 0 ? "&atleast=" + minimumResolution : "");
+            + (minimumResolution.Length > 0 ? "&atleast=" + minimumResolution : "")
+            + (landscapeOnly ? "&ratios=landscape" : "");
         using var json = await GetJsonAsync(url, token);
         var root = json.RootElement;
         var meta = root.GetProperty("meta");
         var wallpapers = root.GetProperty("data").EnumerateArray()
-            .Where(IsSupported).Select(ParseWallpaper).ToArray();
+            .Where(IsSupported).Select(ParseWallpaper)
+            .Where(wallpaper => !landscapeOnly || IsLandscape(wallpaper.Resolution)).ToArray();
         return new(wallpapers, meta.GetProperty("current_page").GetInt32(),
             meta.GetProperty("last_page").GetInt32(), meta.GetProperty("total").GetInt32());
+    }
+
+    private static bool IsLandscape(string resolution)
+    {
+        var dimensions = resolution.Split('x');
+        return dimensions.Length == 2 && int.TryParse(dimensions[0], out var width)
+            && int.TryParse(dimensions[1], out var height) && height > 0 && width > height;
     }
 
     public async Task<WallhavenWallpaper> GetWallpaperAsync(string id, CancellationToken token)

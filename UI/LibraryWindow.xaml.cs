@@ -35,7 +35,8 @@ internal partial class LibraryWindow : Window
         _inlineSelection = selection;
         _inlineMultipleSelection = multipleSelection;
         _inlineBack = back;
-        BackButton.Visibility = Visibility.Visible;
+        LibraryChrome.Visibility = Visibility.Collapsed;
+        LibraryRoot.RowDefinitions[0].Height = new GridLength(0);
         LibraryTitle.Visibility = Visibility.Collapsed;
         LibraryCloseButton.Visibility = Visibility.Collapsed;
         var root = (FrameworkElement)Content;
@@ -63,6 +64,7 @@ internal partial class LibraryWindow : Window
         _marketDownloadFolder = marketplaceDownloadFolder ?? Path.Combine(AppPaths.BaseDir, "wallpapers", "wallhaven");
         InitializeComponent();
         InitializeMarketplace();
+        LibraryRoot.SizeChanged += (_, _) => UpdateDetailsLayout();
         UiAppearance.Attach(this);
         Closed += (_, _) =>
         {
@@ -87,7 +89,8 @@ internal partial class LibraryWindow : Window
     {
         public WallpaperAsset Asset { get; }
         public bool Exists { get; }
-        public string Placeholder => Exists ? "Preview unavailable" : "File missing";
+        private bool _previewLoaded;
+        public string Placeholder => !Exists ? "Source missing" : !_previewLoaded ? "Loading preview…" : "Preview unavailable";
         public string Caption => (Asset.IsFavorite ? "★ · " : "")
             + (WallpaperEngine.IsVideoFile(Asset.FilePath) ? "Video" : "Image")
             + (Asset.Collection.Length > 0 ? " · " + Asset.Collection : "");
@@ -97,7 +100,8 @@ internal partial class LibraryWindow : Window
             get => _thumbnail;
             set
             {
-                _thumbnail = value;
+                _thumbnail = value; _previewLoaded = true;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Placeholder)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Thumbnail)));
             }
         }
@@ -220,6 +224,7 @@ internal partial class LibraryWindow : Window
         if (Gallery.SelectedItem is not GalleryEntry entry)
         {
             DetailsFrame.Visibility = Visibility.Collapsed; DetailsColumn.Width = new GridLength(0);
+            LocalGalleryFrame.Visibility = Visibility.Visible;
             UseButton.Visibility = Visibility.Collapsed;
             DetailsPanel.Visibility = Visibility.Collapsed;
             SelectionHint.Visibility = Visibility.Visible;
@@ -228,7 +233,7 @@ internal partial class LibraryWindow : Window
             return;
         }
         DetailsPanel.Visibility = Visibility.Visible;
-        DetailsFrame.Visibility = Visibility.Visible; DetailsColumn.Width = new GridLength(260);
+        DetailsFrame.Visibility = Visibility.Visible; UpdateDetailsLayout();
         UseButton.Visibility = Visibility.Visible;
         SelectionHint.Visibility = Visibility.Collapsed;
         AssetNameBox.Text = entry.Asset.Name;
@@ -240,6 +245,18 @@ internal partial class LibraryWindow : Window
         UseButton.IsEnabled = entry.Exists && !_busy;
         UpdateLibrarySelection();
     }
+
+    private void UpdateDetailsLayout()
+    {
+        var selected = Gallery.SelectedItem != null;
+        var compact = LibraryRoot.ActualWidth > 0 && LibraryRoot.ActualWidth < 780;
+        LocalGalleryFrame.Visibility = selected && compact ? Visibility.Collapsed : Visibility.Visible;
+        DetailsColumn.Width = new GridLength(selected && !compact ? 280 : 0);
+        System.Windows.Controls.Grid.SetColumn(DetailsFrame, compact ? 0 : 1);
+        System.Windows.Controls.Grid.SetColumnSpan(DetailsFrame, compact ? 2 : 1);
+        BackToCollectionButton.Visibility = selected && compact ? Visibility.Visible : Visibility.Collapsed;
+    }
+    private void BackToCollection_Click(object sender, RoutedEventArgs e) => Gallery.SelectedIndex = -1;
 
     private async Task ImportAsync(IEnumerable<string> sources)
     {

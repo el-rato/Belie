@@ -131,6 +131,7 @@ internal sealed class SceneController : IDisposable
     private void ApplyAccent(string accent)
     {
         _activeAccent = accent;
+        if (SystemParameters.HighContrast) return;
         if (_resources == null || !AccentKeys.All(key => _resources[key] is Color)) return;
         if (!TryParseAccent(accent, out var color))
         {
@@ -142,13 +143,14 @@ internal sealed class SceneController : IDisposable
         SetAccentColor(0, color);
         SetAccentColor(1, Mix(color, Colors.White, 0.2));
         SetAccentColor(2, Mix(color, Colors.Black, 0.15));
-        SetAccentColor(3, Mix(color, Color.FromRgb(23, 25, 24), 0.82));
+        SetAccentColor(3, Mix(color, (Color)System.Windows.Media.ColorConverter.ConvertFromString(UiAppearance.Current.Surface), 0.82));
     }
 
     private void SetAccentColor(int index, Color color)
     {
         _resources![AccentKeys[index]] = color;
         _resources[AccentBrushKeys[index]] = new SolidColorBrush(color);
+        if (index == 0) _resources["AccentTextBrush"] = UiAppearance.ReadableAccent(color);
     }
 
     private static Color Mix(Color color, Color target, double amount) => Color.FromRgb(
@@ -166,6 +168,7 @@ internal sealed class SceneController : IDisposable
             else _resources.Remove(AccentBrushKeys[i]);
         }
         _originalColors = null;
+        if (_resources[AccentBrushKeys[0]] is SolidColorBrush accent) _resources["AccentTextBrush"] = UiAppearance.ReadableAccent(accent.Color);
         _originalBrushes = null;
     }
 

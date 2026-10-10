@@ -6,6 +6,8 @@ public class WallpaperProfile
 
     public string Name { get; set; } = "";
 
+    public string KeyboardShortcut { get; set; } = "";
+
     public string FolderPath { get; set; } = "";
 
     public List<string> AdditionalWallpaperPaths { get; set; } = new();

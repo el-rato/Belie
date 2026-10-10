@@ -9,6 +9,7 @@
     <Grid Background="{DynamicResource BgBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="42"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -21,56 +22,37 @@
                                FontWeight="SemiBold" FontSize="13"/>
                 </StackPanel>
                 <Button x:Name="CloseBtn" Style="{StaticResource TitleBarCloseButton}" Content="&#xE8BB;"
-                        HorizontalAlignment="Right" Margin="0,0,6,0" Click="CloseBtn_Click"/>
+                        HorizontalAlignment="Right" Margin="0,0,6,0" Click="CloseBtn_Click" ToolTip="Close editor" AutomationProperties.Name="Close editor"/>
             </Grid>
         </Border>
 
-        <TabControl x:Name="EditorTabs" Grid.Row="1" Margin="22,18,22,8">
+
+        <TextBlock x:Name="EditorMessage" Grid.Row="1" Margin="22,12,22,0" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}" AutomationProperties.LiveSetting="Polite"/>
+        <TabControl x:Name="EditorTabs" Grid.Row="2" Style="{StaticResource StudioTabs}" Margin="22,18,22,8">
         <TabItem Header="Wallpaper"><ScrollViewer x:Name="EditorScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel x:Name="WallpaperEditorFields" Margin="0,0,8,8">
                 <StackPanel x:Name="PresetPanel" Margin="0,0,0,16">
-                    <TextBlock Text="Start with a scene" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock Text="Profile preset" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,8"/>
                     <ComboBox x:Name="PresetCombo" SelectionChanged="Preset_Changed"/>
                 </StackPanel>
                 <TextBlock Text="Profile name" Style="{StaticResource FieldLabel}"/>
-                <TextBox x:Name="NameBox"/>
+                <TextBox x:Name="NameBox" AutomationProperties.Name="Profile name"/>
 
                 <local:MonitorThumbnail x:Name="EditorPreview" ShowName="False" IsActive="False"
-                                        BezelWidth="{Binding ActualWidth, ElementName=WallpaperEditorFields}" BezelHeight="190" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                                        BezelWidth="338" BezelHeight="190" HorizontalAlignment="Center" Margin="0,16,0,0"/>
 
                 <DockPanel Margin="0,16,0,6">
                     <Button x:Name="AddFromLibraryButton" DockPanel.Dock="Right" Content="+ Library" Padding="10,6"
                             Click="AddFromLibrary_Click" ToolTip="Add wallpapers from your library to this profile"/>
-                    <TextBlock Text="Source" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0"/>
+                    <TextBlock Text="Wallpaper source" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0"/>
                 </DockPanel>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="FolderBox" FontFamily="{StaticResource MonoFont}" FontSize="12" Margin="0,0,6,0"
-                             AllowDrop="True" Drop="FolderBox_Drop" DragOver="FolderBox_DragOver" DragLeave="FolderBox_DragLeave"/>
-                    <Button Grid.Column="1" Padding="10,6" Margin="0,0,6,0" Click="Browse_Click" ToolTip="Pick a folder of images">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Text="Folder" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Grid.Column="2" Padding="10,6" Margin="0,0,6,0" Click="PickImage_Click" ToolTip="Pick a single image">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE8B9;" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Text="Image" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Grid.Column="3" Padding="10,6" Click="PickVideo_Click" ToolTip="Pick a live wallpaper video (plays behind your desktop icons)">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE768;" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Text="Video" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                </Grid>
+                <DockPanel Margin="0,0,0,8"><Button DockPanel.Dock="Right" Content="Remove source" Click="RemoveSource_Click" ToolTip="Original files are kept."/><local:SourceThumbnail FilePath="{Binding Text, ElementName=FolderBox}" Margin="0,0,12,0"/><TextBlock x:Name="SourceNameText" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/></DockPanel>
+                <Expander Header="Source path"><TextBox x:Name="FolderBox" FontSize="12" AutomationProperties.Name="Wallpaper source path" AllowDrop="True" Drop="FolderBox_Drop" DragOver="FolderBox_DragOver" DragLeave="FolderBox_DragLeave"/></Expander>
+                <WrapPanel Margin="0,8,0,0">
+                    <Button Content="Choose folder" Click="Browse_Click" Margin="0,0,8,8"/>
+                    <Button Content="Choose image" Click="PickImage_Click" Margin="0,0,8,8"/>
+                    <Button Content="Choose video" Click="PickVideo_Click" Margin="0,0,0,8"/>
+                </WrapPanel>
                 <StackPanel Orientation="Horizontal" Margin="2,7,0,0">
                     <Ellipse x:Name="PathStatusDot" Width="8" Height="8" VerticalAlignment="Center"
                              Margin="0,0,6,0" Fill="{DynamicResource TextTertiaryBrush}"/>
@@ -84,27 +66,22 @@
                             <ItemsControl.ItemTemplate><DataTemplate>
                                 <DockPanel Margin="0,0,0,5">
                                     <Button DockPanel.Dock="Right" Content="Remove" Tag="{Binding}" Click="RemoveProfileWallpaper_Click" Padding="8,3" FontSize="12" Margin="8,0,0,0"/>
-                                    <TextBlock Text="{Binding Name}" ToolTip="{Binding FilePath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <local:SourceThumbnail FilePath="{Binding FilePath}" Margin="0,0,12,0"/><TextBlock Text="{Binding Name}" ToolTip="{Binding FilePath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </DockPanel>
                             </DataTemplate></ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
                 </StackPanel>
 
-                <Grid Margin="0,16,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Fit mode" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <ComboBox Grid.Column="1" x:Name="FitCombo"
-                              ItemsSource="{x:Static local:EnumLists.FitModes}" Margin="0,0,16,0"/>
-                    <TextBlock Grid.Column="2" Text="Slideshow · min" Style="{StaticResource FieldLabel}"
-                               VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <TextBox Grid.Column="3" x:Name="IntervalBox" Width="64" ToolTip="0 turns slideshow off" FontFamily="{StaticResource MonoFont}"/>
-                </Grid>
+                <DockPanel Margin="0,16,0,0">
+                    <TextBlock Text="Image fit" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                    <ComboBox x:Name="FitCombo" Width="180" HorizontalAlignment="Left" ItemsSource="{x:Static local:EnumLists.FitModes}" AutomationProperties.Name="Image fit"/>
+                </DockPanel>
+            </StackPanel>
+        </ScrollViewer></TabItem>
+        <TabItem Header="Playback"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+            <TextBlock Text="Playback" Style="{StaticResource SectionTitle}" Margin="0,0,0,16"/>
+            <DockPanel><TextBox x:Name="IntervalBox" Width="80" DockPanel.Dock="Right" AutomationProperties.Name="Slideshow interval in minutes" ToolTip="0 turns slideshow off"/><TextBlock Text="Slideshow interval · minutes" VerticalAlignment="Center"/></DockPanel>
                 <StackPanel Margin="0,12,0,4">
                     <CheckBox x:Name="RandomOrderCheck" Style="{StaticResource SwitchStyle}" Content="Shuffle"/>
                     <CheckBox x:Name="VideoMuteCheck" Style="{StaticResource SwitchStyle}" Content="Mute video" Margin="0,12,0,0"
@@ -112,32 +89,10 @@
                     <CheckBox x:Name="IconSafeCheck" Style="{StaticResource SwitchStyle}" Content="Keep icons visible" Margin="0,12,0,0"
                               ToolTip="Plays the video as the real desktop wallpaper at ~4 fps instead of a smooth overlay. Icons and taskbar stay fully visible."/>
                 </StackPanel>
-            </StackPanel>
-        </ScrollViewer></TabItem>
-        <TabItem Header="Mood"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
-                <Border Style="{StaticResource CardBorder}" Margin="0,16,0,4">
-                    <StackPanel>
-                        <TextBlock Text="Accent color" Style="{StaticResource FieldLabel}"/>
-                        <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="Choose color" Click="ChooseAccent_Click" Margin="8,0,0,0"/>
-                            <TextBox x:Name="SceneAccentBox" MaxLength="7" ToolTip="#RRGGBB · clear to use the default"/>
-                        </DockPanel>
-                        <TextBlock Text="Ambient audio (optional)" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
-                        <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="Browse" Click="PickAudio_Click" Margin="8,0,0,0"/>
-                            <TextBox x:Name="AudioPathBox"/>
-                        </DockPanel>
-                        <Grid Margin="0,16,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Volume" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                            <Slider Grid.Column="1" x:Name="AmbientVolumeSlider" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="2" Text="{Binding Value, ElementName=AmbientVolumeSlider, StringFormat={}{0:0}%}" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                        </Grid>
-                        <CheckBox x:Name="AmbientMuteBox" Style="{StaticResource SwitchStyle}" Content="Start muted" Margin="0,12,0,0"/>
-                    </StackPanel>
-                </Border>
         </StackPanel></ScrollViewer></TabItem>
-        <TabItem Header="Rules"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+        <TabItem Header="Automation"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+                <TextBlock Text="Automation" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                <TextBlock Text="Apply this profile on a schedule or when an event occurs." Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,18"/>
                 <DockPanel Margin="0,0,0,8">
                     <Button DockPanel.Dock="Right" Padding="10,4" Click="AddRule_Click">
                         <StackPanel Orientation="Horizontal">
@@ -218,9 +173,34 @@
                 </ItemsControl>
                 <TextBlock x:Name="NoTriggersHint" Style="{StaticResource HintText}" Margin="0,0,0,6"/>
         </StackPanel></ScrollViewer></TabItem>
+        <TabItem Header="Mood"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+                <TextBlock Text="Appearance &amp; audio" FontSize="22" FontWeight="SemiBold"/>
+                <TextBlock Text="Choose an accent color and optional ambient audio." Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,8"/>
+                <Border Style="{StaticResource CardBorder}" Margin="0,16,0,4">
+                    <StackPanel>
+                        <TextBlock Text="Accent color" Style="{StaticResource FieldLabel}"/>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Choose color" Click="ChooseAccent_Click" Margin="8,0,0,0"/>
+                            <TextBox x:Name="SceneAccentBox" AutomationProperties.Name="Accent color" MaxLength="7" ToolTip="#RRGGBB · clear to use the default"/>
+                        </DockPanel>
+                        <TextBlock Text="Ambient audio (optional)" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Browse" Click="PickAudio_Click" Margin="8,0,0,0"/>
+                            <TextBox x:Name="AudioPathBox" AutomationProperties.Name="Ambient audio file"/>
+                        </DockPanel>
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Volume" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <Slider Grid.Column="1" x:Name="AmbientVolumeSlider" AutomationProperties.Name="Ambient audio volume" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Value, ElementName=AmbientVolumeSlider, StringFormat={}{0:0}%}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        </Grid>
+                        <CheckBox x:Name="AmbientMuteBox" Style="{StaticResource SwitchStyle}" Content="Start muted" Margin="0,12,0,0"/>
+                    </StackPanel>
+                </Border>
+        </StackPanel></ScrollViewer></TabItem>
         </TabControl>
 
-        <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
+        <Border Grid.Row="3" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,1,0,0" Padding="18,12">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="Cancel" Width="96" Height="32" IsCancel="True" Margin="0,0,8,0"/>

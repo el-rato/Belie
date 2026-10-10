@@ -87,6 +87,7 @@ internal sealed class ProfileStore
     private static void Normalize(WallpaperProfile profile)
     {
         profile.Name ??= "";
+        profile.KeyboardShortcut = (profile.KeyboardShortcut ?? "").Trim();
         profile.FolderPath ??= "";
         profile.AdditionalWallpaperPaths = (profile.AdditionalWallpaperPaths ?? new())
             .Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => path.Trim())

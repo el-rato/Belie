@@ -33,6 +33,24 @@ public sealed class WallhavenClientTests
     }
 
     [Fact]
+    public async Task Search_LandscapeOnly_ExcludesPortraitAndSquare_OnEveryPage()
+    {
+        using var handler = new MarketplaceHandler(MarketplaceHandler.CreateImage());
+        using var http = new HttpClient(handler);
+        var client = new WallhavenClient(http, throttle: false);
+        foreach (var number in new[] { 1, 2 })
+        {
+            var page = await client.SearchAsync("orientations", "date_added", "", number, default, landscapeOnly: true);
+            Assert.Equal(new[] { "2560x1440", "3440x1440", "1600x1200" }, page.Wallpapers.Select(w => w.Resolution));
+            Assert.Contains("ratios=landscape", handler.Requests.Last());
+            Assert.Equal(number, page.CurrentPage);
+        }
+        var all = await client.SearchAsync("orientations", "date_added", "", 1, default);
+        Assert.Equal(5, all.Wallpapers.Count);
+        Assert.DoesNotContain("ratios=", handler.Requests.Last());
+    }
+
+    [Fact]
     public async Task Download_CommitsDecodedOriginal_AndReusesExistingFile()
     {
         var folder = Path.Combine(Path.GetTempPath(), "belie-market-" + Guid.NewGuid().ToString("N"));
@@ -118,7 +136,9 @@ internal sealed class MarketplaceHandler : HttpMessageHandler
         if (uri.AbsolutePath.Contains("/api/"))
         {
             object result = uri.AbsolutePath.Contains("/search")
-                ? new { data = uri.Query.Contains("page=2") ? new[] { Wallpaper("aaa111"), Wallpaper("bbb222") } : new[] { Wallpaper("aaa111") },
+                ? new { data = uri.Query.Contains("q=orientations")
+                        ? new[] { Wallpaper("aaa111"), Wallpaper("bbb222", "3440x1440"), Wallpaper("ccc333", "1600x1200"), Wallpaper("ddd444", "1080x1920"), Wallpaper("eee555", "1440x1440") }
+                        : uri.Query.Contains("page=2") ? new[] { Wallpaper("aaa111"), Wallpaper("bbb222") } : new[] { Wallpaper("aaa111") },
                     meta = new { current_page = uri.Query.Contains("page=2") ? 2 : 1, last_page = 2, total = 2 } }
                 : new { data = Wallpaper(uri.Segments.Last()) };
             return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(result)) };
@@ -129,9 +149,9 @@ internal sealed class MarketplaceHandler : HttpMessageHandler
         return new(HttpStatusCode.OK) { Content = content };
     }
 
-    private object Wallpaper(string id) => new
+    private object Wallpaper(string id, string resolution = "2560x1440") => new
     {
-        id, purity = "sfw", resolution = "2560x1440", category = "general", file_size = _image.Length,
+        id, purity = "sfw", resolution, category = "general", file_size = _image.Length,
         file_type = "image/png", path = $"https://w.wallhaven.cc/full/aa/wallhaven-{id}.png",
         thumbs = new { large = $"https://th.wallhaven.cc/lg/aa/{id}.jpg" },
         tags = new[] { new { id = 42, name = "nature" } }, uploader = new { username = "Forest artist" }

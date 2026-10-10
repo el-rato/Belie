@@ -2,6 +2,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using WallpaperProfiles.Models;
+using System.Windows.Media.Imaging;
+using HorizontalAlignment = System.Windows.HorizontalAlignment;
 
 namespace WallpaperProfiles.UI;
 
@@ -11,6 +14,36 @@ public partial class MonitorThumbnail : System.Windows.Controls.UserControl
 
     private static readonly SolidColorBrush AccentBrush = new(System.Windows.Media.Color.FromRgb(0x83, 0xAD, 0xB7));
     private static readonly SolidColorBrush InactiveBrush = new(System.Windows.Media.Color.FromRgb(0x41, 0x4C, 0x5A));
+
+    public static readonly DependencyProperty PreviewFitProperty = DependencyProperty.Register(nameof(PreviewFit),
+        typeof(FitMode), typeof(MonitorThumbnail), new PropertyMetadata(FitMode.Fill, OnChanged));
+    public FitMode PreviewFit { get => (FitMode)GetValue(PreviewFitProperty); set => SetValue(PreviewFitProperty, value); }
+    public static readonly DependencyProperty PreviewFilePathProperty = DependencyProperty.Register(nameof(PreviewFilePath),
+        typeof(string), typeof(MonitorThumbnail), new PropertyMetadata("", FileChanged));
+    public string PreviewFilePath { get => (string)GetValue(PreviewFilePathProperty); set => SetValue(PreviewFilePathProperty, value); }
+    private System.Windows.Size _pixelSize;
+    private int _fileVersion;
+    private static async void FileChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var preview = (MonitorThumbnail)d;
+        var version = ++preview._fileVersion;
+        preview._pixelSize = default;
+        var size = await Task.Run(() =>
+        {
+            try
+            {
+                using var stream = System.IO.File.OpenRead(e.NewValue as string ?? "");
+                var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None).Frames[0];
+                return new System.Windows.Size(frame.PixelWidth, frame.PixelHeight);
+            }
+            catch { return default(System.Windows.Size); }
+        });
+        if (preview.Dispatcher.HasShutdownStarted) return;
+        await preview.Dispatcher.InvokeAsync(() =>
+        {
+            if (version == preview._fileVersion) { preview._pixelSize = size; preview.UpdateVisual(); }
+        });
+    }
 
     public static readonly DependencyProperty ScreenSourceProperty =
         DependencyProperty.Register(nameof(ScreenSource), typeof(ImageSource), typeof(MonitorThumbnail),
@@ -134,11 +167,57 @@ public partial class MonitorThumbnail : System.Windows.Controls.UserControl
         Bezel.BorderThickness = new Thickness(IsActive ? 3 : 1);
         Bezel.Effect = null;
         ScreenImage.Source = ScreenSource;
+        ScreenImage.Stretch = PreviewFit switch { FitMode.Fit => Stretch.Uniform, FitMode.Stretch => Stretch.Fill,
+            FitMode.Center => Stretch.None, _ => Stretch.UniformToFill };
+        ScreenImage.Width = ScreenImage.Height = double.NaN;
+        ScreenImage.HorizontalAlignment = HorizontalAlignment.Stretch; ScreenImage.VerticalAlignment = VerticalAlignment.Stretch;
+        ScreenImage.Visibility = Visibility.Visible;
+        ScreenSurface.SetResourceReference(Border.BackgroundProperty, "SurfaceRaisedBrush");
+        if ((PreviewFit is FitMode.Center or FitMode.Tile) && ScreenSource is BitmapSource bitmap)
+        {
+            var pixels = _pixelSize.Width > 0 ? _pixelSize : new System.Windows.Size(bitmap.PixelWidth, bitmap.PixelHeight);
+            var screen = System.Windows.Forms.Screen.PrimaryScreen!.Bounds;
+            var width = pixels.Width * Math.Max(1, BezelWidth - 4) / screen.Width;
+            var height = pixels.Height * Math.Max(1, BezelHeight - 4) / screen.Height;
+            if (PreviewFit == FitMode.Center)
+            {
+                ScreenImage.Stretch = Stretch.Fill; ScreenImage.Width = width; ScreenImage.Height = height;
+                ScreenImage.HorizontalAlignment = HorizontalAlignment.Center; ScreenImage.VerticalAlignment = VerticalAlignment.Center;
+            }
+            else
+            {
+                ScreenImage.Visibility = Visibility.Collapsed;
+                ScreenSurface.Background = new ImageBrush(ScreenSource) { TileMode = TileMode.Tile, Stretch = Stretch.Fill,
+                    ViewportUnits = BrushMappingMode.Absolute, Viewport = new Rect(0, 0, width, height) };
+            }
+        }
         EmptyState.Visibility = ScreenSource == null ? Visibility.Visible : Visibility.Collapsed;
         ScreenImage.Opacity = ScreenSource == null ? 1.0 : ScreenOpacity;
         SignalDot.Visibility = HasRules ? Visibility.Visible : Visibility.Collapsed;
         VideoBadge.Visibility = IsVideo && ScreenSource != null ? Visibility.Visible : Visibility.Collapsed;
         NameText.Visibility = ShowName ? Visibility.Visible : Visibility.Collapsed;
         NameText.Text = ProfileName;
+    }
+}
+
+public sealed class SourceThumbnail : System.Windows.Controls.Image
+{
+    public static readonly DependencyProperty FilePathProperty = DependencyProperty.Register(nameof(FilePath), typeof(string),
+        typeof(SourceThumbnail), new PropertyMetadata("", Changed));
+    private int _version;
+    public string FilePath { get => (string)GetValue(FilePathProperty); set => SetValue(FilePathProperty, value); }
+    public SourceThumbnail() { Stretch = Stretch.UniformToFill; Width = 48; Height = 32; }
+    private static async void Changed(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var image = (SourceThumbnail)d;
+        var version = ++image._version;
+        image.Source = null;
+        try
+        {
+            var thumbnail = await Task.Run(() => ThumbnailLoader.Load(e.NewValue as string ?? "", 120));
+            if (image.Dispatcher.HasShutdownStarted) return;
+            await image.Dispatcher.InvokeAsync(() => { if (version == image._version) image.Source = thumbnail; });
+        }
+        catch (Exception ex) { WallpaperProfiles.Infrastructure.Logger.Error("Loading source thumbnail failed.", ex); }
     }
 }

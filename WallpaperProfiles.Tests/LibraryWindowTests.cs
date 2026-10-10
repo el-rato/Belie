@@ -147,13 +147,18 @@ public sealed class LibraryWindowTests
             catch (Exception ex) { failure ??= ex; }
             finally
             {
+                if (app != null)
+                {
+                    foreach (var editor in app.Windows.OfType<ProfileEditorWindow>()) editor.ChooseDraftAction = () => DraftChoice.Discard;
+                    foreach (var main in app.Windows.OfType<MainWindow>()) main.ChooseDraftAction = () => DraftChoice.Discard;
+                }
                 app?.Shutdown();
                 Directory.Delete(dir, recursive: true);
             }
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(25)), "The library UI thread did not exit.");
+        Assert.True(thread.Join(TimeSpan.FromSeconds(90)), "The library UI thread did not exit.");
         if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
     }
 
@@ -170,6 +175,19 @@ public sealed class LibraryWindowTests
         await WaitUntil(() => !Loading());
         Assert.Single(gallery.Items.Cast<object>());
         Assert.Contains(handler.Requests, r => r.Contains("sorting=toplist") && r.Contains("topRange=1M"));
+        var landscape = (CheckBox)window.FindName("MarketLandscapeOnly");
+        search.Text = "orientations";
+        landscape.IsChecked = true;
+        await WaitUntil(() => !Loading());
+        Assert.Equal(3, gallery.Items.Count);
+        Assert.Contains("ratios=landscape", handler.Requests.Last(r => r.Contains("/search")));
+        landscape.IsChecked = false;
+        await WaitUntil(() => !Loading());
+        Assert.Equal(5, gallery.Items.Count);
+        Assert.DoesNotContain("ratios=", handler.Requests.Last(r => r.Contains("/search")));
+        search.Text = "";
+        Click(window, "MarketSearchButton");
+        await WaitUntil(() => !Loading());
         Click(window, "MarketNewestSortButton");
         await WaitUntil(() => !Loading());
         Assert.Contains("sorting=date_added", handler.Requests.Last(r => r.Contains("/search")));
@@ -300,7 +318,9 @@ public sealed class LibraryWindowTests
         using var coordinator = new WallpaperCoordinator(profiles, settings, new AppSettings(), clock, _ => { });
         typeof(WallpaperCoordinator).GetField("_profiles", BindingFlags.Instance | BindingFlags.NonPublic)!
             .SetValue(coordinator, new List<WallpaperProfile> { profile });
-        var main = new MainWindow(coordinator, profiles, settings, libraryStore);
+        using var shortcuts = new ProfileShortcutManager(() => coordinator.Profiles, profiles.Save,
+            coordinator.ProfilesEdited, id => coordinator.SwitchManually(id), new ProfileShortcutTests.Hotkeys());
+        var main = new MainWindow(coordinator, profiles, settings, libraryStore, shortcuts) { ChooseDraftAction = () => DraftChoice.Discard };
         // Present real popup controls without invoking startup and registry changes.
         main.Loaded -= (RoutedEventHandler)Delegate.CreateDelegate(typeof(RoutedEventHandler), main,
             typeof(MainWindow).GetMethod("OnLoaded", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)!);
@@ -316,10 +336,10 @@ public sealed class LibraryWindowTests
         Assert.Contains("22:00 – 06:00 · overnight", ((TextBlock)main.FindName("ScheduleSummary")).Text);
         Assert.Contains(CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName(DayOfWeek.Monday), ((TextBlock)main.FindName("ScheduleSummary")).Text);
         Assert.Equal("battery ≤ 15% · priority 8", ((TextBlock)main.FindName("TriggerSummary")).Text);
-        Assert.Equal("Edit rules", ((Button)main.FindName("EditRulesButton")).Content);
+        Assert.Equal("Edit schedules & triggers", ((Button)main.FindName("EditRulesButton")).Content);
         ((TabControl)main.FindName("ProfileTabs")).SelectedIndex = 2;
         RenderWorkspace(main, "profile-rules", 880, 650);
-        foreach (var (button, tab) in new[] { ("EditProfileButton", 0), ("EditRulesButton", 2) })
+        foreach (var (button, tab) in new[] { ("EditRulesButton", 2) })
         {
             Exception? editorFailure = null;
             main.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
@@ -349,7 +369,7 @@ public sealed class LibraryWindowTests
         Assert.Equal(48, gallery.Items.Count);
         Assert.Equal(main.FindResource("TextPrimaryBrush"), gallery.Foreground);
         Assert.Same(libraryPane.Content, library.FindName("LibraryRoot"));
-        Assert.Equal(Visibility.Visible, ((Button)library.FindName("BackButton")).Visibility);
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)library.FindName("LibraryChrome")).Visibility);
 
         RenderWorkspace(main, "library", 1040, 790);
         RenderWorkspace(main, "library-compact", 880, 650);
@@ -409,15 +429,284 @@ public sealed class LibraryWindowTests
         Assert.Equal(imagePath, ((TextBox)main.FindName("FolderBox")).Text);
         profileTabs.SelectedIndex = 0;
         Click(main, "SettingsButton");
-        Assert.True(((System.Windows.Controls.Primitives.Popup)main.FindName("SettingsPopup")).IsOpen);
+        Assert.Contains(System.Windows.Application.Current.Windows.OfType<Window>(), w => w.Owner == main && w.Title == "Belie settings");
         Click(main, "SettingsButton");
-        Assert.False(((System.Windows.Controls.Primitives.Popup)main.FindName("SettingsPopup")).IsOpen);
+        Assert.DoesNotContain(System.Windows.Application.Current.Windows.OfType<Window>(), w => w.Owner == main && w.Title == "Belie settings");
         CheckAppearance(main, coordinator, settings, profile);
+        CheckProfileDrafts(main, profiles, coordinator, profile.Id, imagePath);
+        CheckThumbnailDispatch(main);
+        profile = coordinator.Profiles.Single(p => p.Id == profile.Id);
         RenderWorkspace(main, "profiles", 1040, 790);
         RenderWorkspace(main, "profiles-compact", 880, 650);
         CheckActivityAndSceneControls(main, coordinator, clock, profile, imagePath);
         CheckDesktopCanvasPanel(main, dir, imagePath);
+        CheckWidgetDrafts(main);
+        CaptureAuditViews(main, profile.Id);
+        typeof(MainWindow).GetMethod("Select", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, new object[] { profile.Id });
+        Click(main, "ShortcutButton");
+        var shortcutPopup = (System.Windows.Controls.Primitives.Popup)main.FindName("ShortcutPopup");
+        Assert.True(shortcutPopup.IsOpen);
+        Assert.True(shortcuts.IsCapturing);
+        typeof(MainWindow).GetField("_pendingShortcut", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(main, "Ctrl+Alt+1");
+        typeof(MainWindow).GetMethod("AssignShortcut_Click", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, new object[] { main, new RoutedEventArgs() });
+        Assert.False(shortcutPopup.IsOpen);
+        Assert.False(shortcuts.IsCapturing);
+        Assert.Equal("Ctrl+Alt+1", profiles.LoadAll().Single(p => p.Id == profile.Id).KeyboardShortcut);
+        Assert.Equal("Ctrl + Alt + 1", ((Button)main.FindName("ShortcutButton")).Content);
+        UiAppearance.Apply("Ember");
+        RenderWorkspace(main, "profiles-shortcuts-ember", 1040, 790);
+        RenderWorkspace(main, "profiles-shortcuts-compact", 880, 650);
+        Click(main, "ShortcutButton");
+        typeof(MainWindow).GetMethod("RemoveShortcut_Click", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, new object[] { main, new RoutedEventArgs() });
+        Assert.Empty(profiles.LoadAll().Single(p => p.Id == profile.Id).KeyboardShortcut);
+        Assert.Equal("Assign shortcut", ((Button)main.FindName("ShortcutButton")).Content);
+        CheckNowPlayingWidget(main, dir);
         library.Close();
+    }
+
+    private static void CheckNowPlayingWidget(MainWindow main, string dir)
+    {
+        Click(main, "CanvasNavButton");
+        var view = (DesktopCanvasView)((ContentControl)main.FindName("CanvasPane")).Content;
+        void Press(string name) => ((Button)view.FindName(name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Press("AddNowPlayingButton");
+        Assert.Equal(Visibility.Collapsed, ((TextBox)view.FindName("WidgetContent")).Visibility);
+        Press("SaveWidgetButton");
+        var store = new DesktopCanvasStore(Path.Combine(dir, "canvas.json"));
+        var saved = Assert.Single(store.Load().Widgets, widget => widget.Kind == DesktopWidgetKind.NowPlaying);
+        Assert.False(saved.ShowBorder); Assert.False(saved.ShowBackground); Assert.False(saved.ShowHeader);
+        ((ComboBox)view.FindName("WidgetMusicLayout")).SelectedItem = NowPlayingLayout.Stacked;
+        ((CheckBox)view.FindName("WidgetAlbumArt")).IsChecked = false;
+        ((TextBox)view.FindName("WidgetMusicAccent")).Text = "#FF8855";
+        Assert.True(view.IsDraftDirty);
+        Press("SaveWidgetButton");
+        saved = store.Load().Widgets.Single(widget => widget.Id == saved.Id);
+        Assert.Equal(NowPlayingLayout.Stacked, saved.MusicLayout);
+        Assert.False(saved.ShowAlbumArt); Assert.Equal("#FF8855", saved.MusicAccentColor);
+        RenderWorkspace(main, "now-playing-editor", 1040, 790);
+        Press("DuplicateWidgetButton");
+        var widgets = store.Load().Widgets.Where(widget => widget.Kind == DesktopWidgetKind.NowPlaying).ToArray();
+        Assert.Equal(2, widgets.Length);
+        Assert.All(widgets, widget => { Assert.False(widget.ShowBorder); Assert.Equal("#FF8855", widget.MusicAccentColor); });
+        CheckNowPlayingDrag(store, saved);
+        Press("StyleRainmeterButton");
+        Press("SaveWidgetButton");
+        var minimal = store.Load().Widgets.Last(widget => widget.Kind == DesktopWidgetKind.NowPlaying);
+        Assert.Equal(NowPlayingLayout.Minimal, minimal.MusicLayout);
+        Assert.False(minimal.ShowAlbumArt); Assert.False(minimal.ShowPlaybackControls);
+        Assert.True(minimal.ShowPlaybackProgress);
+        Assert.False(minimal.ShowHeader); Assert.False(minimal.ShowBorder); Assert.False(minimal.ShowBackground);
+        RenderWorkspace(main, "now-playing-rainmeter", 1040, 790);
+        Press("CloseWidgetEditorButton");
+    }
+
+    private static void CheckNowPlayingDrag(DesktopCanvasStore store, DesktopWidget saved)
+    {
+        saved.X = 200; saved.Y = 200;
+        store.UpdateLayout(saved.Id, saved.X, saved.Y, saved.Width, saved.Height);
+        var pointer = new System.Drawing.Point(500, 500);
+        var window = new WallpaperProfiles.Engine.DesktopWidgetWindow(saved, store, () => pointer) { Opacity = 0 };
+        window.Show(); window.UpdateLayout();
+        var card = (Border)window.Content;
+        var song = VisualChildren(card).OfType<TextBlock>().First(t => t.ToolTip is string);
+        var start = store.Load().Widgets.Single(widget => widget.Id == saved.Id);
+        try
+        {
+            card.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+                { RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent, Source = song });
+            pointer = new System.Drawing.Point(590, 545);
+            card.RaiseEvent(new System.Windows.Input.MouseEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.PreviewMouseMoveEvent });
+            card.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+                { RoutedEvent = UIElement.PreviewMouseLeftButtonUpEvent });
+            var moved = store.Load().Widgets.Single(widget => widget.Id == saved.Id);
+            Assert.Equal(start.X + 90, moved.X); Assert.Equal(start.Y + 45, moved.Y);
+            var play = VisualChildren(card).OfType<Button>().First();
+            card.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+                { RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent, Source = play });
+            Assert.False(card.IsMouseCaptured);
+            moved.Locked = true; window.Update(moved);
+            card.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+                { RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent, Source = song });
+            Assert.False(card.IsMouseCaptured);
+        }
+        finally { window.Close(); }
+    }
+
+    private static void CheckWidgetDrafts(MainWindow main)
+    {
+        var view = (DesktopCanvasView)((ContentControl)main.FindName("CanvasPane")).Content;
+        Click(main, "CanvasNavButton");
+        var list = (ListBox)view.FindName("WidgetList");
+        list.SelectedIndex = 0;
+        var title = (TextBox)view.FindName("WidgetTitle");
+        var original = title.Text;
+        title.Text = "Pending widget title";
+        var scope = (ComboBox)view.FindName("WidgetScopeFilter");
+        var originalScope = scope.SelectedItem;
+        view.ChooseDraftAction = () => DraftChoice.Cancel;
+        scope.SelectedIndex = 1;
+        Assert.Equal(originalScope, scope.SelectedItem);
+        Assert.Equal("Pending widget title", title.Text);
+        Assert.True(view.IsDraftDirty);
+        ((Button)view.FindName("CloseWidgetEditorButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.NotNull(list.SelectedItem);
+        view.ChooseDraftAction = () => DraftChoice.Save;
+        Assert.True(view.TryLeaveDraft());
+        Assert.False(view.IsDraftDirty);
+        title.Text = original;
+        ((Button)view.FindName("SaveWidgetButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        title.Text = "Discard this widget title";
+        view.ChooseDraftAction = () => DraftChoice.Discard;
+        Assert.True(view.TryLeaveDraft());
+        Assert.Equal(original, title.Text);
+        view.ConfirmDeleteAction = () => false;
+        var count = list.Items.Count;
+        ((Button)view.FindName("DeleteWidgetButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(count, list.Items.Count);
+        ((Button)view.FindName("CloseWidgetEditorButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Null(list.SelectedItem);
+    }
+
+    private static void CaptureAuditViews(MainWindow main, Guid profileId)
+    {
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("BELIE_WORKSPACE_PREVIEW"))) return;
+        foreach (var theme in new[] { "Ember", "Daylight" })
+        {
+            ((ListBox)main.FindName("ThemePicker")).SelectedItem = UiAppearance.Find(theme);
+            typeof(MainWindow).GetMethod("Select", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, new object[] { profileId });
+            var tabs = (TabControl)main.FindName("ProfileTabs");
+            for (var index = 0; index < tabs.Items.Count; index++)
+            {
+                tabs.SelectedIndex = index;
+                RenderWorkspace(main, $"audit-{theme.ToLowerInvariant()}-profile-{index}", 1180, 820);
+                RenderWorkspace(main, $"audit-{theme.ToLowerInvariant()}-profile-{index}-compact", 880, 650);
+            }
+            tabs.SelectedIndex = 0;
+            Click(main, "DashboardNavButton"); RenderWorkspace(main, $"audit-{theme.ToLowerInvariant()}-overview", 1180, 820);
+            Click(main, "LibraryNavButton"); RenderWorkspace(main, $"audit-{theme.ToLowerInvariant()}-library", 1180, 820);
+            var library = (LibraryWindow)typeof(MainWindow).GetField("_libraryView", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(main)!;
+            var gallery = (ListBox)library.FindName("Gallery");
+            gallery.SelectedIndex = 0;
+            RenderWorkspace(main, $"audit-{theme.ToLowerInvariant()}-library-details", 880, 650);
+            Assert.Equal(Visibility.Visible, ((Button)library.FindName("BackToCollectionButton")).Visibility);
+            Click(library, "BackToCollectionButton");
+            Assert.Equal(Visibility.Visible, ((FrameworkElement)library.FindName("LocalGalleryFrame")).Visibility);
+            Click(main, "CanvasNavButton"); RenderWorkspace(main, $"audit-{theme.ToLowerInvariant()}-widgets", 1180, 820);
+            var widgets = (DesktopCanvasView)((ContentControl)main.FindName("CanvasPane")).Content;
+            ((ListBox)widgets.FindName("WidgetList")).SelectedIndex = 0;
+            foreach (var tab in new[] { "Content", "Style", "Layout" })
+            {
+                ((Button)widgets.FindName("Widget" + tab + "Tab")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                RenderWorkspace(main, $"audit-{theme.ToLowerInvariant()}-widget-{tab.ToLowerInvariant()}", 880, 650);
+            }
+            ((Button)widgets.FindName("CloseWidgetEditorButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Click(main, "SettingsButton");
+            var settings = System.Windows.Application.Current.Windows.OfType<Window>().Single(w => w.Title == "Belie settings");
+            RenderWorkspace(settings, $"audit-{theme.ToLowerInvariant()}-settings", 400, 430);
+            Click(main, "SettingsButton");
+            foreach (var key in new[] { "TextPrimaryBrush", "TextSecondaryBrush", "TextTertiaryBrush", "AccentTextBrush" })
+            {
+                var ink = AccentInkConverter.Luminance(((SolidColorBrush)main.FindResource(key)).Color);
+                foreach (var background in new[] { "BgBrush", "SurfaceBrush", "SurfaceRaisedBrush" })
+                {
+                    var paper = AccentInkConverter.Luminance(((SolidColorBrush)main.FindResource(background)).Color);
+                    Assert.True((Math.Max(ink, paper) + .05) / (Math.Min(ink, paper) + .05) >= 4.5, key + " contrast in " + theme);
+                }
+            }
+        }
+        ((ListBox)main.FindName("ThemePicker")).SelectedItem = UiAppearance.Find("Sage");
+        CaptureFitViews();
+    }
+
+    private static void CaptureFitViews()
+    {
+        foreach (var (name, width, height) in new[] { ("portrait", 300, 900), ("ultrawide", 1600, 450) })
+        {
+            var visual = new DrawingVisual();
+            using (var drawing = visual.RenderOpen())
+            {
+                drawing.DrawRectangle(Brushes.Teal, null, new Rect(0, 0, width, height));
+                drawing.DrawRectangle(Brushes.Goldenrod, null, new Rect(0, 0, width / 3d, height));
+                drawing.DrawRectangle(Brushes.Coral, null, new Rect(width * 2 / 3d, 0, width / 3d, height));
+            }
+            var image = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            image.Render(visual); image.Freeze();
+            var monitor = new MonitorThumbnail { ScreenSource = image, ShowName = false, BezelWidth = 400, BezelHeight = 225 };
+            var window = new Window { Content = monitor, Width = 440, Height = 265 };
+            foreach (var fit in Enum.GetValues<FitMode>())
+            {
+                monitor.PreviewFit = fit;
+                RenderWorkspace(window, $"audit-preview-{name}-{fit}", 440, 265);
+            }
+            RenderWorkspace(window, $"audit-preview-{name}-150dpi", 440, 265, 144);
+            RenderWorkspace(window, $"audit-preview-{name}-200dpi", 440, 265, 192);
+            window.Close();
+        }
+    }
+
+    private static void CheckThumbnailDispatch(MainWindow main)
+    {
+        var rail = (StackPanel)main.FindName("RailStack");
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
+        bool Loaded() => VisualChildren(rail).OfType<MonitorThumbnail>().Any(m => m.ScreenSource != null)
+            && VisualChildren(main).OfType<SourceThumbnail>().Any(t => t.Source != null);
+        timer.Tick += (_, _) => { if (Loaded() || DateTime.UtcNow > deadline) { timer.Stop(); frame.Continue = false; } };
+        timer.Start(); System.Windows.Threading.Dispatcher.PushFrame(frame);
+        Assert.True(Loaded(), "Profile and source thumbnails must load on their UI dispatcher.");
+    }
+
+    private static void CheckProfileDrafts(MainWindow main, ProfileStore store, WallpaperCoordinator coordinator, Guid id, string imagePath)
+    {
+        var other = new WallpaperProfile { Name = "Other profile", FolderPath = imagePath };
+        store.Save(other); coordinator.ProfilesEdited();
+        void Select(Guid profileId) => typeof(MainWindow).GetMethod("Select", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, new object[] { profileId });
+        var name = (TextBox)main.FindName("NameBox");
+        var interval = (TextBox)main.FindName("IntervalBox");
+        var originalName = name.Text;
+        name.Text = "Reverted draft";
+        name.Text = originalName;
+        Assert.False(main.IsDraftDirty);
+        Assert.NotEqual("Unsaved changes", ((TextBlock)main.FindName("ProfileMessage")).Text);
+        name.Text = "Pending name";
+        Assert.True(main.IsDraftDirty);
+        Assert.Equal("Focus", coordinator.Profiles.Single(p => p.Id == id).Name);
+        main.ChooseDraftAction = () => DraftChoice.Cancel;
+        Select(other.Id);
+        Assert.Equal("Pending name", name.Text);
+        Assert.True(main.IsDraftDirty);
+        main.ChooseDraftAction = () => DraftChoice.Save;
+        interval.Text = "invalid";
+        Select(other.Id);
+        Assert.Equal("Pending name", name.Text);
+        Assert.Equal(1, ((TabControl)main.FindName("ProfileTabs")).SelectedIndex);
+        Assert.Contains("whole number", ((TextBlock)main.FindName("ProfileMessage")).Text);
+        interval.Text = "5";
+        Select(other.Id);
+        Assert.Equal("Pending name", store.LoadAll().Single(p => p.Id == id).Name);
+        Assert.Equal("Other profile", name.Text);
+        Select(id);
+        name.Text = "Discard this name";
+        main.ChooseDraftAction = () => DraftChoice.Discard;
+        Select(other.Id);
+        Assert.Equal("Pending name", store.LoadAll().Single(p => p.Id == id).Name);
+        Select(id); name.Text = "Focus"; Click(main, "SaveProfileButton");
+        Assert.False(main.IsDraftDirty);
+        Assert.Equal("Changes saved", ((TextBlock)main.FindName("ProfileMessage")).Text);
+        var discardCalled = false;
+        Assert.False(DraftGuard.Confirm(main, "fixture", () => false, () => discardCalled = true, () => DraftChoice.Save));
+        Assert.False(discardCalled);
+        store.Delete(other.Id); coordinator.ProfilesEdited();
+        typeof(MainWindow).GetMethod("BuildRail", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, null);
+        Select(id);
+        ((TabControl)main.FindName("ProfileTabs")).SelectedIndex = 0;
+        var commands = (Button)main.FindName("ApplyProfileButton");
+        RenderWorkspace(main, "profile-pinned-commands", 880, 650);
+        ((ScrollViewer)main.FindName("ProfileDetailsScroll")).ScrollToEnd(); main.UpdateLayout();
+        var commandPosition = commands.TranslatePoint(new System.Windows.Point(), (UIElement)main.Content);
+        Assert.InRange(commandPosition.Y + commands.ActualHeight, 1, main.ActualHeight);
+        ((ScrollViewer)main.FindName("ProfileDetailsScroll")).ScrollToTop();
     }
 
     private static void CheckEditorLibrary(LibraryStore store, string imagePath, string secondWallpaper)
@@ -465,11 +754,14 @@ public sealed class LibraryWindowTests
         };
         Assert.True(editor.ShowDialog());
         if (failure != null) throw failure;
+        Assert.Empty(model.AdditionalWallpaperPaths);
+        Assert.Empty(model.FolderPath);
+        model = editor.Result!;
         Assert.Equal(new[] { secondWallpaper }, model.AdditionalWallpaperPaths);
         Assert.Equal(imagePath, model.FolderPath);
 
         var cancelEditor = new ProfileEditorWindow(model, isNew: false, libraryStore: store)
-            { ShowInTaskbar = false, Opacity = 0 };
+            { ShowInTaskbar = false, Opacity = 0, ChooseDraftAction = () => DraftChoice.Discard };
         cancelEditor.Loaded += (_, _) =>
         {
             try
@@ -548,7 +840,7 @@ public sealed class LibraryWindowTests
         var store = new DesktopCanvasStore(Path.Combine(dir, "canvas.json"));
         var starts = 0;
         var widgetProfiles = new List<WallpaperProfile> { new() { Name = "Study" }, new() { Name = "Chill" } };
-        var view = new DesktopCanvasView(store, () => starts++, profiles: () => widgetProfiles);
+        var view = new DesktopCanvasView(store, () => starts++, profiles: () => widgetProfiles) { ChooseDraftAction = () => DraftChoice.Discard, ConfirmDeleteAction = () => true };
         var pane = (ContentControl)main.FindName("CanvasPane");
         pane.Content = view;
         Click(main, "CanvasNavButton");
@@ -1033,6 +1325,16 @@ public sealed class LibraryWindowTests
         Assert.InRange(dashboard.ViewportHeight, 1, root.ActualHeight - 47);
         Assert.True(dashboard.ScrollableHeight > 0);
         dashboard.ScrollToTop(); main.UpdateLayout();
+        var sceneCard = VisualChildren((StackPanel)main.FindName("SceneGallery")).OfType<Button>().First();
+        var galleryWheel = new System.Windows.Input.MouseWheelEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, -120)
+            { RoutedEvent = System.Windows.Input.Mouse.PreviewMouseWheelEvent };
+        sceneCard.RaiseEvent(galleryWheel);
+        if (!galleryWheel.Handled)
+            sceneCard.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(galleryWheel.MouseDevice, galleryWheel.Timestamp, galleryWheel.Delta)
+                { RoutedEvent = System.Windows.Input.Mouse.MouseWheelEvent });
+        main.UpdateLayout();
+        Assert.True(dashboard.VerticalOffset > 0, "Wheel scrolling over scene cards must scroll the Activity page.");
+        dashboard.ScrollToTop(); main.UpdateLayout();
         var recentActivity = (ItemsControl)main.FindName("RecentActivityList");
         var wheel = new System.Windows.Input.MouseWheelEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, -120)
             { RoutedEvent = System.Windows.Input.Mouse.MouseWheelEvent };
@@ -1045,13 +1347,13 @@ public sealed class LibraryWindowTests
         var lastPosition = lastActivity.TranslatePoint(new System.Windows.Point(), dashboard);
         Assert.InRange(lastPosition.Y + lastActivity.ActualHeight, 1, dashboard.ActualHeight);
         Click(main, "SettingsButton");
-        Assert.True(((System.Windows.Controls.Primitives.Popup)main.FindName("SettingsPopup")).IsOpen);
+        Assert.Contains(System.Windows.Application.Current.Windows.OfType<Window>(), w => w.Owner == main && w.Title == "Belie settings");
         Click(main, "SettingsButton");
         RenderWorkspace(main, "activity-scrolled", 880, 650);
         dashboard.ScrollToTop(); main.UpdateLayout();
 
         var editor = new ProfileEditorWindow(new WallpaperProfile { FolderPath = imagePath }, isNew: true)
-            { ShowInTaskbar = false, Opacity = 0 };
+            { ShowInTaskbar = false, Opacity = 0, ChooseDraftAction = () => DraftChoice.Discard };
         editor.Loaded += (_, _) =>
         {
             ((ComboBox)editor.FindName("PresetCombo")).SelectedItem = "Gaming";
@@ -1060,7 +1362,7 @@ public sealed class LibraryWindowTests
             Assert.True(((CheckBox)editor.FindName("AmbientMuteBox")).IsChecked);
             Assert.Equal(15, ((Slider)editor.FindName("AmbientVolumeSlider")).Value);
             ((TextBox)editor.FindName("AudioPathBox")).Text = Path.Combine(Path.GetDirectoryName(imagePath)!, "ambient.wav");
-            ((TabControl)editor.FindName("EditorTabs")).SelectedIndex = 1;
+            ((TabControl)editor.FindName("EditorTabs")).SelectedIndex = 3;
             RenderWorkspace(editor, "scene-editor", 680, 720);
             typeof(ProfileEditorWindow).GetMethod("Save_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .Invoke(editor, new object[] { editor, new RoutedEventArgs() });
@@ -1111,7 +1413,7 @@ public sealed class LibraryWindowTests
         finally { for (var i = 0; i < fields.Length; i++) fields[i].SetValue(null, originals[i]); }
     }
 
-    private static void RenderWorkspace(Window window, string view, int width, int height)
+    private static void RenderWorkspace(Window window, string view, int width, int height, double dpi = 96)
     {
         if (window is MainWindow) { window.Width = width; window.Height = height; window.UpdateLayout(); }
         var content = (FrameworkElement)window.Content;
@@ -1120,7 +1422,12 @@ public sealed class LibraryWindowTests
         content.UpdateLayout();
         var path = Environment.GetEnvironmentVariable("BELIE_WORKSPACE_PREVIEW");
         if (string.IsNullOrEmpty(path)) return;
-        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(210) };
+        timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
+        timer.Start(); System.Windows.Threading.Dispatcher.PushFrame(frame);
+        content.UpdateLayout();
+        var bitmap = new RenderTargetBitmap((int)(width * dpi / 96), (int)(height * dpi / 96), dpi, dpi, PixelFormats.Pbgra32);
         bitmap.Render(content);
         var png = new PngBitmapEncoder();
         png.Frames.Add(BitmapFrame.Create(bitmap));

@@ -247,7 +247,7 @@ internal sealed class DesktopWidgetWindow : Window
         };
         _card.MouseMove += (_, _) =>
         {
-            if (HasHeader || _dragStart is not { } start) return;
+            if (HasHeader || _widget.Kind == DesktopWidgetKind.NowPlaying || _dragStart is not { } start) return;
             var cursor = System.Windows.Forms.Cursor.Position;
             _widget.X = _startX + cursor.X - start.X; _widget.Y = _startY + cursor.Y - start.Y; Place();
         };
@@ -309,9 +309,32 @@ internal sealed class DesktopWidgetWindow : Window
         _card.Child = surface;
         _glass.SizeChanged += (_, _) => UpdateGlassClip();
         Content = _card;
+        _card.MouseEnter += (_, _) => { if (_widget.Kind == DesktopWidgetKind.NowPlaying) _resize.Opacity = .5; };
+        _card.MouseLeave += (_, _) => { if (_widget.Kind == DesktopWidgetKind.NowPlaying) _resize.Opacity = 0; };
+        _card.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (_widget.Kind != DesktopWidgetKind.NowPlaying || HasHeader || _widget.Locked) return;
+            for (var element = e.OriginalSource as DependencyObject; element != null && element != _card;
+                element = element is Visual ? VisualTreeHelper.GetParent(element) : LogicalTreeHelper.GetParent(element))
+                if (element is System.Windows.Controls.Primitives.ButtonBase or RangeBase or Thumb or System.Windows.Controls.Primitives.ScrollBar) return;
+            _dragStart = _cursorPosition(); _startX = _widget.X; _startY = _widget.Y;
+            _card.CaptureMouse(); e.Handled = true;
+        };
+        _card.PreviewMouseMove += (_, e) =>
+        {
+            if (_widget.Kind != DesktopWidgetKind.NowPlaying || _dragStart is not { } start) return;
+            var cursor = _cursorPosition();
+            _widget.X = _startX + cursor.X - start.X; _widget.Y = _startY + cursor.Y - start.Y;
+            Place(); e.Handled = true;
+        };
+        _card.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if (_widget.Kind != DesktopWidgetKind.NowPlaying || _dragStart == null) return;
+            _dragStart = null; _card.ReleaseMouseCapture(); SaveLayout(); e.Handled = true;
+        };
         _card.MouseLeftButtonDown += (_, e) =>
         {
-            if (HasHeader || _widget.Locked || _widget.Kind is DesktopWidgetKind.Link or DesktopWidgetKind.Sketch) return;
+            if (HasHeader || _widget.Locked || _widget.Kind is DesktopWidgetKind.Link or DesktopWidgetKind.Sketch or DesktopWidgetKind.NowPlaying) return;
             _dragStart = System.Windows.Forms.Cursor.Position; _startX = _widget.X; _startY = _widget.Y;
             _card.CaptureMouse(); e.Handled = true;
         };
@@ -426,6 +449,7 @@ internal sealed class DesktopWidgetWindow : Window
         _grid.RowDefinitions[0].Height = new GridLength(HasHeader ? 38 : 0);
         _body.Margin = new Thickness(16, HasHeader ? 4 : 16, 16, 18);
         _resize.Visibility = widget.Locked ? Visibility.Collapsed : Visibility.Visible;
+        _resize.Opacity = widget.Kind == DesktopWidgetKind.NowPlaying && !_card.IsMouseOver ? 0 : .5;
         _title.Text = widget.Title;
         Title = "Belie widget · " + widget.DisplayTitle;
         var appearance = widget.Kind + "\n" + widget.Content + "\n" + widget.FontSize + "\n" + widget.Alignment + "\n" + widget.ImageFit;
@@ -474,9 +498,13 @@ internal sealed class DesktopWidgetWindow : Window
                     }, () => { _dragStart = null; SaveLayout(); });
                     _body.Content = _sketch;
                     break;
+                case DesktopWidgetKind.NowPlaying:
+                    _body.Content = new NowPlayingView(widget);
+                    break;
             }
         }
         if (widget.Kind == DesktopWidgetKind.Sketch) _sketch?.UpdateDrawing(widget);
+        if (_body.Content is NowPlayingView music) music.UpdateAppearance(widget);
         RefreshCountdown();
         Place();
     }

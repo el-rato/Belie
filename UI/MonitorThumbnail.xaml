@@ -11,7 +11,7 @@
 
         <Grid Grid.Column="0">
             <Border x:Name="Bezel" BorderThickness="1" CornerRadius="6" Background="{DynamicResource SurfaceRaisedBrush}">
-                <Border Margin="2" CornerRadius="4" ClipToBounds="True" Background="{DynamicResource SurfaceRaisedBrush}">
+                <Border x:Name="ScreenSurface" Margin="2" CornerRadius="4" ClipToBounds="True" Background="{DynamicResource SurfaceRaisedBrush}">
                     <Grid>
                         <Image x:Name="ScreenImage" Stretch="UniformToFill" Opacity="0.85"/>
                         <Border x:Name="VideoBadge" Background="#B3000000" CornerRadius="4" Padding="5,3"

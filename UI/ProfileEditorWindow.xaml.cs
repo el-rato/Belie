@@ -32,13 +32,16 @@ internal partial class ProfileEditorWindow : Window
     private readonly DispatcherTimer _pathDebounce;
     private int _pathVersion;
     private bool _closed;
+    private bool _acceptClose;
+    private string _savedDraft = "";
+    internal Func<DraftChoice>? ChooseDraftAction { get; set; }
 
     public WallpaperProfile? Result { get; private set; }
 
     public ProfileEditorWindow(WallpaperProfile model, bool isNew, LibraryStore? libraryStore = null)
     {
         InitializeComponent();
-        _model = model;
+        _model = model = DraftGuard.Clone(model);
         _libraryStore = libraryStore ?? new LibraryStore(Path.Combine(AppPaths.BaseDir, "library.json"));
         TitleText.Text = isNew ? "New Profile" : $"Edit Profile – {model.Name}";
         TrySetAppIcon();
@@ -73,7 +76,7 @@ internal partial class ProfileEditorWindow : Window
         _additionalWallpapers.CollectionChanged += (_, _) =>
         {
             AdditionalWallpaperPanel.Visibility = _additionalWallpapers.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            AdditionalWallpaperCount.Text = $"{_additionalWallpapers.Count} additional wallpaper(s)";
+            AdditionalWallpaperCount.Text = $"{_additionalWallpapers.Count} additional {(_additionalWallpapers.Count == 1 ? "wallpaper" : "wallpapers")}";
             ++_pathVersion;
             _pathDebounce.Stop();
             _pathDebounce.Start();
@@ -93,6 +96,18 @@ internal partial class ProfileEditorWindow : Window
         TriggersList.ItemsSource = _triggers;
 
         RefreshHints();
+        _savedDraft = DraftSnapshot();
+        FitCombo.SelectionChanged += (_, _) => UpdatePreviewFit();
+        SizeChanged += (_, _) => UpdatePreviewFit();
+        Closing += (_, e) =>
+        {
+            if (!_acceptClose && DraftSnapshot() != _savedDraft)
+            {
+                e.Cancel = true;
+                Dispatcher.BeginInvoke(new Action(RequestClose));
+            }
+        };
+        UpdatePreviewFit();
         Loaded += (_, _) => ValidatePath();
         Closed += (_, _) =>
         {
@@ -142,6 +157,8 @@ internal partial class ProfileEditorWindow : Window
     {
         if (_closed) return;
         var path = FolderBox.Text.Trim();
+        SourceNameText.Text = path.Length == 0 ? "No source selected" : Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar));
+        SourceNameText.ToolTip = path;
         var version = ++_pathVersion;
 
         if (_additionalWallpapers.Count > 0)
@@ -155,6 +172,7 @@ internal partial class ProfileEditorWindow : Window
             var first = media.FirstOrDefault();
             var thumbnail = first == null ? null : await Task.Run(() => ThumbnailLoader.Load(first, 640));
             if (_closed || version != _pathVersion) return;
+            EditorPreview.PreviewFilePath = first ?? "";
             EditorPreview.ScreenSource = thumbnail;
             EditorPreview.IsVideo = first != null && WallpaperEngine.IsVideoFile(first);
             return;
@@ -223,6 +241,7 @@ internal partial class ProfileEditorWindow : Window
             return;
         }
         var previous = EditorPreview.ScreenSource;
+        EditorPreview.PreviewFilePath = info.FirstMedia ?? "";
         EditorPreview.ScreenSource = image;
         EditorPreview.IsVideo = info.IsFile && info.VideoCount > 0;
         if (image != null && !ReferenceEquals(previous, image))
@@ -258,6 +277,8 @@ internal partial class ProfileEditorWindow : Window
         if (firstMultipleSelection && _additionalWallpapers.Count > 0 && IntervalBox.Text.Trim() == "0") IntervalBox.Text = "5";
         ValidatePath();
     }
+
+    private void RemoveSource_Click(object sender, RoutedEventArgs e) => FolderBox.Clear();
 
     private void RemoveProfileWallpaper_Click(object sender, RoutedEventArgs e)
     {
@@ -405,19 +426,42 @@ internal partial class ProfileEditorWindow : Window
         }
     }
 
-    private void CloseBtn_Click(object sender, RoutedEventArgs e)
+    private string DraftSnapshot() => DraftGuard.Snapshot(new { NameBox.Text, Path = FolderBox.Text, Interval = IntervalBox.Text,
+        Fit = FitCombo.SelectedItem, RandomOrderCheck.IsChecked, Video = VideoMuteCheck.IsChecked, Icons = IconSafeCheck.IsChecked,
+        Accent = SceneAccentBox.Text, Audio = AudioPathBox.Text, Volume = AmbientVolumeSlider.Value, Muted = AmbientMuteBox.IsChecked,
+        Additional = _additionalWallpapers.Select(a => a.FilePath).ToArray(),
+        Rules = _rules.Select(r => new { r.StartTimeText, r.EndTimeText, r.Days }).ToArray(),
+        Triggers = _triggers.Select(t => new { t.Type, t.Condition, t.PriorityText }).ToArray() });
+    private void UpdatePreviewFit()
     {
-        DialogResult = false;
-        Close();
+        var height = ActualHeight > 0 && ActualHeight < 680 ? 150d : 190d;
+        var fit = FitCombo.SelectedItem is FitMode selected ? selected : FitMode.Fill;
+        var screen = fit == FitMode.Span ? System.Windows.Forms.SystemInformation.VirtualScreen : System.Windows.Forms.Screen.PrimaryScreen!.Bounds;
+        var ratio = screen.Width / (double)screen.Height;
+        height = Math.Min(height, Math.Max(300, ActualWidth - 60) / ratio);
+        EditorPreview.BezelHeight = height; EditorPreview.BezelWidth = height * ratio;
+        EditorPreview.PreviewFit = fit;
     }
-
+    private void RequestClose()
+    {
+        if (DraftSnapshot() != _savedDraft && !DraftGuard.Confirm(this, "this profile", TryBuildResult,
+                () => { }, ChooseDraftAction)) return;
+        _acceptClose = true;
+        DialogResult = Result != null;
+    }
+    private void CloseBtn_Click(object sender, RoutedEventArgs e) => RequestClose();
     private void Save_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryBuildResult()) return;
+        _acceptClose = true; DialogResult = true;
+    }
+    private bool TryBuildResult()
     {
         var name = NameBox.Text.Trim();
         if (name.Length == 0)
         {
             Warn("Please enter a profile name.");
-            return;
+            return false;
         }
 
         var folder = FolderBox.Text.Trim();
@@ -425,12 +469,12 @@ internal partial class ProfileEditorWindow : Window
         if (accent.Length > 0 && !SceneController.TryParseAccent(accent, out _))
         {
             Warn("Enter a six-digit accent color such as #B7CDBC, or leave it blank for the default.");
-            return;
+            return false;
         }
         if (folder.Length == 0 && _additionalWallpapers.Count == 0)
         {
             Warn("Please choose a wallpaper image, video, or folder.");
-            return;
+            return false;
         }
         if (folder.Length > 0 && !Directory.Exists(folder) && !File.Exists(folder))
         {
@@ -438,7 +482,7 @@ internal partial class ProfileEditorWindow : Window
                 "Missing location", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (reply != MessageBoxResult.Yes)
             {
-                return;
+                return false;
             }
         }
 
@@ -446,7 +490,7 @@ internal partial class ProfileEditorWindow : Window
             || interval < 0 || interval > 1440)
         {
             Warn("Slideshow interval must be a whole number between 0 and 1440 minutes.");
-            return;
+            return false;
         }
 
         var rules = new List<ScheduleRule>();
@@ -456,12 +500,12 @@ internal partial class ProfileEditorWindow : Window
                 || !TimeOnly.TryParseExact(vm.EndTimeText, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var end))
             {
                 Warn("A schedule rule has invalid times (use HH:mm, e.g. 09:00).");
-                return;
+                return false;
             }
             if (start == end)
             {
                 Warn("A schedule rule's start and end time are equal, so it would never match. Pick two different times.");
-                return;
+                return false;
             }
             var days = new HashSet<DayOfWeek>();
             for (var i = 0; i < 7; i++)
@@ -474,7 +518,7 @@ internal partial class ProfileEditorWindow : Window
             if (days.Count == 0)
             {
                 Warn("A schedule rule has no days selected.");
-                return;
+                return false;
             }
             vm.Model.StartTime = start;
             vm.Model.EndTime = end;
@@ -499,14 +543,14 @@ internal partial class ProfileEditorWindow : Window
                     if (!double.TryParse(trigger.Condition, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) || number <= 0)
                     {
                         Warn($"The '{trigger.Type}' trigger needs a positive number in the 'when' box.");
-                        return;
+                        return false;
                     }
                     break;
                 case TriggerType.ProcessLaunch:
                     if (trigger.Condition.Length == 0)
                     {
                         Warn("The process-launch trigger needs a program name, e.g. notepad.exe");
-                        return;
+                        return false;
                     }
                     break;
             }
@@ -531,9 +575,34 @@ internal partial class ProfileEditorWindow : Window
         _model.EventTriggers = triggers;
 
         Result = _model;
-        DialogResult = true;
+        return true;
     }
 
-    private void Warn(string message) =>
-        System.Windows.MessageBox.Show(this, message, "Cannot save", MessageBoxButton.OK, MessageBoxImage.Warning);
+    private static System.Windows.Controls.Control? FirstInput(DependencyObject root)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is System.Windows.Controls.Control input && input.IsVisible && input.IsEnabled && input.Focusable && input is TextBox or System.Windows.Controls.ComboBox or System.Windows.Controls.CheckBox) return input;
+            if (FirstInput(child) is { } nested) return nested;
+        }
+        return null;
+    }
+    private void Warn(string message)
+    {
+        EditorMessage.Text = message;
+        var tab = message.Contains("accent", StringComparison.OrdinalIgnoreCase) ? 3
+            : message.Contains("schedule", StringComparison.OrdinalIgnoreCase) || message.Contains("trigger", StringComparison.OrdinalIgnoreCase) ? 2
+            : message.Contains("interval", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        EditorTabs.SelectedIndex = tab;
+        var field = tab == 3 ? SceneAccentBox : tab == 1 ? IntervalBox : message.Contains("name") ? NameBox : FolderBox;
+        if (tab == 2)
+        {
+            EditorTabs.UpdateLayout();
+            var root = message.Contains("trigger", StringComparison.OrdinalIgnoreCase) ? TriggersList : RulesList;
+            var control = FirstInput(root);
+            if (control != null) DraftGuard.Focus(control);
+        }
+        else DraftGuard.Focus(field);
+    }
 }

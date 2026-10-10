@@ -5,6 +5,10 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
 using Color = System.Windows.Media.Color;
+using System.Globalization;
+using System.Windows.Data;
+using Brushes = System.Windows.Media.Brushes;
+using SystemColors = System.Windows.SystemColors;
 
 namespace WallpaperProfiles.UI;
 
@@ -16,13 +20,21 @@ internal sealed record UiTheme(string Name, string Background, string Surface, s
 
 internal static class UiAppearance
 {
+    static UiAppearance()
+    {
+        SystemParameters.StaticPropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SystemParameters.HighContrast) && System.Windows.Application.Current != null)
+                System.Windows.Application.Current.Dispatcher.Invoke(() => Apply(Current.Name));
+        };
+    }
     public static IReadOnlyList<UiTheme> Themes { get; } = new[]
     {
-        new UiTheme("Sage", "#171918", "#1D201E", "#242825", "#2D332F", "#343B36", "#59645D", "#F1F2EE", "#BBC3BC", "#9AA69D", "#D2E3D6", "#2C3930"),
-        new UiTheme("Midnight", "#111725", "#182132", "#202B40", "#2A3852", "#33425D", "#62779A", "#EDF3FF", "#BACAE2", "#8DABC9", "#ABCFFF", "#263D60"),
-        new UiTheme("Amethyst", "#1B1523", "#251D30", "#30253E", "#3C2F4D", "#493854", "#80678F", "#F5EDFF", "#D2C1DF", "#B49BC6", "#D5B6F4", "#433052"),
-        new UiTheme("Ember", "#211815", "#2B201B", "#372923", "#453129", "#503C31", "#8C6C55", "#FFF2E7", "#DFC7B2", "#BE9E82", "#EFC29B", "#50382A"),
-        new UiTheme("Daylight", "#F4F3ED", "#FEFDF8", "#EAECE4", "#E1E6DC", "#CCD4C9", "#8C9E8E", "#202C25", "#4C6053", "#62786A", "#A9C9B4", "#DCE9DF")
+        new UiTheme("Sage", "#111613", "#191F1B", "#232B25", "#303B32", "#364239", "#718E83", "#F3F5EC", "#C0CFC7", "#9AACAA", "#DDF79D", "#303D26"),
+        new UiTheme("Midnight", "#111318", "#191D25", "#232A35", "#303A48", "#384354", "#62779A", "#EDF3FF", "#BACAE2", "#9BACBF", "#ABCFFF", "#263447"),
+        new UiTheme("Amethyst", "#161318", "#1F1B22", "#2A2430", "#39313F", "#44394C", "#80678F", "#F5EDFF", "#D2C1DF", "#B49BC6", "#D5B6F4", "#3B2D47"),
+        new UiTheme("Ember", "#141313", "#1D1B1A", "#272322", "#36302B", "#3D3631", "#8C6C55", "#F6F1EB", "#D5C7BA", "#B5A393", "#EFC29B", "#382C24"),
+        new UiTheme("Daylight", "#F4F3ED", "#FEFDF8", "#EAECE4", "#E1E6DC", "#CCD4C9", "#8C9E8E", "#202C25", "#4C6053", "#52675A", "#A9C9B4", "#DCE9DF")
     };
     public static UiTheme Current { get; private set; } = Themes[0];
     public static event Action? Changed;
@@ -41,7 +53,7 @@ internal static class UiAppearance
             ("TextPrimaryBrush", theme.Text), ("TextSecondaryBrush", theme.Secondary), ("TextTertiaryBrush", theme.Muted),
             ("DangerBrush", theme.Name == "Daylight" ? "#AD4040" : "#E49B94"),
             ("GoodBrush", theme.Name == "Daylight" ? "#34724B" : "#98CAA5"),
-            ("SignalBrush", theme.Name == "Daylight" ? "#986620" : "#D9AF6E")
+            ("SignalBrush", theme.Name == "Daylight" ? "#80551B" : "#D9AF6E")
         }) resources[key] = new SolidColorBrush(Parse(hex));
         resources["BgColor"] = Parse(theme.Background);
         var accent = Parse(theme.Accent);
@@ -49,7 +61,30 @@ internal static class UiAppearance
         var colorKeys = new[] { "SceneAccentColor", "SceneAccentHoverColor", "SceneAccentPressedColor", "SceneAccentSubtleColor" };
         var brushKeys = new[] { "AccentBrush", "AccentHoverBrush", "AccentPressedBrush", "AccentSubtleBrush" };
         for (var i = 0; i < accents.Length; i++) { resources[colorKeys[i]] = accents[i]; resources[brushKeys[i]] = new SolidColorBrush(accents[i]); }
+        resources["AccentTextBrush"] = ReadableAccent(accent);
+        if (SystemParameters.HighContrast)
+        {
+            foreach (var key in new[] { "BgBrush", "SurfaceBrush", "SurfaceRaisedBrush", "SurfaceHoverBrush", "AccentSubtleBrush" }) resources[key] = SystemColors.WindowBrush;
+            foreach (var key in new[] { "TextPrimaryBrush", "TextSecondaryBrush", "TextTertiaryBrush", "BorderBrush", "BorderStrongBrush", "DangerBrush", "GoodBrush", "SignalBrush" }) resources[key] = SystemColors.WindowTextBrush;
+            foreach (var key in new[] { "AccentBrush", "AccentHoverBrush", "AccentPressedBrush", "AccentTextBrush" }) resources[key] = SystemColors.HighlightBrush;
+            resources["BgColor"] = SystemColors.WindowColor;
+        }
         Changed?.Invoke();
+    }
+
+    internal static System.Windows.Media.Brush ReadableAccent(Color accent)
+    {
+        var surfaces = new[] { Current.Background, Current.Surface, Current.Raised, Current.Subtle }.Select(Parse).ToArray();
+        var target = Current.Name == "Daylight" ? Colors.Black : Colors.White;
+        for (var step = 0; step <= 20; step++)
+        {
+            var candidate = Mix(accent, target, step / 20d);
+            var luminance = AccentInkConverter.Luminance(candidate);
+            if (surfaces.All(surface => (Math.Max(luminance, AccentInkConverter.Luminance(surface)) + .05)
+                / (Math.Min(luminance, AccentInkConverter.Luminance(surface)) + .05) >= 4.5))
+                return new SolidColorBrush(candidate);
+        }
+        return new SolidColorBrush(target);
     }
 
     private static ResourceDictionary FindPalette(ResourceDictionary resources)
@@ -167,4 +202,27 @@ internal static class UiAppearance
         DwmSetWindowAttribute(handle, 35, ref caption, sizeof(int));
         return borderResult == 0;
     }
+}
+
+internal sealed class AccentInkConverter : IValueConverter
+{
+    internal static double Luminance(Color color)
+    {
+        static double Channel(byte value) { var c = value / 255d; return c <= .04045 ? c / 12.92 : Math.Pow((c + .055) / 1.055, 2.4); }
+        return .2126 * Channel(color.R) + .7152 * Channel(color.G) + .0722 * Channel(color.B);
+    }
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is SolidColorBrush brush && Luminance(brush.Color) < .179 ? Brushes.White : Brushes.Black;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+internal sealed class GalleryCardWidthConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        var width = value is double actual && actual > 0 ? actual : 620;
+        var columns = Math.Max(1, (int)Math.Floor(width / 206));
+        return Math.Max(150, Math.Min(240, (width - 14 * columns) / columns));
+    }
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }

@@ -36,6 +36,7 @@ internal partial class LibraryWindow
     private string _marketQuery = "";
     private string _marketSorting = "toplist";
     private string _marketMinimumResolution = "";
+    private bool _marketLandscapeOnly;
     private WallhavenWallpaper? _marketSelected;
     private WallpaperAsset? _marketDownloadedAsset;
     private Window? _marketPreviewWindow;
@@ -114,6 +115,12 @@ internal partial class LibraryWindow
             await SearchMarketplaceAsync();
     }
 
+    private async void MarketOrientation_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_marketInitialized && MarketPane.Visibility == Visibility.Visible)
+            await SearchMarketplaceAsync();
+    }
+
     private async void MarketSort_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _marketDownloading || sender is not Button { Tag: string sorting } selected || sorting == _marketSorting) return;
@@ -136,6 +143,7 @@ internal partial class LibraryWindow
         _marketDetailCancellation?.Cancel();
         _marketQuery = MarketSearchBox.Text.Trim();
         _marketMinimumResolution = (MarketResolution.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
+        _marketLandscapeOnly = MarketLandscapeOnly.IsChecked == true;
         _marketPage = _marketLastPage = 0;
         _marketInitialized = false;
         _marketEntries.Clear();
@@ -161,7 +169,7 @@ internal partial class LibraryWindow
         var token = request.Token;
         try
         {
-            var page = await _marketClient.SearchAsync(_marketQuery, _marketSorting, _marketMinimumResolution, _marketPage + 1, token);
+            var page = await _marketClient.SearchAsync(_marketQuery, _marketSorting, _marketMinimumResolution, _marketPage + 1, token, _marketLandscapeOnly);
             if (token.IsCancellationRequested || _closed || request != _marketSearchCancellation) return;
             var knownIds = _marketEntries.Select(x => x.Wallpaper.Id).ToHashSet();
             var entries = page.Wallpapers.Where(x => knownIds.Add(x.Id)).Select(x => new MarketEntry(x)).ToArray();
@@ -171,7 +179,9 @@ internal partial class LibraryWindow
             _marketTotal = page.Total;
             _marketInitialized = true;
             MarketStatusText.Text = $"{_marketEntries.Count} loaded · {_marketTotal:N0} results on Wallhaven";
-            MarketEmptyText.Text = "No matching wallpapers. Try another tag or a lower resolution.";
+            MarketEmptyText.Text = _marketLandscapeOnly
+                ? "No matching landscape wallpapers. Try another tag, a lower resolution, or turn off Landscape only."
+                : "No matching wallpapers. Try another tag or a lower resolution.";
             _ = LoadMarketThumbnailsAsync(entries, token);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }

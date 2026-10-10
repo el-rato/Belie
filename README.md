@@ -6,11 +6,20 @@ of images, a single image, or a **video/GIF**, and switch your desktop wallpaper
 (battery, idle, or a program launches).
 
 It lives quietly in the **system tray** (bottom-right corner of the taskbar). You never need to
-know C# or .NET to use it. The UI is a dark **cyberpunk** theme with neon accents.
+know C# or .NET to use it. Choose from four dark themes and the light Daylight theme.
 
 ## Download
 
 [Download the latest Windows release](https://github.com/el-rato/Wallpaper-Profile-App/releases/latest/download/Belie.exe).
+
+### New in 3.1.0
+
+- Polished navigation, larger wallpaper previews, responsive galleries, and subtle interaction feedback.
+- Profile keyboard shortcuts for quick switching, including while Belie is in the tray.
+- Customizable Now playing widgets with a transparent Rainmeter style, song details, and a thin progress line.
+- Music-player filtering that ignores browser and video playback, plus optional album art and playback controls.
+- Drag the song text to position an unlocked music widget on the desktop.
+- Landscape-only wallpaper discovery and clearer save, apply, and unsaved-change feedback.
 
 ---
 
@@ -22,7 +31,7 @@ You need the **.NET 8 SDK**. Open a terminal **in this folder** and run:
 dotnet build -c Debug
 ```
 
-The compiled app appears in `bin\Debug\net8.0-windows\Belie.exe`.
+The compiled app appears in `bin\Debug\net8.0-windows10.0.19041.0\Belie.exe`.
 
 Unit tests (resolver, schedule rules, profile storage):
 
