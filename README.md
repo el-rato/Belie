@@ -12,6 +12,15 @@ know C# or .NET to use it. Choose from four dark themes and the light Daylight t
 
 [Download the latest Windows release](https://github.com/el-rato/Wallpaper-Profile-App/releases/latest/download/Belie.exe).
 
+### New in 3.1.1
+
+- Transparent clock widgets with a script weekday, date, time, and optional greeting.
+- Live visualizer bars that react to desktop audio from your default speakers or headphones.
+- Clock options for 12/24-hour time, greeting visibility, and the audio visualizer.
+- Stronger glass blur and tint with less glare for clearer widget text.
+
+Choose **Widgets → + Clock → Create** to add the new clock.
+
 ### New in 3.1.0
 
 - Polished navigation, larger wallpaper previews, responsive galleries, and subtle interaction feedback.

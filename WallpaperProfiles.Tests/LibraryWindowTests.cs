@@ -1399,10 +1399,10 @@ public sealed class LibraryWindowTests
                     Assert.Equal(screen.WorkingArea.Bottom - bounds.Height, bounds.Y);
                     var frost = (Border)type.GetField("_frost", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(renderer)!;
                     var brush = Assert.IsType<ImageBrush>(frost.Background);
-                    Assert.Equal((320 + 48) * factor / screen.Bounds.Width, brush.Viewbox.Width, precision: 6);
-                    Assert.Equal((200 + 48) * factor / screen.Bounds.Height, brush.Viewbox.Height, precision: 6);
-                    Assert.Equal((bounds.X - 24 * factor - screen.Bounds.Left) / screen.Bounds.Width, brush.Viewbox.X, precision: 6);
-                    Assert.Equal((bounds.Y - 24 * factor - screen.Bounds.Top) / screen.Bounds.Height, brush.Viewbox.Y, precision: 6);
+                    Assert.Equal((320 + 96) * factor / screen.Bounds.Width, brush.Viewbox.Width, precision: 6);
+                    Assert.Equal((200 + 96) * factor / screen.Bounds.Height, brush.Viewbox.Height, precision: 6);
+                    Assert.Equal((bounds.X - 48 * factor - screen.Bounds.Left) / screen.Bounds.Width, brush.Viewbox.X, precision: 6);
+                    Assert.Equal((bounds.Y - 48 * factor - screen.Bounds.Top) / screen.Bounds.Height, brush.Viewbox.Y, precision: 6);
                 }
                 Assert.Equal(screen.WorkingArea.Right - 10, widget.X);
                 Assert.Equal(screen.WorkingArea.Bottom - 10, widget.Y);

@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace WallpaperProfiles.Persistence;
 
-internal enum DesktopWidgetKind { Note, Countdown, Image, Link, Sketch, NowPlaying }
+internal enum DesktopWidgetKind { Note, Countdown, Image, Link, Sketch, NowPlaying, Clock }
 internal enum NowPlayingLayout { Horizontal, Stacked, Minimal }
 internal enum WidgetTextAlignment { Left, Center, Right }
 internal enum WidgetImageFit { Fit, Fill, Stretch }
@@ -44,6 +44,9 @@ internal sealed class DesktopWidget
     public bool ShowPlaybackControls { get; set; } = true;
     public bool ShowPlaybackProgress { get; set; } = true;
     public string MusicAccentColor { get; set; } = "#A9C9B4";
+    public bool ClockUse24Hour { get; set; }
+    public bool ClockShowGreeting { get; set; } = true;
+    public bool ClockShowVisualizer { get; set; } = true;
     public WidgetImageFit ImageFit { get; set; }
     public string Drawing { get; set; } = "";
     public double DrawingWidth { get; set; } = 300;

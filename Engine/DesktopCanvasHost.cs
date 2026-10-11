@@ -185,7 +185,8 @@ internal sealed class DesktopWidgetWindow : Window
     private readonly Grid _grid = new();
     private readonly Border _header = new();
     private readonly Grid _glass = new() { IsHitTestVisible = false };
-    private readonly Border _frost = new() { Margin = new Thickness(-24), Effect = new BlurEffect { Radius = 24, RenderingBias = RenderingBias.Performance } };
+    private const double FrostRadius = 48;
+    private readonly Border _frost = new() { Margin = new Thickness(-FrostRadius), Effect = new BlurEffect { Radius = FrostRadius, RenderingBias = RenderingBias.Performance } };
     private readonly Border _glassTint = new();
     private readonly Border _reflection = new();
     private static BitmapSource? _wallpaper;
@@ -309,8 +310,8 @@ internal sealed class DesktopWidgetWindow : Window
         _card.Child = surface;
         _glass.SizeChanged += (_, _) => UpdateGlassClip();
         Content = _card;
-        _card.MouseEnter += (_, _) => { if (_widget.Kind == DesktopWidgetKind.NowPlaying) _resize.Opacity = .5; };
-        _card.MouseLeave += (_, _) => { if (_widget.Kind == DesktopWidgetKind.NowPlaying) _resize.Opacity = 0; };
+        _card.MouseEnter += (_, _) => { if (_widget.Kind is DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock) _resize.Opacity = .5; };
+        _card.MouseLeave += (_, _) => { if (_widget.Kind is DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock) _resize.Opacity = 0; };
         _card.PreviewMouseLeftButtonDown += (_, e) =>
         {
             if (_widget.Kind != DesktopWidgetKind.NowPlaying || HasHeader || _widget.Locked) return;
@@ -436,11 +437,11 @@ internal sealed class DesktopWidgetWindow : Window
         {
             var tint = ColorBrush(widget.BackgroundColor, Color.FromRgb(24, 35, 51)).Color;
             _glassTint.Background = new LinearGradientBrush(new GradientStopCollection {
-                new(Color.FromArgb(95, tint.R, tint.G, tint.B), 0), new(Color.FromArgb(130, tint.R, tint.G, tint.B), .6),
-                new(Color.FromArgb(155, tint.R, tint.G, tint.B), 1) }, 90);
+                new(Color.FromArgb(165, tint.R, tint.G, tint.B), 0), new(Color.FromArgb(185, tint.R, tint.G, tint.B), .6),
+                new(Color.FromArgb(200, tint.R, tint.G, tint.B), 1) }, 90);
             _reflection.Background = new LinearGradientBrush(new GradientStopCollection {
-                new(Color.FromArgb(85, 255, 255, 255), 0), new(Color.FromArgb(18, 255, 255, 255), .32),
-                new(Colors.Transparent, .58), new(Color.FromArgb(12, 230, 241, 255), 1) },
+                new(Color.FromArgb(36, 255, 255, 255), 0), new(Color.FromArgb(10, 255, 255, 255), .32),
+                new(Colors.Transparent, .58), new(Color.FromArgb(8, 230, 241, 255), 1) },
                 new System.Windows.Point(0, 0), new System.Windows.Point(1, 1));
             UpdateGlassClip();
             RefreshGlass();
@@ -449,10 +450,11 @@ internal sealed class DesktopWidgetWindow : Window
         _grid.RowDefinitions[0].Height = new GridLength(HasHeader ? 38 : 0);
         _body.Margin = new Thickness(16, HasHeader ? 4 : 16, 16, 18);
         _resize.Visibility = widget.Locked ? Visibility.Collapsed : Visibility.Visible;
-        _resize.Opacity = widget.Kind == DesktopWidgetKind.NowPlaying && !_card.IsMouseOver ? 0 : .5;
+        _resize.Opacity = widget.Kind is (DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock) && !_card.IsMouseOver ? 0 : .5;
         _title.Text = widget.Title;
         Title = "Belie widget · " + widget.DisplayTitle;
         var appearance = widget.Kind + "\n" + widget.Content + "\n" + widget.FontSize + "\n" + widget.Alignment + "\n" + widget.ImageFit;
+        if (widget.Kind == DesktopWidgetKind.Clock) appearance = $"Clock|{widget.Id}";
         if (widget.Kind == DesktopWidgetKind.Link)
             appearance += $"|{widget.LinkPageTitle}|{widget.LinkDescription}|{widget.LinkCustomDescription}|{widget.LeetCodeUsername}|{widget.LinkUpdatedAt}|{DateTime.UtcNow.Date}";
         if (widget.Kind == DesktopWidgetKind.Sketch)
@@ -501,10 +503,14 @@ internal sealed class DesktopWidgetWindow : Window
                 case DesktopWidgetKind.NowPlaying:
                     _body.Content = new NowPlayingView(widget);
                     break;
+                case DesktopWidgetKind.Clock:
+                    _body.Content = new ClockWidgetView(widget);
+                    break;
             }
         }
         if (widget.Kind == DesktopWidgetKind.Sketch) _sketch?.UpdateDrawing(widget);
         if (_body.Content is NowPlayingView music) music.UpdateAppearance(widget);
+        if (_body.Content is ClockWidgetView clock) clock.UpdateAppearance(widget);
         RefreshCountdown();
         Place();
     }
@@ -648,8 +654,8 @@ internal sealed class DesktopWidgetWindow : Window
         var position = $"{_wallpaperKey}|{_wallpaperStyle}|{_widget.X}|{_widget.Y}|{Width}|{Height}|{scale.M11}|{bounds}";
         if (_glassPosition == position) return;
         _glassPosition = position;
-        _frost.Background = WallpaperBrush(new Rect(_widget.X - 24 * scale.M11, _widget.Y - 24 * scale.M22,
-            (Width + 48) * scale.M11, (Height + 48) * scale.M22), bounds) ?? (System.Windows.Media.Brush)Brushes.Transparent;
+        _frost.Background = WallpaperBrush(new Rect(_widget.X - FrostRadius * scale.M11, _widget.Y - FrostRadius * scale.M22,
+            (Width + 2 * FrostRadius) * scale.M11, (Height + 2 * FrostRadius) * scale.M22), bounds) ?? (System.Windows.Media.Brush)Brushes.Transparent;
     }
 
     public static IntPtr FindDesktop()

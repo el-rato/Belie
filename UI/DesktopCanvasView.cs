@@ -82,6 +82,10 @@ internal sealed class DesktopCanvasView : UserControl
     private readonly TextBox _linkDescription = new() { TextWrapping = TextWrapping.Wrap };
     private readonly TextBox _leetCodeUser = new();
     private readonly StackPanel _musicFields = new();
+    private readonly StackPanel _clockFields = new();
+    private readonly CheckBox _clock24Hour = new() { Content = "Use 24-hour time" };
+    private readonly CheckBox _clockGreeting = new() { Content = "Show greeting" };
+    private readonly CheckBox _clockVisualizer = new() { Content = "Show desktop audio visualizer" };
     private readonly ComboBox _musicLayout = new() { ItemsSource = Enum.GetValues<NowPlayingLayout>() };
     private readonly CheckBox _albumArt = new() { Content = "Show album art" };
     private readonly CheckBox _playbackControls = new() { Content = "Show playback controls" };
@@ -110,7 +114,8 @@ internal sealed class DesktopCanvasView : UserControl
         Glass = _glassEffect.IsChecked, Enabled = _enabled.IsChecked, Locked = _locked.IsChecked,
         Description = _linkDescription.Text, User = _leetCodeUser.Text,
         MusicLayout = _musicLayout.SelectedItem, Art = _albumArt.IsChecked, Controls = _playbackControls.IsChecked,
-        Progress = _playbackProgress.IsChecked, MusicAccent = _musicAccent.Text });
+        Progress = _playbackProgress.IsChecked, MusicAccent = _musicAccent.Text,
+        Clock24Hour = _clock24Hour.IsChecked, ClockGreeting = _clockGreeting.IsChecked, ClockVisualizer = _clockVisualizer.IsChecked });
     internal bool IsDraftDirty => !_loading && _selected != null && (_isNew || _savedDraft != DraftSnapshot());
     internal bool TryLeaveDraft()
     {
@@ -209,7 +214,7 @@ internal sealed class DesktopCanvasView : UserControl
         _save.IsEnabled = false; _duplicate.IsEnabled = false; _delete.IsEnabled = false;
         foreach (var box in new[] { _title, _content, _textColor, _backgroundColor, _borderColor, _time, _linkDescription, _leetCodeUser, _musicAccent }) box.TextChanged += (_, _) => RefreshPreview();
         _musicLayout.SelectionChanged += (_, _) => RefreshPreview();
-        foreach (var option in new[] { _albumArt, _playbackControls, _playbackProgress })
+        foreach (var option in new[] { _albumArt, _playbackControls, _playbackProgress, _clock24Hour, _clockGreeting, _clockVisualizer })
         { option.Checked += (_, _) => RefreshPreview(); option.Unchecked += (_, _) => RefreshPreview(); }
         foreach (var (name, element) in new (string, FrameworkElement)[] { ("WidgetMusicLayout", _musicLayout), ("WidgetAlbumArt", _albumArt),
             ("WidgetPlaybackControls", _playbackControls), ("WidgetPlaybackProgress", _playbackProgress), ("WidgetMusicAccent", _musicAccent) })
@@ -248,7 +253,7 @@ internal sealed class DesktopCanvasView : UserControl
         var subtitle = new TextBlock { Text = "Add, arrange, and customize your desktop widgets.", Style = (Style)FindResource("WorkspaceCaption") };
         heading.Children.Add(subtitle);
         var quickAdd = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };
-        foreach (var kind in new[] { DesktopWidgetKind.Note, DesktopWidgetKind.Image, DesktopWidgetKind.Countdown, DesktopWidgetKind.NowPlaying })
+        foreach (var kind in new[] { DesktopWidgetKind.Note, DesktopWidgetKind.Image, DesktopWidgetKind.Countdown, DesktopWidgetKind.NowPlaying, DesktopWidgetKind.Clock })
         {
             var captured = kind;
             var quick = ActionButton("+ " + (kind == DesktopWidgetKind.NowPlaying ? "Now playing" : kind.ToString()), "QuickAdd" + kind + "Button", () => Add(captured));
@@ -345,6 +350,13 @@ internal sealed class DesktopCanvasView : UserControl
         foreach (var option in new[] { _albumArt, _playbackControls, _playbackProgress }) { option.Margin = new Thickness(0, 10, 0, 0); _musicFields.Children.Add(option); }
         ColorField("Playback accent", _musicAccent, _musicFields);
         _contentPage.Children.Add(_musicFields);
+        _clockFields.Children.Add(new TextBlock { Text = "A script weekday, date, time, and live desktop audio. Bars react to your default speakers or headphones and settle when silent.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), FontSize = 12 });
+        foreach (var (name, option) in new[] { ("Clock24Hour", _clock24Hour), ("ClockGreeting", _clockGreeting), ("ClockVisualizer", _clockVisualizer) })
+        {
+            option.Margin = new Thickness(0, 10, 0, 0); _clockFields.Children.Add(option); RegisterName(name, option);
+            System.Windows.Automation.AutomationProperties.SetName(option, option.Content.ToString());
+        }
+        _contentPage.Children.Add(_clockFields);
         Field(_targetFields, "Date", _date); Field(_targetFields, "Time · HH:mm", _time); _contentPage.Children.Add(_targetFields);
         var presets = new WrapPanel();
         foreach (var name in new[] { "Rainmeter", "Glass", "Paper", "Minimal", "Gothic", "Cathedral", "Crimson", "Parchment", "Royal", "Neon", "Terminal" })
@@ -532,6 +544,9 @@ internal sealed class DesktopCanvasView : UserControl
         widget.ShowPlaybackControls = _playbackControls.IsChecked == true;
         widget.ShowPlaybackProgress = _playbackProgress.IsChecked == true;
         widget.MusicAccentColor = _musicAccent.Text.Trim().ToUpperInvariant();
+        widget.ClockUse24Hour = _clock24Hour.IsChecked == true;
+        widget.ClockShowGreeting = _clockGreeting.IsChecked == true;
+        widget.ClockShowVisualizer = _clockVisualizer.IsChecked == true;
         widget.BorderColor = _borderColor.Text.Trim().ToUpperInvariant(); widget.BorderWidth = _borderWidth.Value;
     }
     private void QueuePreview()
@@ -602,6 +617,11 @@ internal sealed class DesktopCanvasView : UserControl
         if (name == "Rainmeter")
         {
             _showHeader.IsChecked = _showBorder.IsChecked = _showBackground.IsChecked = _glassEffect.IsChecked = false;
+            if (_selected?.Kind == DesktopWidgetKind.Clock)
+            {
+                _font.Text = ClockWidgetView.ScriptFont; _fontSize.Value = 76;
+                _width.Value = 520; _height.Value = 310; _alignment.SelectedItem = WidgetTextAlignment.Center;
+            }
             if (_selected?.Kind == DesktopWidgetKind.NowPlaying)
             {
                 _musicLayout.SelectedItem = NowPlayingLayout.Minimal;
@@ -712,11 +732,13 @@ internal sealed class DesktopCanvasView : UserControl
         var offset = document.Widgets.Count % 8 * 28;
         Select(new DesktopWidget { Kind = kind, Title = kind == DesktopWidgetKind.NowPlaying ? "Now playing" : kind == DesktopWidgetKind.Note ? "A little reminder" : "New " + kind.ToString().ToLowerInvariant(),
             ProfileId = (_scopeFilter.SelectedItem as ProfileChoice)?.Id,
-            Content = kind == DesktopWidgetKind.Note ? "Make room for what matters." : "", FontSize = kind == DesktopWidgetKind.NowPlaying ? 24 : kind == DesktopWidgetKind.Countdown ? 30 : 16,
-            Width = kind == DesktopWidgetKind.NowPlaying ? 360 : 300, Height = kind == DesktopWidgetKind.NowPlaying ? 140 : 230,
+            Content = kind == DesktopWidgetKind.Note ? "Make room for what matters." : "", FontSize = kind == DesktopWidgetKind.Clock ? 76 : kind == DesktopWidgetKind.NowPlaying ? 24 : kind == DesktopWidgetKind.Countdown ? 30 : 16,
+            FontFamily = kind == DesktopWidgetKind.Clock ? ClockWidgetView.ScriptFont : "Segoe UI",
+            Alignment = kind == DesktopWidgetKind.Clock ? WidgetTextAlignment.Center : WidgetTextAlignment.Left,
+            Width = kind == DesktopWidgetKind.Clock ? 520 : kind == DesktopWidgetKind.NowPlaying ? 360 : 300, Height = kind == DesktopWidgetKind.Clock ? 310 : kind == DesktopWidgetKind.NowPlaying ? 140 : 230,
             MusicLayout = NowPlayingLayout.Minimal, ShowAlbumArt = kind != DesktopWidgetKind.NowPlaying, ShowPlaybackControls = kind != DesktopWidgetKind.NowPlaying,
             MusicAccentColor = "#F1F2EE",
-            ShowHeader = kind != DesktopWidgetKind.NowPlaying, ShowBorder = kind != DesktopWidgetKind.NowPlaying, ShowBackground = kind != DesktopWidgetKind.NowPlaying,
+            ShowHeader = kind is not (DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock), ShowBorder = kind is not (DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock), ShowBackground = kind is not (DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock),
             X = area.Right - 340 - offset, Y = area.Top + 70 + offset }, true);
         if (kind == DesktopWidgetKind.Link) _leetCodeUser.Text = "_Unkillable__Demon_King";
         _loading = true; _list.SelectedItem = null; _loading = false;
@@ -739,6 +761,8 @@ internal sealed class DesktopCanvasView : UserControl
         _linkDescription.Text = widget.LinkCustomDescription; _leetCodeUser.Text = widget.LeetCodeUsername;
         _linkFields.Visibility = widget.Kind == DesktopWidgetKind.Link ? Visibility.Visible : Visibility.Collapsed;
         _musicFields.Visibility = widget.Kind == DesktopWidgetKind.NowPlaying ? Visibility.Visible : Visibility.Collapsed;
+        _clockFields.Visibility = widget.Kind == DesktopWidgetKind.Clock ? Visibility.Visible : Visibility.Collapsed;
+        _clock24Hour.IsChecked = widget.ClockUse24Hour; _clockGreeting.IsChecked = widget.ClockShowGreeting; _clockVisualizer.IsChecked = widget.ClockShowVisualizer;
         _musicLayout.SelectedItem = widget.MusicLayout; _albumArt.IsChecked = widget.ShowAlbumArt;
         _playbackControls.IsChecked = widget.ShowPlaybackControls; _playbackProgress.IsChecked = widget.ShowPlaybackProgress;
         _musicAccent.Text = widget.MusicAccentColor;
@@ -756,7 +780,7 @@ internal sealed class DesktopCanvasView : UserControl
         _showBackground.IsChecked = widget.ShowBackground;
         _enabled.IsChecked = widget.Enabled; _locked.IsChecked = widget.Locked;
         _targetFields.Visibility = widget.Kind == DesktopWidgetKind.Countdown ? Visibility.Visible : Visibility.Collapsed;
-        _content.Visibility = widget.Kind is DesktopWidgetKind.Countdown or DesktopWidgetKind.Sketch or DesktopWidgetKind.NowPlaying ? Visibility.Collapsed : Visibility.Visible;
+        _content.Visibility = widget.Kind is DesktopWidgetKind.Countdown or DesktopWidgetKind.Sketch or DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock ? Visibility.Collapsed : Visibility.Visible;
         _contentLabel.Visibility = _content.Visibility;
         _contentLabel.Text = widget.Kind switch { DesktopWidgetKind.Image => "Image file", DesktopWidgetKind.Link => "Website address (https://…)", _ => "Your note" };
         _browse.Visibility = widget.Kind == DesktopWidgetKind.Image ? Visibility.Visible : Visibility.Collapsed;
