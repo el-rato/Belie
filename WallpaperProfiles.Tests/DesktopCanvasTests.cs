@@ -39,7 +39,7 @@ public sealed class DesktopCanvasTests
     {
         using var fixture = new CanvasFixture();
         var widget = new DesktopWidget { Kind = DesktopWidgetKind.NowPlaying, MusicLayout = NowPlayingLayout.Minimal,
-            ShowAlbumArt = false, ShowPlaybackControls = false, ShowPlaybackProgress = false, MusicAccentColor = "#FF8855",
+            ShowAlbumArt = false, ShowPlaybackControls = false, ShowPlaybackProgress = false, ShowAudioVisualizer = true, MusicAccentColor = "#FF8855",
             ShowBorder = false, ShowBackground = false, ShowHeader = false };
         fixture.Store.Save(new DesktopCanvasDocument { Enabled = true, Widgets = new() { widget } });
         fixture.Store.UpdateLayout(widget.Id, 400, 500, 420, 190);
@@ -48,6 +48,7 @@ public sealed class DesktopCanvasTests
         Assert.NotEqual(saved.Id, copy.Id);
         Assert.Equal(NowPlayingLayout.Minimal, copy.MusicLayout);
         Assert.Equal("#FF8855", copy.MusicAccentColor);
+        Assert.True(copy.ShowAudioVisualizer);
         Assert.False(copy.ShowAlbumArt); Assert.False(copy.ShowPlaybackControls); Assert.False(copy.ShowPlaybackProgress);
         Assert.False(copy.ShowBorder); Assert.False(copy.ShowBackground); Assert.False(copy.ShowHeader);
     }

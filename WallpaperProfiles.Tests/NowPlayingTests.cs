@@ -81,6 +81,18 @@ public sealed class NowPlayingTests
                     await view.RefreshAsync();
                     Assert.Contains(Children(view).OfType<TextBlock>(), t => t.Text == "First song");
                     Assert.Contains(Children(view).OfType<Button>(), b => Equals(b.ToolTip, "Pause") && b.IsEnabled);
+                    var spectrum = Assert.Single(Children(view).OfType<AudioSpectrumView>());
+                    Assert.Equal(Visibility.Collapsed, spectrum.Visibility);
+                    widget.ShowAudioVisualizer = true; widget.MusicAccentColor = "#FF8855";
+                    foreach (var layout in Enum.GetValues<NowPlayingLayout>())
+                    {
+                        widget.MusicLayout = layout; view.UpdateAppearance(widget);
+                        Assert.Equal(Visibility.Visible, spectrum.Visibility);
+                        Assert.All(Children(spectrum).OfType<System.Windows.Shapes.Line>(), bar =>
+                            Assert.Equal("#FFFF8855", ((SolidColorBrush)bar.Stroke).Color.ToString()));
+                    }
+                    widget.ShowAudioVisualizer = false; view.UpdateAppearance(widget);
+                    Assert.Equal(Visibility.Collapsed, spectrum.Visibility);
                     await view.SendAsync(PlaybackCommand.Toggle, TimeSpan.Zero);
                     Assert.Equal(PlaybackCommand.Toggle, Assert.Single(source.Commands).Command);
                     await view.SendAsync(PlaybackCommand.Seek, TimeSpan.FromHours(2));

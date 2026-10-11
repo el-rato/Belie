@@ -478,10 +478,15 @@ public sealed class LibraryWindowTests
         ((ComboBox)view.FindName("WidgetMusicLayout")).SelectedItem = NowPlayingLayout.Stacked;
         ((CheckBox)view.FindName("WidgetAlbumArt")).IsChecked = false;
         ((TextBox)view.FindName("WidgetMusicAccent")).Text = "#FF8855";
+        var spectrumOption = (CheckBox)view.FindName("WidgetAudioVisualizer");
+        Assert.True(spectrumOption.IsVisible);
+        spectrumOption.IsChecked = true;
         Assert.True(view.IsDraftDirty);
         Press("SaveWidgetButton");
         saved = store.Load().Widgets.Single(widget => widget.Id == saved.Id);
         Assert.Equal(NowPlayingLayout.Stacked, saved.MusicLayout);
+        Assert.True(saved.ShowAudioVisualizer);
+        Assert.True(saved.Height >= 380);
         Assert.False(saved.ShowAlbumArt); Assert.Equal("#FF8855", saved.MusicAccentColor);
         RenderWorkspace(main, "now-playing-editor", 1040, 790);
         Press("DuplicateWidgetButton");

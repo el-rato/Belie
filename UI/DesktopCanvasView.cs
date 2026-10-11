@@ -90,6 +90,7 @@ internal sealed class DesktopCanvasView : UserControl
     private readonly CheckBox _albumArt = new() { Content = "Show album art" };
     private readonly CheckBox _playbackControls = new() { Content = "Show playback controls" };
     private readonly CheckBox _playbackProgress = new() { Content = "Show progress and time" };
+    private readonly CheckBox _audioVisualizer = new() { Content = "Show audio spectrum", ToolTip = "Live bars react to desktop audio from your default speakers or headphones." };
     private readonly TextBox _musicAccent = new() { MaxLength = 7 };
     private readonly StackPanel _contentPage = new(), _stylePage = new(), _layoutPage = new();
     private readonly ScrollViewer _editorScroll = new() { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
@@ -114,7 +115,7 @@ internal sealed class DesktopCanvasView : UserControl
         Glass = _glassEffect.IsChecked, Enabled = _enabled.IsChecked, Locked = _locked.IsChecked,
         Description = _linkDescription.Text, User = _leetCodeUser.Text,
         MusicLayout = _musicLayout.SelectedItem, Art = _albumArt.IsChecked, Controls = _playbackControls.IsChecked,
-        Progress = _playbackProgress.IsChecked, MusicAccent = _musicAccent.Text,
+        Progress = _playbackProgress.IsChecked, AudioVisualizer = _audioVisualizer.IsChecked, MusicAccent = _musicAccent.Text,
         Clock24Hour = _clock24Hour.IsChecked, ClockGreeting = _clockGreeting.IsChecked, ClockVisualizer = _clockVisualizer.IsChecked });
     internal bool IsDraftDirty => !_loading && _selected != null && (_isNew || _savedDraft != DraftSnapshot());
     internal bool TryLeaveDraft()
@@ -214,10 +215,15 @@ internal sealed class DesktopCanvasView : UserControl
         _save.IsEnabled = false; _duplicate.IsEnabled = false; _delete.IsEnabled = false;
         foreach (var box in new[] { _title, _content, _textColor, _backgroundColor, _borderColor, _time, _linkDescription, _leetCodeUser, _musicAccent }) box.TextChanged += (_, _) => RefreshPreview();
         _musicLayout.SelectionChanged += (_, _) => RefreshPreview();
-        foreach (var option in new[] { _albumArt, _playbackControls, _playbackProgress, _clock24Hour, _clockGreeting, _clockVisualizer })
+        foreach (var option in new[] { _albumArt, _playbackControls, _playbackProgress, _audioVisualizer, _clock24Hour, _clockGreeting, _clockVisualizer })
         { option.Checked += (_, _) => RefreshPreview(); option.Unchecked += (_, _) => RefreshPreview(); }
+        _audioVisualizer.Checked += (_, _) =>
+        {
+            if (!_loading && _selected?.Kind == DesktopWidgetKind.NowPlaying)
+                _height.Value = Math.Max(_height.Value, _musicLayout.SelectedItem is NowPlayingLayout.Stacked ? 380 : 220);
+        };
         foreach (var (name, element) in new (string, FrameworkElement)[] { ("WidgetMusicLayout", _musicLayout), ("WidgetAlbumArt", _albumArt),
-            ("WidgetPlaybackControls", _playbackControls), ("WidgetPlaybackProgress", _playbackProgress), ("WidgetMusicAccent", _musicAccent) })
+            ("WidgetPlaybackControls", _playbackControls), ("WidgetPlaybackProgress", _playbackProgress), ("WidgetMusicAccent", _musicAccent), ("WidgetAudioVisualizer", _audioVisualizer) })
         { RegisterName(name, element); System.Windows.Automation.AutomationProperties.SetName(element, name[6..]); }
         _font.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => QueuePreview()), handledEventsToo: true);
         foreach (var slider in new[] { _width, _height, _fontSize, _opacity, _radius, _borderWidth }) slider.ValueChanged += (_, _) => RefreshPreview();
@@ -345,9 +351,9 @@ internal sealed class DesktopCanvasView : UserControl
         _contentLabel.Margin = new Thickness(0, 12, 0, 6); _contentPage.Children.Add(_contentLabel); _contentPage.Children.Add(_content); _contentPage.Children.Add(_browse);
         Field(_linkFields, "Description · optional", _linkDescription); Field(_linkFields, "LeetCode username", _leetCodeUser);
         _linkFields.Children.Add(ActionButton("Refresh details", "RefreshLinkButton", RefreshLink)); _contentPage.Children.Add(_linkFields);
-        _musicFields.Children.Add(new TextBlock { Text = "Music players only, such as Spotify, Apple Music, and TIDAL. Browser playback and videos are ignored. Drag the song text or album art to move the widget.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), FontSize = 12 });
+        _musicFields.Children.Add(new TextBlock { Text = "Song details and controls use music players such as Spotify, Apple Music, and TIDAL. The audio spectrum reacts to all desktop audio. Drag the song text or spectrum to move the widget.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), FontSize = 12 });
         Field(_musicFields, "Player layout", _musicLayout);
-        foreach (var option in new[] { _albumArt, _playbackControls, _playbackProgress }) { option.Margin = new Thickness(0, 10, 0, 0); _musicFields.Children.Add(option); }
+        foreach (var option in new[] { _albumArt, _playbackControls, _playbackProgress, _audioVisualizer }) { option.Margin = new Thickness(0, 10, 0, 0); _musicFields.Children.Add(option); }
         ColorField("Playback accent", _musicAccent, _musicFields);
         _contentPage.Children.Add(_musicFields);
         _clockFields.Children.Add(new TextBlock { Text = "A script weekday, date, time, and live desktop audio. Bars react to your default speakers or headphones and settle when silent.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), FontSize = 12 });
@@ -543,6 +549,7 @@ internal sealed class DesktopCanvasView : UserControl
         widget.ShowAlbumArt = _albumArt.IsChecked == true;
         widget.ShowPlaybackControls = _playbackControls.IsChecked == true;
         widget.ShowPlaybackProgress = _playbackProgress.IsChecked == true;
+        widget.ShowAudioVisualizer = _audioVisualizer.IsChecked == true;
         widget.MusicAccentColor = _musicAccent.Text.Trim().ToUpperInvariant();
         widget.ClockUse24Hour = _clock24Hour.IsChecked == true;
         widget.ClockShowGreeting = _clockGreeting.IsChecked == true;
@@ -626,7 +633,7 @@ internal sealed class DesktopCanvasView : UserControl
             {
                 _musicLayout.SelectedItem = NowPlayingLayout.Minimal;
                 _albumArt.IsChecked = _playbackControls.IsChecked = false; _playbackProgress.IsChecked = true;
-                _fontSize.Value = 24; _width.Value = 360; _height.Value = 140;
+                _fontSize.Value = 24; _width.Value = 360; _height.Value = _audioVisualizer.IsChecked == true ? 220 : 140;
                 _musicAccent.Text = _textColor.Text;
             }
         }
@@ -765,6 +772,7 @@ internal sealed class DesktopCanvasView : UserControl
         _clock24Hour.IsChecked = widget.ClockUse24Hour; _clockGreeting.IsChecked = widget.ClockShowGreeting; _clockVisualizer.IsChecked = widget.ClockShowVisualizer;
         _musicLayout.SelectedItem = widget.MusicLayout; _albumArt.IsChecked = widget.ShowAlbumArt;
         _playbackControls.IsChecked = widget.ShowPlaybackControls; _playbackProgress.IsChecked = widget.ShowPlaybackProgress;
+        _audioVisualizer.IsChecked = widget.ShowAudioVisualizer;
         _musicAccent.Text = widget.MusicAccentColor;
         _date.SelectedDate = widget.Target.LocalDateTime.Date;
         _time.Text = widget.Target.LocalDateTime.ToString("HH:mm", CultureInfo.InvariantCulture);

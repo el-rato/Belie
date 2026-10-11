@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using WallpaperProfiles.Engine;
 using WallpaperProfiles.Persistence;
@@ -16,16 +15,13 @@ internal sealed class ClockWidgetView : System.Windows.Controls.UserControl
 {
     internal static string ScriptFont { get; } = new[] { "Edwardian Script ITC", "French Script MT", "Segoe Script", "Gabriola" }
         .FirstOrDefault(name => Fonts.SystemFontFamilies.Any(font => font.Source.Equals(name, StringComparison.OrdinalIgnoreCase))) ?? "Segoe UI";
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(33) };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly TextBlock _day = new() { Name = "ClockDay", TextAlignment = TextAlignment.Center };
     private readonly TextBlock _date = Detail("ClockDate", 11, .68);
     private readonly TextBlock _time = Detail("ClockTime", 14, 1);
     private readonly TextBlock _greeting = Detail("ClockGreetingText", 11, .75);
-    private readonly System.Windows.Controls.Canvas _wave = new() { Width = 440, Height = 64, Margin = new Thickness(0, 16, 0, 0) };
-    private readonly Line[] _bars = new Line[SpectrumAnalyzer.BarCount];
-    private readonly float[] _levels = new float[SpectrumAnalyzer.BarCount];
+    private readonly AudioSpectrumView _wave = new() { Width = 440, Height = 64, Margin = new Thickness(0, 16, 0, 0) };
     private DesktopWidget _widget;
-    private DesktopAudioSpectrum? _audio;
     private string _minute = "";
 
     public ClockWidgetView(DesktopWidget widget)
@@ -38,18 +34,12 @@ internal sealed class ClockWidgetView : System.Windows.Controls.UserControl
         _time.Margin = new Thickness(0, 4, 0, 0);
         _greeting.Margin = new Thickness(0, 20, 0, 0);
         panel.Children.Add(_day); panel.Children.Add(_date); panel.Children.Add(_time); panel.Children.Add(_greeting);
-        for (var i = 0; i < _bars.Length; i++)
-        {
-            var x = 4 + i * 432d / (_bars.Length - 1);
-            _bars[i] = new Line { X1 = x, X2 = x, Y1 = 31, Y2 = 33, StrokeThickness = 2, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Opacity = .82 };
-            _wave.Children.Add(_bars[i]);
-        }
         panel.Children.Add(_wave);
         Content = new Viewbox { Child = panel, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center };
         UpdateAppearance(widget);
-        _timer.Tick += (_, _) => Tick();
-        Loaded += (_, _) => { Tick(); _timer.Start(); };
-        Unloaded += (_, _) => { _timer.Stop(); StopAudio(); };
+        _timer.Tick += (_, _) => RefreshTime(DateTime.Now);
+        Loaded += (_, _) => { RefreshTime(DateTime.Now); _timer.Start(); };
+        Unloaded += (_, _) => _timer.Stop();
     }
 
     private static TextBlock Detail(string name, double size, double opacity) => new()
@@ -68,9 +58,7 @@ internal sealed class ClockWidgetView : System.Windows.Controls.UserControl
         var alignment = widget.Alignment switch { WidgetTextAlignment.Center => TextAlignment.Center, WidgetTextAlignment.Right => TextAlignment.Right, _ => TextAlignment.Left };
         foreach (var text in new[] { _day, _date, _time, _greeting }) text.TextAlignment = alignment;
         _greeting.Visibility = widget.ClockShowGreeting ? Visibility.Visible : Visibility.Collapsed;
-        _wave.Visibility = widget.ClockShowVisualizer ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var bar in _bars) bar.Stroke = Foreground;
-        if (!widget.ClockShowVisualizer) StopAudio();
+        _wave.UpdateAppearance(widget.ClockShowVisualizer, Foreground);
         _minute = "";
         RefreshTime(DateTime.Now);
     }
@@ -103,26 +91,4 @@ internal sealed class ClockWidgetView : System.Windows.Controls.UserControl
         return spaced.ToString();
     }
 
-    private void Tick()
-    {
-        RefreshTime(DateTime.Now);
-        // Gallery and editor previews never open additional audio capture sessions.
-        if (!_widget.ClockShowVisualizer || Window.GetWindow(this) is not DesktopWidgetWindow) return;
-        _audio ??= new DesktopAudioSpectrum();
-        var bands = _audio.Read();
-        ToolTip = _audio.Error ?? "Live desktop audio · drag to move";
-        for (var i = 0; i < _bars.Length; i++)
-        {
-            _levels[i] += (bands[i] - _levels[i]) * (bands[i] > _levels[i] ? .6f : .16f);
-            var half = 1 + 29 * _levels[i];
-            _bars[i].Y1 = 32 - half; _bars[i].Y2 = 32 + half;
-        }
-    }
-
-    private void StopAudio()
-    {
-        _audio?.Dispose(); _audio = null;
-        Array.Clear(_levels);
-        foreach (var bar in _bars) { bar.Y1 = 31; bar.Y2 = 33; }
-    }
 }

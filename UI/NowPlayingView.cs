@@ -53,6 +53,7 @@ internal sealed class NowPlayingView : System.Windows.Controls.UserControl
     private readonly StackPanel _controls = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
     private readonly Button _previous, _toggle, _next;
     private readonly StackPanel _progress = new() { Margin = new Thickness(0, 10, 0, 0) };
+    private readonly AudioSpectrumView _spectrum = new() { Name = "NowPlayingAudioSpectrum", Height = 48, Margin = new Thickness(0, 12, 0, 0) };
     private readonly Slider _position = new() { Minimum = 0, Maximum = 1, Height = 22, Margin = new Thickness(0) };
     private readonly TextBlock _elapsed = new() { FontSize = 11, Opacity = .75 };
     private readonly TextBlock _duration = new() { FontSize = 11, Opacity = .75, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
@@ -98,7 +99,7 @@ internal sealed class NowPlayingView : System.Windows.Controls.UserControl
         };
         var times = new Grid(); times.Children.Add(_elapsed); times.Children.Add(_duration);
         _progress.Children.Add(_position); _progress.Children.Add(times);
-        var content = new StackPanel(); content.Children.Add(_layout); content.Children.Add(_progress); content.Children.Add(_message);
+        var content = new StackPanel(); content.Children.Add(_layout); content.Children.Add(_progress); content.Children.Add(_spectrum); content.Children.Add(_message);
         Content = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0) };
         _timer.Tick += async (_, _) => await RefreshAsync();
         Loaded += async (_, _) => { Start(); await RefreshAsync(); };
@@ -145,6 +146,7 @@ internal sealed class NowPlayingView : System.Windows.Controls.UserControl
         FontStyle = widget.Italic ? FontStyles.Italic : FontStyles.Normal;
         _track.FontSize = widget.FontSize;
         var accent = ColorBrush(widget.MusicAccentColor, Color.FromRgb(169, 201, 180));
+        _spectrum.UpdateAppearance(widget.ShowAudioVisualizer, accent);
         _toggle.Background = accent;
         _toggle.Foreground = AccentInkConverter.Luminance(accent.Color) < .179 ? Brushes.White : Brushes.Black;
         _previous.Foreground = _next.Foreground = Foreground;

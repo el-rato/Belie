@@ -43,6 +43,7 @@ internal sealed class DesktopWidget
     public bool ShowAlbumArt { get; set; } = true;
     public bool ShowPlaybackControls { get; set; } = true;
     public bool ShowPlaybackProgress { get; set; } = true;
+    public bool ShowAudioVisualizer { get; set; }
     public string MusicAccentColor { get; set; } = "#A9C9B4";
     public bool ClockUse24Hour { get; set; }
     public bool ClockShowGreeting { get; set; } = true;

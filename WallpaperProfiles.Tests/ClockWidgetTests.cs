@@ -96,7 +96,7 @@ public sealed class ClockWidgetTests
                 view.RefreshTime(new DateTime(2026, 10, 11, 19, 9, 0));
                 Assert.Equal("1\u20099\u2009:\u20090\u20099", text["ClockTime"].Text);
                 Assert.Equal(Visibility.Collapsed, text["ClockGreetingText"].Visibility);
-                Assert.Equal(Visibility.Collapsed, Assert.Single(Descendants(view).OfType<Canvas>()).Visibility);
+                Assert.Equal(Visibility.Collapsed, Assert.Single(Descendants(view).OfType<AudioSpectrumView>()).Visibility);
             }
             catch (Exception ex) { failure = ex; }
         });
