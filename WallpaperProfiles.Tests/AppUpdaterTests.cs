@@ -49,7 +49,7 @@ public sealed class AppUpdaterTests
         Assert.Null(AppUpdater.ParseRelease(Release(draft: draft, prerelease: prerelease), new Version(3, 1, 1)));
 
     [Theory]
-    [InlineData("http://github.com/el-rato/Wallpaper-Profile-App/releases/download/v3.2.0/Belie.exe")]
+    [InlineData("http://github.com/el-rato/Belie/releases/download/v3.2.0/Belie.exe")]
     [InlineData("https://example.com/Belie.exe")]
     [InlineData("https://github.com/other/repo/releases/download/v3.2.0/Belie.exe")]
     public void UnexpectedDownloadLocations_AreRejected(string url) =>

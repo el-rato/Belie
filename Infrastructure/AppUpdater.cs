@@ -11,7 +11,7 @@ internal sealed record AppRelease(Version Version, Uri DownloadUrl, long Size, s
 
 internal sealed class AppUpdater
 {
-    internal const string Repository = "el-rato/Wallpaper-Profile-App";
+    internal const string Repository = "el-rato/Belie";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(15) };
     private readonly HttpClient _http;
     public static Version CurrentVersion => Normalize(typeof(AppUpdater).Assembly.GetName().Version!);
