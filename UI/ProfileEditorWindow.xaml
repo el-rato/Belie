@@ -46,33 +46,32 @@
                             Click="AddFromLibrary_Click" ToolTip="Add wallpapers from your library to this profile"/>
                     <TextBlock Text="Wallpaper source" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0"/>
                 </DockPanel>
-                <DockPanel Margin="0,0,0,8"><Button DockPanel.Dock="Right" Content="Remove source" Click="RemoveSource_Click" ToolTip="Original files are kept."/><local:SourceThumbnail FilePath="{Binding Text, ElementName=FolderBox}" Margin="0,0,12,0"/><TextBlock x:Name="SourceNameText" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/></DockPanel>
-                <Expander Header="Source path"><TextBox x:Name="FolderBox" FontSize="12" AutomationProperties.Name="Wallpaper source path" AllowDrop="True" Drop="FolderBox_Drop" DragOver="FolderBox_DragOver" DragLeave="FolderBox_DragLeave"/></Expander>
+                <DockPanel Visibility="Collapsed"><local:SourceThumbnail FilePath="{Binding Text, ElementName=FolderBox}" Margin="0,0,12,0"/><TextBlock x:Name="SourceNameText" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/></DockPanel>
+                <TextBox x:Name="FolderBox" Visibility="Collapsed"/>
                 <WrapPanel Margin="0,8,0,0">
                     <Button Content="Choose folder" Click="Browse_Click" Margin="0,0,8,8"/>
                     <Button Content="Choose image" Click="PickImage_Click" Margin="0,0,8,8"/>
                     <Button Content="Choose video" Click="PickVideo_Click" Margin="0,0,0,8"/>
                 </WrapPanel>
-                <StackPanel Orientation="Horizontal" Margin="2,7,0,0">
+                <StackPanel x:Name="PathStatusPanel" Visibility="Collapsed" Orientation="Horizontal" Margin="2,7,0,0">
                     <Ellipse x:Name="PathStatusDot" Width="8" Height="8" VerticalAlignment="Center"
                              Margin="0,0,6,0" Fill="{DynamicResource TextTertiaryBrush}"/>
                     <TextBlock x:Name="PathStatusText" Style="{StaticResource HintText}" Text="No location set"/>
                 </StackPanel>
 
-                <StackPanel x:Name="AdditionalWallpaperPanel" Visibility="Collapsed" Margin="0,12,0,0">
-                    <TextBlock x:Name="AdditionalWallpaperCount" Style="{StaticResource FieldLabel}"/>
-                    <ScrollViewer MaxHeight="115" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl x:Name="AdditionalWallpaperList">
-                            <ItemsControl.ItemTemplate><DataTemplate>
-                                <DockPanel Margin="0,0,0,5">
-                                    <Button DockPanel.Dock="Right" Content="Remove" Tag="{Binding}" Click="RemoveProfileWallpaper_Click" Padding="8,3" FontSize="12" Margin="8,0,0,0"/>
-                                    <local:SourceThumbnail FilePath="{Binding FilePath}" Margin="0,0,12,0"/><TextBlock Text="{Binding Name}" ToolTip="{Binding FilePath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                </DockPanel>
-                            </DataTemplate></ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </StackPanel>
-
+                <ScrollViewer MaxHeight="132" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
+                    <ScrollViewer.Style><Style TargetType="ScrollViewer">
+                        <Style.Triggers><DataTrigger Binding="{Binding HasItems, ElementName=ProfileWallpaperList}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
+                    </Style></ScrollViewer.Style>
+                    <local:WallpaperThumbnailList x:Name="ProfileWallpaperList" OrderChanged="WallpaperOrder_Changed" Cursor="Hand" ToolTip="Drag wallpapers to change their order" AutomationProperties.Name="Wallpapers in this profile">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate><DataTemplate>
+                            <Border Padding="3" Margin="0,0,8,8" CornerRadius="5" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                <local:SourceThumbnail FilePath="{Binding}" Width="80" Height="50" AutomationProperties.Name="{Binding}"/>
+                            </Border>
+                        </DataTemplate></ItemsControl.ItemTemplate>
+                    </local:WallpaperThumbnailList>
+                </ScrollViewer>
                 <DockPanel Margin="0,16,0,0">
                     <TextBlock Text="Image fit" VerticalAlignment="Center" Margin="0,0,16,0"/>
                     <ComboBox x:Name="FitCombo" Width="180" HorizontalAlignment="Left" ItemsSource="{x:Static local:EnumLists.FitModes}" AutomationProperties.Name="Image fit"/>

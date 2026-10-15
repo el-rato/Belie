@@ -117,6 +117,12 @@ internal static class WallpaperEngine
             catch (ArgumentException) { }
             catch (NotSupportedException) { }
         }
+        if (profile.WallpaperOrder is { Count: > 0 })
+        {
+            var available = result.ToDictionary(path => path, StringComparer.OrdinalIgnoreCase);
+            result = profile.WallpaperOrder.Where(path => path != null && available.ContainsKey(path))
+                .Select(path => available[path]).Concat(result).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
         return result;
     }
 

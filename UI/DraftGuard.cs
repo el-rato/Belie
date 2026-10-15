@@ -50,7 +50,8 @@ internal static class DraftGuard
             button.Click += (_, _) => { result = choice; dialog.DialogResult = choice != DraftChoice.Cancel; };
             commands.Children.Add(button);
         }
-        content.Children.Add(commands); dialog.Content = content;
+        content.Children.Add(commands);
+        UiAppearance.SetDialogContent(dialog, content, "Unsaved changes");
         dialog.ShowDialog();
         return result;
     }

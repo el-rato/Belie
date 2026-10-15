@@ -403,16 +403,30 @@ public sealed class LibraryWindowTests
         Assert.Equal("Add 2 wallpapers", ((Button)library.FindName("UseButton")).Content);
         Click(library, "UseButton");
         Assert.Equal(imagePath, ((TextBox)main.FindName("FolderBox")).Text);
-        Assert.Single(((ItemsControl)main.FindName("AdditionalWallpaperList")).Items.Cast<object>());
+        var wallpapers = (ItemsControl)main.FindName("ProfileWallpaperList");
+        PumpUntil(() => wallpapers.Items.Count == 2);
+        Assert.Equal(new[] { imagePath, secondWallpaper }, wallpapers.Items.Cast<string>());
         Click(main, "SaveProfileButton");
         Assert.Equal(new[] { secondWallpaper }, Assert.Single(profiles.LoadAll()).AdditionalWallpaperPaths);
         profile = coordinator.Profiles.Single(p => p.Id == profile.Id);
         main.UpdateLayout();
         RenderWorkspace(main, "profile-wallpaper-list", 1040, 790);
-        var additions = (ItemsControl)main.FindName("AdditionalWallpaperList");
-        VisualChildren(additions).OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        PumpUntil(() => wallpapers.Items.Count == 2);
+        main.UpdateLayout();
+        var thumbnails = VisualChildren(wallpapers).OfType<SourceThumbnail>().ToArray();
+        Assert.Equal(new[] { imagePath, secondWallpaper }, thumbnails.Select(image => image.FilePath));
+        PumpUntil(() => thumbnails.All(image => image.Source != null));
+        Assert.DoesNotContain(VisualChildren(wallpapers).OfType<TextBlock>(), text =>
+            text.Text.Contains(Path.GetFileName(imagePath)) || text.Text.Contains(Path.GetFileName(secondWallpaper)));
+        MoveWallpaper(main, secondWallpaper, "-1");
+        PumpUntil(() => wallpapers.Items.Cast<string>().SequenceEqual(new[] { secondWallpaper, imagePath }));
+        Assert.True(main.IsDraftDirty);
+        Assert.Empty(Assert.Single(profiles.LoadAll()).WallpaperOrder);
         Click(main, "SaveProfileButton");
-        Assert.Empty(Assert.Single(profiles.LoadAll()).AdditionalWallpaperPaths);
+        Assert.Equal(new[] { secondWallpaper, imagePath }, Assert.Single(profiles.LoadAll()).WallpaperOrder);
+        MoveWallpaper(main, secondWallpaper, "1");
+        PumpUntil(() => wallpapers.Items.Cast<string>().SequenceEqual(new[] { imagePath, secondWallpaper }));
+        Click(main, "SaveProfileButton");
         Assert.True(File.Exists(secondWallpaper));
         Click(main, "AddFromLibraryButton");
         librarySearch.Text = "Sky beyond";
@@ -748,22 +762,29 @@ public sealed class LibraryWindowTests
                 if (failure != null) throw failure;
                 Assert.Equal(imagePath, ((TextBox)editor.FindName("FolderBox")).Text);
                 Assert.Equal("5", ((TextBox)editor.FindName("IntervalBox")).Text);
-                Assert.Single(((ItemsControl)editor.FindName("AdditionalWallpaperList")).Items);
+                var wallpapers = (ItemsControl)editor.FindName("ProfileWallpaperList");
+                PumpUntil(() => wallpapers.Items.Count == 2);
+                Assert.Equal(new[] { imagePath, secondWallpaper }, wallpapers.Items.Cast<string>());
                 Assert.Empty(model.AdditionalWallpaperPaths);
                 Assert.Equal("", model.FolderPath);
                 RenderWorkspace(editor, "profile-editor-library", 680, 720);
+                MoveWallpaper(editor, secondWallpaper, "-1");
+                PumpUntil(() => wallpapers.Items.Cast<string>().SequenceEqual(new[] { secondWallpaper, imagePath }));
+                Assert.Empty(model.WallpaperOrder);
                 typeof(ProfileEditorWindow).GetMethod("Save_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
                     .Invoke(editor, new object[] { editor, new RoutedEventArgs() });
             }
-            catch (Exception ex) { failure = ex; editor.Close(); }
+            catch (Exception ex) { failure = ex; editor.ChooseDraftAction = () => DraftChoice.Discard; editor.Close(); }
         };
-        Assert.True(editor.ShowDialog());
-        if (failure != null) throw failure;
+        var saved = editor.ShowDialog();
+        if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+        Assert.True(saved);
         Assert.Empty(model.AdditionalWallpaperPaths);
         Assert.Empty(model.FolderPath);
         model = editor.Result!;
         Assert.Equal(new[] { secondWallpaper }, model.AdditionalWallpaperPaths);
         Assert.Equal(imagePath, model.FolderPath);
+        Assert.Equal(new[] { secondWallpaper, imagePath }, model.WallpaperOrder);
 
         var cancelEditor = new ProfileEditorWindow(model, isNew: false, libraryStore: store)
             { ShowInTaskbar = false, Opacity = 0, ChooseDraftAction = () => DraftChoice.Discard };
@@ -772,9 +793,11 @@ public sealed class LibraryWindowTests
             try
             {
                 cancelEditor.UpdateLayout();
-                var list = (ItemsControl)cancelEditor.FindName("AdditionalWallpaperList");
-                VisualChildren(list).OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Assert.Empty(list.Items);
+                var list = (ItemsControl)cancelEditor.FindName("ProfileWallpaperList");
+                PumpUntil(() => list.Items.Count == 2);
+                Assert.Equal(new[] { secondWallpaper, imagePath }, list.Items.Cast<string>());
+                MoveWallpaper(cancelEditor, secondWallpaper, "1");
+                PumpUntil(() => list.Items.Cast<string>().SequenceEqual(new[] { imagePath, secondWallpaper }));
             }
             catch (Exception ex) { failure = ex; }
             finally { cancelEditor.Close(); }
@@ -782,6 +805,7 @@ public sealed class LibraryWindowTests
         Assert.False(cancelEditor.ShowDialog());
         if (failure != null) throw failure;
         Assert.Equal(new[] { secondWallpaper }, model.AdditionalWallpaperPaths);
+        Assert.Equal(new[] { secondWallpaper, imagePath }, model.WallpaperOrder);
         Assert.True(File.Exists(secondWallpaper));
     }
 
@@ -1497,6 +1521,61 @@ public sealed class LibraryWindowTests
         scene.Apply(new WallpaperProfile());
         Assert.False(scene.HasAudio);
         Assert.Equal("No ambient track", scene.AudioStatus);
+    }
+
+    private static void MoveWallpaper(Window window, string path, string step)
+    {
+        window.UpdateLayout();
+        var list = (WallpaperThumbnailList)window.FindName("ProfileWallpaperList");
+        PumpUntil(() => VisualChildren(list).OfType<SourceThumbnail>().All(image => image.Source != null));
+        var originalThumbnails = VisualChildren(list).OfType<SourceThumbnail>().ToDictionary(image => image.FilePath);
+        var originalImages = originalThumbnails.ToDictionary(pair => pair.Key, pair => pair.Value.Source);
+        var preview = (MonitorThumbnail)window.FindName(window is MainWindow ? "PreviewMon" : "EditorPreview");
+        var previewImage = preview.ScreenSource;
+        var previewPath = preview.PreviewFilePath;
+        var index = list.Items.IndexOf(path);
+        var direction = int.Parse(step, CultureInfo.InvariantCulture);
+        var target = (FrameworkElement)list.ItemContainerGenerator.ContainerFromIndex(index + direction);
+        var point = target.TranslatePoint(new System.Windows.Point(direction < 0 ? 1 : target.ActualWidth - 1, target.ActualHeight / 2), list);
+        Assert.Empty(VisualChildren(list).OfType<Button>());
+        var data = list.CreateDragData(path);
+        System.Windows.DragEventArgs DragEvent(System.Windows.DragDropKeyStates keys, RoutedEvent routedEvent)
+        {
+            var args = (System.Windows.DragEventArgs)Activator.CreateInstance(typeof(System.Windows.DragEventArgs),
+                BindingFlags.Instance | BindingFlags.NonPublic, null,
+                new object[] { data, keys, System.Windows.DragDropEffects.Move, list, point }, CultureInfo.InvariantCulture)!;
+            args.RoutedEvent = routedEvent;
+            return args;
+        }
+        var over = DragEvent(System.Windows.DragDropKeyStates.LeftMouseButton, System.Windows.DragDrop.DragOverEvent);
+        list.RaiseEvent(over);
+        Assert.Equal(System.Windows.DragDropEffects.Move, over.Effects);
+        var drop = DragEvent(System.Windows.DragDropKeyStates.None, System.Windows.DragDrop.DropEvent);
+        list.RaiseEvent(drop);
+        Assert.Equal(System.Windows.DragDropEffects.Move, drop.Effects);
+        Assert.Equal(originalThumbnails.Count, list.Items.Count);
+        window.UpdateLayout();
+        var updatedThumbnails = VisualChildren(list).OfType<SourceThumbnail>().ToArray();
+        Assert.Equal(originalThumbnails.Count, updatedThumbnails.Length);
+        foreach (var thumbnail in updatedThumbnails)
+        {
+            Assert.Same(originalThumbnails[thumbnail.FilePath], thumbnail);
+            Assert.Same(originalImages[thumbnail.FilePath], thumbnail.Source);
+        }
+        Assert.Same(previewImage, preview.ScreenSource);
+        Assert.Equal(previewPath, preview.PreviewFilePath);
+    }
+
+    private static void PumpUntil(Func<bool> condition)
+    {
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
+        timer.Tick += (_, _) => { if (condition() || DateTime.UtcNow >= deadline) frame.Continue = false; };
+        timer.Start();
+        try { System.Windows.Threading.Dispatcher.PushFrame(frame); }
+        finally { timer.Stop(); }
+        Assert.True(condition(), "Profile wallpaper thumbnails did not finish updating.");
     }
 
     private static async Task WaitUntil(Func<bool> condition)

@@ -1,9 +1,6 @@
 using System.IO;
-using System.Net;
 using System.Net.Http;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+using Velopack;
 using WallpaperProfiles.Infrastructure;
 using Xunit;
 
@@ -11,132 +8,163 @@ namespace WallpaperProfiles.Tests;
 
 public sealed class AppUpdaterTests
 {
-    private static readonly byte[] Payload = Encoding.UTF8.GetBytes("test release payload");
-    private static string Hash => Convert.ToHexString(SHA256.HashData(Payload));
-
-    private static string Release(string tag = "v3.2.0", bool draft = false, bool prerelease = false,
-        string? digest = null, string? url = null, string name = "Belie.exe") => JsonSerializer.Serialize(new
+    private static UpdateInfo Release(int patch = 1) => new(new VelopackAsset
     {
-        tag_name = tag, draft, prerelease,
-        assets = new[] { new { name, state = "uploaded", size = Payload.Length,
-            digest = digest ?? "sha256:" + Hash,
-            browser_download_url = url ?? $"https://github.com/{AppUpdater.Repository}/releases/download/{tag}/Belie.exe" } }
-    });
+        PackageId = "Belie",
+        Version = new SemanticVersion(99, 0, patch),
+        Type = VelopackAssetType.Full,
+        FileName = $"Belie-99.0.{patch}-full.nupkg",
+    }, false, null, Array.Empty<VelopackAsset>());
 
     [Fact]
-    public void NewStableRelease_SelectsVerifiedExecutable()
+    public async Task UnpackagedBuild_ExplainsHowToEnableUpdatesWithoutCheckingFeed()
     {
-        var release = AppUpdater.ParseRelease(Release(), new Version(3, 1, 1));
-        Assert.NotNull(release);
-        Assert.Equal(new Version(3, 2, 0, 0), release.Version);
-        Assert.Equal(Payload.Length, release.Size);
-        Assert.Equal(Hash, release.Sha256);
-    }
-
-    [Theory]
-    [InlineData("v3.1.1")]
-    [InlineData("3.1.1.0")]
-    [InlineData("v3.0.0")]
-    [InlineData("v3.2.0-beta.1")]
-    [InlineData("latest")]
-    public void EqualOlderAndNonStableTags_AreNotUpdates(string tag) =>
-        Assert.Null(AppUpdater.ParseRelease(Release(tag), new Version(3, 1, 1, 0)));
-
-    [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public void UnpublishedReleases_AreIgnored(bool draft, bool prerelease) =>
-        Assert.Null(AppUpdater.ParseRelease(Release(draft: draft, prerelease: prerelease), new Version(3, 1, 1)));
-
-    [Theory]
-    [InlineData("http://github.com/el-rato/Belie/releases/download/v3.2.0/Belie.exe")]
-    [InlineData("https://example.com/Belie.exe")]
-    [InlineData("https://github.com/other/repo/releases/download/v3.2.0/Belie.exe")]
-    public void UnexpectedDownloadLocations_AreRejected(string url) =>
-        Assert.Throws<InvalidDataException>(() => AppUpdater.ParseRelease(Release(url: url), new Version(3, 1, 1)));
-
-    [Fact]
-    public void MissingExecutableOrHash_IsNotReportedAsUpToDate()
-    {
-        Assert.Throws<InvalidDataException>(() => AppUpdater.ParseRelease(Release(name: "source.zip"), new Version(3, 1, 1)));
-        Assert.Throws<InvalidDataException>(() => AppUpdater.ParseRelease(Release(digest: ""), new Version(3, 1, 1)));
-    }
-
-    [Theory]
-    [InlineData(0, false)]
-    [InlineData(-1, false)]
-    [InlineData(1, false)]
-    [InlineData(0, true)]
-    public async Task Download_VerifiesHashAndSize_AndRemovesBadDownloads(int sizeOffset, bool wrongHash)
-    {
-        var path = Path.Combine(Path.GetTempPath(), "belie-test-" + Guid.NewGuid().ToString("N") + ".exe");
-        try
-        {
-            using var http = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
-            { Content = new ByteArrayContent(Payload) }));
-            var updater = new AppUpdater(http);
-            var release = AppUpdater.ParseRelease(Release(), new Version(3, 1, 1))!;
-            release = release with { Size = Payload.Length + sizeOffset, Sha256 = wrongHash ? new string('0', 64) : Hash };
-            if (sizeOffset != 0 || wrongHash)
-            {
-                await Assert.ThrowsAsync<InvalidDataException>(() => updater.DownloadAsync(release, path, null, default));
-                Assert.False(File.Exists(path));
-            }
-            else
-            {
-                await updater.DownloadAsync(release, path, null, default);
-                Assert.Equal(Payload, File.ReadAllBytes(path));
-            }
-        }
-        finally { File.Delete(path); }
+        var client = new StubClient { IsInstalled = false };
+        var updater = new AppUpdater(client);
+        await updater.CheckAsync();
+        Assert.Equal(0, client.Checks);
+        Assert.Null(updater.Available);
+        Assert.Contains("Setup.exe", updater.Status);
+        Assert.False(updater.Busy);
     }
 
     [Fact]
-    public async Task Check_HandlesRateLimitsAndNotifiesOnlyOncePerVersion()
+    public void DevelopmentBuild_IsNotTreatedAsAVelopackInstallation()
     {
-        var fail = false;
-        using var http = new HttpClient(new StubHandler(request =>
-        {
-            Assert.Contains("Belie/", request.Headers.UserAgent.ToString());
-            return fail ? new HttpResponseMessage(HttpStatusCode.Forbidden) : new HttpResponseMessage(HttpStatusCode.OK)
-            { Content = new StringContent(Release("v99.0.0")) };
-        }));
-        var updater = new AppUpdater(http);
+        VelopackApp.Build().SetArgs(Array.Empty<string>()).SetAutoApplyOnStartup(false).Run();
+        Assert.False(new VelopackUpdateClient().IsInstalled);
+    }
+
+    [Fact]
+    public async Task Check_NotifiesOncePerVersion_AndPreservesOfferOnNetworkFailure()
+    {
+        var client = new StubClient { Release = Release() };
+        var updater = new AppUpdater(client);
         var notifications = 0;
         updater.UpdateFound += () => notifications++;
         await updater.CheckAsync();
         await updater.CheckAsync();
         Assert.Equal(1, notifications);
-        Assert.NotNull(updater.Available);
-        fail = true;
+        client.Release = Release(2);
+        await updater.CheckAsync();
+        Assert.Equal(2, notifications);
+        client.CheckError = new HttpRequestException("Rate limited");
         await updater.CheckAsync();
         Assert.False(updater.Busy);
         Assert.Contains("Couldn’t check", updater.Status);
-        Assert.NotNull(updater.Available);
+        Assert.Same(client.Release, updater.Available);
+        client.CheckError = null;
+        client.Release = null;
+        await updater.CheckAsync();
+        Assert.Null(updater.Available);
+        Assert.Contains("up to date", updater.Status);
     }
 
     [Fact]
-    public void Cleanup_LeavesUnrelatedFilesAlone()
+    public async Task Install_DownloadsAndArmsUpdaterBeforeCleanShutdown()
     {
-        var job = Path.Combine(Path.GetTempPath(), "belie-test-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(job);
-        try
-        {
-            File.WriteAllText(Path.Combine(job, "download.exe"), "partial");
-            File.WriteAllText(Path.Combine(job, "user-data.txt"), "keep");
-            AppUpdater.CleanupJob(job);
-            Assert.False(File.Exists(Path.Combine(job, "download.exe")));
-            Assert.Equal("keep", File.ReadAllText(Path.Combine(job, "user-data.txt")));
-        }
-        finally { File.Delete(Path.Combine(job, "user-data.txt")); Directory.Delete(job); }
+        var client = new StubClient { Release = Release() };
+        var updater = new AppUpdater(client);
+        await updater.CheckAsync();
+        await updater.InstallAsync(() => { client.Events.Add("guard"); return true; },
+            () => client.Events.Add("shutdown"), default);
+        Assert.Equal(new[] { "download", "guard", "apply", "shutdown" }, client.Events);
+        Assert.False(updater.Busy);
     }
 
-    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    [Fact]
+    public async Task UnsavedChanges_CanPostponeUpdate_AndRetryUsesSameRelease()
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        var client = new StubClient { Release = Release() };
+        var updater = new AppUpdater(client);
+        await updater.CheckAsync();
+        await updater.InstallAsync(() => false, () => Assert.Fail("Must not exit"), default);
+        Assert.Equal(new[] { "download" }, client.Events);
+        Assert.Contains("postponed", updater.Status);
+        Assert.Same(client.Release, updater.Available);
+        await updater.InstallAsync(() => true, () => client.Events.Add("shutdown"), default);
+        Assert.Equal(new[] { "download", "download", "apply", "shutdown" }, client.Events);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DownloadOrHandoffFailure_DoesNotShutDown(bool failHandoff)
+    {
+        var client = new StubClient { Release = Release(), FailDownload = !failHandoff, FailApply = failHandoff };
+        var updater = new AppUpdater(client);
+        await updater.CheckAsync();
+        await updater.InstallAsync(() => true, () => Assert.Fail("Must not exit"), default);
+        Assert.Contains("Couldn’t install", updater.Status);
+        Assert.False(updater.Busy);
+        Assert.Same(client.Release, updater.Available);
+    }
+
+    [Fact]
+    public async Task CancellationAfterDownload_DoesNotApplyOrRestart()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var client = new StubClient { Release = Release(), AfterDownload = cancellation.Cancel };
+        var updater = new AppUpdater(client);
+        await updater.CheckAsync();
+        await updater.InstallAsync(() => throw new InvalidOperationException("Must not prompt"),
+            () => Assert.Fail("Must not exit"), cancellation.Token);
+        Assert.Equal(new[] { "download" }, client.Events);
+        Assert.Contains("cancelled", updater.Status);
+        Assert.False(updater.Busy);
+    }
+
+    [Fact]
+    public async Task CheckAndInstall_CannotOverlap()
+    {
+        var completion = new TaskCompletionSource<UpdateInfo?>();
+        var client = new StubClient { PendingCheck = completion.Task };
+        var updater = new AppUpdater(client);
+        var check = updater.CheckAsync();
+        Assert.True(updater.Busy);
+        await updater.CheckAsync();
+        await updater.InstallAsync(() => true, () => Assert.Fail("Must not exit"), default);
+        Assert.Equal(1, client.Checks);
+        Assert.Empty(client.Events);
+        completion.SetResult(Release());
+        await check;
+        Assert.False(updater.Busy);
+    }
+
+    private sealed class StubClient : IAppUpdateClient
+    {
+        public bool IsInstalled { get; set; } = true;
+        public UpdateInfo? Release { get; set; }
+        public Exception? CheckError { get; set; }
+        public bool FailDownload { get; set; }
+        public bool FailApply { get; set; }
+        public Action? AfterDownload { get; set; }
+        public Task<UpdateInfo?>? PendingCheck { get; set; }
+        public int Checks { get; private set; }
+        public List<string> Events { get; } = new();
+
+        public Task<UpdateInfo?> CheckAsync()
+        {
+            Checks++;
+            if (CheckError != null) throw CheckError;
+            return PendingCheck ?? Task.FromResult(Release);
+        }
+
+        public Task DownloadAsync(UpdateInfo update, Action<int> progress, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(respond(request));
+            Assert.Same(Release, update);
+            Events.Add("download");
+            if (FailDownload) throw new IOException("Package verification failed");
+            AfterDownload?.Invoke();
+            return Task.CompletedTask;
+        }
+
+        public void ApplyOnExit(UpdateInfo update)
+        {
+            Assert.Same(Release, update);
+            Events.Add("apply");
+            if (FailApply) throw new IOException("Could not start Update.exe");
         }
     }
 }

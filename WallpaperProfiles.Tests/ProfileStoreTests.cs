@@ -162,6 +162,46 @@ public class ProfileStoreTests : IDisposable
     }
 
     [Fact]
+    public void WallpaperOrder_RoundTrips_AndKeepsFolderSourcesAndNewFiles()
+    {
+        var folder = Path.Combine(_dir, "ordered-folder");
+        Directory.CreateDirectory(folder);
+        var first = Path.Combine(folder, "a.png");
+        var second = Path.Combine(folder, "b.png");
+        var third = Path.Combine(folder, "c.png");
+        var unrelated = Path.Combine(_dir, "outside.png");
+        foreach (var path in new[] { first, second, unrelated }) File.WriteAllBytes(path, new byte[] { 1 });
+        var profile = new WallpaperProfile { FolderPath = folder,
+            WallpaperOrder = new() { unrelated, second.ToUpperInvariant(), first, second } };
+        CreateStore().Save(profile);
+        var loaded = Assert.Single(CreateStore().LoadAll());
+        Assert.Equal(profile.WallpaperOrder, loaded.WallpaperOrder);
+        Assert.Equal(folder, loaded.FolderPath);
+        Assert.Equal(new[] { second, first }, WallpaperEngine.GetProfileMedia(loaded));
+        File.WriteAllBytes(third, new byte[] { 1 });
+        Assert.Equal(new[] { second, first, third }, WallpaperEngine.GetProfileMedia(loaded));
+        File.Delete(second);
+        Assert.Equal(new[] { first, third }, WallpaperEngine.GetProfileMedia(loaded));
+    }
+
+    [Fact]
+    public async Task Slideshow_FollowsSavedWallpaperOrder()
+    {
+        var first = Path.Combine(_dir, "first.png");
+        var second = Path.Combine(_dir, "second.png");
+        foreach (var path in new[] { first, second }) File.WriteAllBytes(path, new byte[] { 1 });
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var applied = new ConcurrentQueue<string>();
+        using var slideshow = new SlideshowController((path, _) => { applied.Enqueue(path); ready.TrySetResult(); });
+        slideshow.Start(new WallpaperProfile { FolderPath = first, AdditionalWallpaperPaths = new() { second },
+            WallpaperOrder = new() { second, first }, SlideshowIntervalMinutes = 5 });
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await (Task)typeof(SlideshowController).GetMethod("AdvanceAndApplyAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(slideshow, null)!;
+        Assert.Equal(new[] { second, first }, applied.ToArray());
+    }
+
+    [Fact]
     public void LegacyProfile_AndNullWallpaperList_LoadWithoutChangingSource()
     {
         var id = Guid.NewGuid();

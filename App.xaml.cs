@@ -27,21 +27,27 @@ internal partial class App : System.Windows.Application
     private EventWaitHandle? _exitEvent;
     private volatile bool _sessionEnding;
     private bool _updating;
-    private bool _updateHelper;
     private System.Windows.Threading.DispatcherTimer? _updateTimer;
     private readonly CancellationTokenSource _updateCancellation = new();
     internal AppUpdater Updates { get; } = new();
     internal static bool IsExiting { get; private set; }
 
+    [STAThread]
+    private static void Main()
+    {
+        // Detached widget and wallpaper launches must never apply a pending update.
+        Velopack.VelopackApp.Build().SetAutoApplyOnStartup(false)
+            .OnFirstRun(_ =>
+            {
+                if (Autostart.AutostartManager.IsEnabled()) Autostart.AutostartManager.SetEnabled(true);
+            }).Run();
+        var app = new App();
+        app.InitializeComponent();
+        app.Run();
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
-        if (e.Args.Contains("--install-update"))
-        {
-            _updateHelper = true;
-            AppUpdater.RunInstaller();
-            Shutdown();
-            return;
-        }
         base.OnStartup(e);
 
         DispatcherUnhandledException += (_, args) =>
@@ -170,9 +176,6 @@ internal partial class App : System.Windows.Application
             _updateTimer.Tick += async (_, _) => await Updates.CheckAsync();
             _updateTimer.Start();
             _ = Updates.CheckAsync();
-            var updatedFrom = Array.IndexOf(e.Args, "--updated-from");
-            if (updatedFrom >= 0 && updatedFrom + 1 < e.Args.Length)
-                _ = AppUpdater.CleanupAfterRestartAsync(e.Args[updatedFrom + 1]);
         }
         catch (Exception ex)
         {
@@ -254,7 +257,6 @@ internal partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        if (_updateHelper) { base.OnExit(e); return; }
         _updateTimer?.Stop();
         _updateCancellation.Cancel();
         Logger.Info("Shutting down.");

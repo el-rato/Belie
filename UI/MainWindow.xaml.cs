@@ -66,6 +66,7 @@ internal partial class MainWindow : Window
     private int _previewIndex;
     private int _previewRequest;
     private readonly ObservableCollection<WallpaperAsset> _additionalWallpapers = new();
+    private List<string> _wallpaperOrder = new();
 
     private readonly DispatcherTimer _pathDebounce;
     private readonly DispatcherTimer _dashboardTimer;
@@ -112,11 +113,8 @@ internal partial class MainWindow : Window
             _pathDebounce.Stop();
             _pathDebounce.Start();
         };
-        AdditionalWallpaperList.ItemsSource = _additionalWallpapers;
         _additionalWallpapers.CollectionChanged += (_, _) =>
         {
-            AdditionalWallpaperPanel.Visibility = _additionalWallpapers.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            AdditionalWallpaperCount.Text = $"{_additionalWallpapers.Count} additional {(_additionalWallpapers.Count == 1 ? "wallpaper" : "wallpapers")}";
             ++_pathVersion;
             _pathDebounce.Stop();
             _pathDebounce.Start();
@@ -624,6 +622,7 @@ internal partial class MainWindow : Window
         }
 
         NameBox.Text = _selected.Name;
+        _wallpaperOrder = new List<string>(_selected.WallpaperOrder ?? new());
         UpdateShortcutButton();
         _additionalWallpapers.Clear();
         foreach (var path in _selected.AdditionalWallpaperPaths)
@@ -650,7 +649,7 @@ internal partial class MainWindow : Window
     private string DraftSnapshot() => DraftGuard.Snapshot(new { NameBox.Text, Path = FolderBox.Text,
         Interval = IntervalBox.Text, Fit = FitCombo.SelectedItem, Random = RandomBox.IsChecked,
         Muted = VideoMuteBox.IsChecked, Icons = IconSafeBox.IsChecked,
-        Additional = _additionalWallpapers.Select(a => a.FilePath).ToArray() });
+        Additional = _additionalWallpapers.Select(a => a.FilePath).ToArray(), Order = _wallpaperOrder.ToArray() });
     internal bool IsDraftDirty => !_loadingDraft && _selected != null && _savedDraft != DraftSnapshot();
     private void UpdateDraftState()
     {
@@ -809,7 +808,7 @@ internal partial class MainWindow : Window
         {
             var extraPaths = _additionalWallpapers.Select(a => a.FilePath).ToList();
             var media = await Task.Run(() => WallpaperEngine.GetProfileMedia(new WallpaperProfile
-                { FolderPath = path, AdditionalWallpaperPaths = extraPaths }));
+                { FolderPath = path, AdditionalWallpaperPaths = extraPaths, WallpaperOrder = _wallpaperOrder.ToList() }));
             if (version != _pathVersion) return;
             var missing = extraPaths.Count(source => !File.Exists(source));
             SetPathStatus(media.Count > 0 ? "GoodBrush" : "DangerBrush",
@@ -880,15 +879,18 @@ internal partial class MainWindow : Window
             SetPathStatus("GoodBrush", text);
         }
 
-        var image = info.FirstMedia is null
+        var available = await Task.Run(() => WallpaperEngine.GetProfileMedia(new WallpaperProfile { FolderPath = path, WallpaperOrder = _wallpaperOrder.ToList() }));
+        if (version != _pathVersion) return;
+        var previewFile = available.FirstOrDefault();
+        var image = previewFile is null
             ? null
-            : await Task.Run(() => ThumbnailLoader.Load(info.FirstMedia, 900));
+            : await Task.Run(() => ThumbnailLoader.Load(previewFile, 900));
         if (version != _pathVersion)
         {
             return;
         }
         var previous = PreviewMon.ScreenSource;
-        PreviewMon.PreviewFilePath = info.FirstMedia ?? "";
+        PreviewMon.PreviewFilePath = previewFile ?? "";
         PreviewMon.ScreenSource = image;
         if (image == null && PreviewMon.PreviewFilePath.Length > 0) { PreviewEmptyTitle.Text = "Preview unavailable"; PreviewEmptyHint.Text = "The source is available. Choose another image to preview."; }
         PreviewMon.IsVideo = info.IsFile && info.VideoCount > 0;
@@ -896,16 +898,28 @@ internal partial class MainWindow : Window
         {
             PreviewMon.Pulse();
         }
-        var available = await Task.Run(() => WallpaperEngine.GetProfileMedia(new WallpaperProfile { FolderPath = path }));
         if (version == _pathVersion) SetPreviewMedia(available);
     }
 
     private void SetPreviewMedia(IReadOnlyList<string> media)
     {
         _previewMedia = media;
+        ProfileWallpaperList.SetWallpapers(media);
         _previewIndex = 0;
         PreviousPreviewButton.IsEnabled = NextPreviewButton.IsEnabled = media.Count > 1;
         PreviewPositionText.Text = media.Count > 0 ? $"1 / {media.Count}" : "Desktop preview";
+    }
+
+    private void WallpaperOrder_Changed(object sender, RoutedEventArgs e)
+    {
+        var media = ProfileWallpaperList.Items.Cast<string>().ToList();
+        _wallpaperOrder = media.Concat(_wallpaperOrder).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        ++_pathVersion;
+        ++_previewRequest;
+        _previewMedia = media;
+        _previewIndex = Math.Max(0, media.FindIndex(path => path.Equals(PreviewMon.PreviewFilePath, StringComparison.OrdinalIgnoreCase)));
+        PreviewPositionText.Text = media.Count > 0 ? $"{_previewIndex + 1} / {media.Count}" : "Desktop preview";
+        UpdateDraftState();
     }
 
     private async void BrowsePreview_Click(object sender, RoutedEventArgs e)
@@ -948,6 +962,8 @@ internal partial class MainWindow : Window
     {
         PathStatusDot.Fill = (Brush)FindResource(brushKey);
         PathStatusText.Text = text;
+        PathStatusPanel.Visibility = brushKey == "DangerBrush" || text.Contains("missing", StringComparison.OrdinalIgnoreCase)
+            ? Visibility.Visible : Visibility.Collapsed;
         if (brushKey == "DangerBrush")
         { PreviewEmptyTitle.Text = "Source unavailable"; PreviewEmptyHint.Text = text + ". Choose another source or restore the file."; }
     }
@@ -1060,6 +1076,7 @@ internal partial class MainWindow : Window
 
         profile.Name = name;
         profile.FolderPath = FolderBox.Text.Trim();
+        profile.WallpaperOrder = _wallpaperOrder.ToList();
         profile.AdditionalWallpaperPaths = _additionalWallpapers.Select(a => a.FilePath)
             .Where(path => !path.Equals(profile.FolderPath, StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -1124,8 +1141,6 @@ internal partial class MainWindow : Window
             else _additionalWallpapers.Add(asset);
         }
         if (firstMultipleSelection && _additionalWallpapers.Count > 0 && IntervalBox.Text.Trim() == "0") IntervalBox.Text = "5";
-        if (_additionalWallpapers.Count > 0)
-            AdditionalWallpaperCount.Text = $"{_additionalWallpapers.Count} additional {(_additionalWallpapers.Count == 1 ? "wallpaper" : "wallpapers")} · Save to keep changes";
         ValidatePath();
     }
 
@@ -1270,13 +1285,14 @@ internal partial class MainWindow : Window
         if (_settingsDialog != null) { _settingsDialog.Close(); return; }
         var content = SettingsPopup.Child;
         SettingsPopup.Child = null;
-        var dialog = new Window { Title = "Belie settings", Owner = this, Width = 400,
+        var scroll = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var dialog = new Window { Title = "Belie settings", Owner = this, Width = 460,
             SizeToContent = SizeToContent.Height, MaxHeight = Math.Max(500, ActualHeight - 60),
+            FontSize = 14,
             ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false, Icon = Icon, Content = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
-        dialog.SetResourceReference(Window.BackgroundProperty, "BgBrush");
-        dialog.SetResourceReference(Window.ForegroundProperty, "TextPrimaryBrush");
-        dialog.Closed += (_, _) => { ((ScrollViewer)dialog.Content).Content = null; SettingsPopup.Child = content; _settingsDialog = null; };
+            ShowInTaskbar = false, Icon = Icon };
+        UiAppearance.SetDialogContent(dialog, scroll, "Settings");
+        dialog.Closed += (_, _) => { scroll.Content = null; SettingsPopup.Child = content; _settingsDialog = null; };
         _settingsDialog = dialog; dialog.Show();
     }
 

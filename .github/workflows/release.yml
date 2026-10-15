@@ -8,9 +8,19 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: belie-releases
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      VPK_REPO_URL: https://github.com/${{ github.repository }}
+      VPK_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
 
@@ -18,15 +28,43 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Publish self-contained Windows executable
-        shell: pwsh
+      - name: Validate release version and install matching Velopack CLI
         run: |
           $releaseVersion = $env:GITHUB_REF_NAME -replace '^v', ''
-          if ($releaseVersion -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw 'Release tags must use vMAJOR.MINOR.PATCH (or four numeric parts).' }
-          dotnet publish .\WallpaperProfiles.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:Version=$releaseVersion" "-p:FileVersion=$releaseVersion" "-p:AssemblyVersion=$releaseVersion" -o .\release-output
+          if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Release tags must use vMAJOR.MINOR.PATCH.' }
+          "RELEASE_VERSION=$releaseVersion" >> $env:GITHUB_ENV
+          [xml]$project = Get-Content .\WallpaperProfiles.csproj
+          $velopackVersion = ($project.Project.ItemGroup.PackageReference | Where-Object Include -eq 'Velopack').Version
+          dotnet tool install -g vpk --version $velopackVersion
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Create GitHub release and upload executable
+      - name: Test
+        run: dotnet test .\WallpaperProfiles.Tests\WallpaperProfiles.Tests.csproj -c Release
+
+      - name: Publish self-contained Windows app
+        run: |
+          dotnet publish .\WallpaperProfiles.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false "-p:Version=$env:RELEASE_VERSION" "-p:FileVersion=$env:RELEASE_VERSION.0" "-p:AssemblyVersion=$env:RELEASE_VERSION.0" -o .\release-output\app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Download previous Velopack release for delta generation
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME .\release-output\Belie.exe --generate-notes
+        run: |
+          # Legacy releases have no Velopack feed; the first package is a full release.
+          $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $previous = $releases | Where-Object { -not $_.draft -and -not $_.prerelease -and ($_.assets.name -contains 'releases.win.json') }
+          if ($previous) {
+            vpk download github --outputDir .\release-output\packages
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Package installer, portable app and delta updates
+        run: |
+          vpk pack --packId Belie --packVersion $env:RELEASE_VERSION --packDir .\release-output\app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon .\appicon.ico --outputDir .\release-output\packages
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publish GitHub release
+        run: |
+          vpk upload github --outputDir .\release-output\packages --publish --releaseName "Belie $env:RELEASE_VERSION" --tag $env:GITHUB_REF_NAME
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

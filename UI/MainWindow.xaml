@@ -113,17 +113,29 @@
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE713;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,12,0"/><TextBlock Text="Settings"/></StackPanel>
                 </Button>
                 <Popup x:Name="SettingsPopup" PlacementTarget="{Binding ElementName=SettingsButton}" Placement="Top" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-                <Border CornerRadius="14" Padding="18" Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <Border Padding="24" Background="{DynamicResource BgBrush}">
                 <StackPanel>
-                    <TextBlock Text="Appearance" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,14"/>
-                    <ListBox x:Name="ThemePicker" SelectionChanged="Theme_Changed" Background="Transparent" BorderThickness="0" Padding="0" Margin="0,0,0,18" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="App theme">
-                        <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate></ListBox.ItemsPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="App updates" FontSize="14" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="InstalledVersionText" Style="{StaticResource HintText}" FontSize="12" Margin="0,5,12,0"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" x:Name="CheckUpdatesButton" Content="Check for updates" Click="CheckUpdates_Click" Padding="12,8" FontSize="12" VerticalAlignment="Center" AutomationProperties.Name="Check for updates"/>
+                    </Grid>
+                    <TextBlock x:Name="UpdateStatusText" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,12,0,0" AutomationProperties.LiveSetting="Polite"/>
+                    <Button x:Name="SettingsUpdateButton" Content="Update and restart" Click="UpdateNow_Click" Visibility="Collapsed" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right" Margin="0,12,0,0"/>
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,22,0,22"/>
+                    <TextBlock Text="Appearance" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,14"/>
+                    <ListBox x:Name="ThemePicker" SelectionChanged="Theme_Changed" Background="Transparent" BorderThickness="0" Padding="0" Margin="-3,0,-3,0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled" AutomationProperties.Name="App theme">
+                        <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="5"/></ItemsPanelTemplate></ListBox.ItemsPanel>
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
                                 <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
-                                <Setter Property="Margin" Value="0,0,6,6"/><Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="Margin" Value="3,0"/><Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                 <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
-                                    <Border x:Name="Choice" CornerRadius="10" Padding="8" BorderThickness="1" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}">
+                                    <Border x:Name="Choice" CornerRadius="8" Padding="5,6" BorderThickness="1" Background="Transparent" BorderBrush="{DynamicResource BorderBrush}">
                                         <ContentPresenter/>
                                     </Border>
                                     <ControlTemplate.Triggers>
@@ -134,21 +146,32 @@
                                 </ControlTemplate></Setter.Value></Setter>
                             </Style>
                         </ListBox.ItemContainerStyle>
-                        <ListBox.ItemTemplate><DataTemplate><StackPanel Width="62">
-                            <Image Source="{Binding Icon}" Width="28" Height="28" Margin="0,0,0,6"/>
-                            <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="12" HorizontalAlignment="Center"/>
+                        <ListBox.ItemTemplate><DataTemplate><StackPanel>
+                            <Border Height="38" CornerRadius="4" Background="{Binding Background}" BorderBrush="{Binding Border}" BorderThickness="1" Padding="6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Border Background="{Binding Surface}" CornerRadius="2" Margin="0,0,4,0"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <Border Height="4" Background="{Binding Accent}" CornerRadius="2" Margin="0,0,0,4"/>
+                                        <Border Height="3" Background="{Binding Muted}" CornerRadius="1" Margin="0,0,5,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="11" HorizontalAlignment="Center" Margin="0,7,0,0"/>
                         </StackPanel></DataTemplate></ListBox.ItemTemplate>
                     </ListBox>
-                    <TextBlock Text="Startup" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,18"/>
-                    <CheckBox Style="{StaticResource SwitchStyle}" Content="Start with Windows" x:Name="AutostartToggle"
-                              Checked="Toggle_Changed" Unchecked="Toggle_Changed" Margin="0,0,0,14"/>
-                    <CheckBox Style="{StaticResource SwitchStyle}" Content="Start in tray" x:Name="MinimizedToggle"
-                              Checked="Toggle_Changed" Unchecked="Toggle_Changed"/>
-                    <TextBlock Text="App updates" FontSize="17" FontWeight="SemiBold" Margin="0,24,0,12"/>
-                    <TextBlock x:Name="InstalledVersionText" Style="{StaticResource HintText}" Margin="0,0,0,6"/>
-                    <TextBlock x:Name="UpdateStatusText" TextWrapping="Wrap" Margin="0,0,0,12" AutomationProperties.LiveSetting="Polite"/>
-                    <Button x:Name="CheckUpdatesButton" Content="Check for updates" Click="CheckUpdates_Click"/>
-                    <Button x:Name="SettingsUpdateButton" Content="Update and restart" Click="UpdateNow_Click" Visibility="Collapsed" Style="{StaticResource PrimaryButton}" Margin="0,8,0,0"/>
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,22,0,22"/>
+                    <TextBlock Text="Startup" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,14"/>
+                    <Grid MinHeight="34" Margin="0,0,0,8">
+                        <TextBlock Text="Start with Windows" FontSize="13" VerticalAlignment="Center" Margin="0,0,62,0"/>
+                        <CheckBox Style="{StaticResource SwitchStyle}" x:Name="AutostartToggle" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                  AutomationProperties.Name="Start with Windows" Checked="Toggle_Changed" Unchecked="Toggle_Changed"/>
+                    </Grid>
+                    <Grid MinHeight="34">
+                        <TextBlock Text="Start in tray" FontSize="13" VerticalAlignment="Center" Margin="0,0,62,0"/>
+                        <CheckBox Style="{StaticResource SwitchStyle}" x:Name="MinimizedToggle" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                  AutomationProperties.Name="Start in tray" Checked="Toggle_Changed" Unchecked="Toggle_Changed"/>
+                    </Grid>
                 </StackPanel>
                 </Border></Popup>
             </Grid>
@@ -256,29 +279,28 @@
                     <Button Content="Choose image" Click="PickImage_Click" Margin="0,0,8,8"/>
                     <Button Content="Choose video" Click="PickVideo_Click" Margin="0,0,0,8"/>
                 </WrapPanel>
-                <DockPanel Margin="0,0,0,8">
-                    <Button DockPanel.Dock="Right" Content="Remove source" Click="RemoveSource_Click" ToolTip="Remove this source from the profile. Original files are kept." Margin="8,0,0,0"/>
+                <DockPanel Visibility="Collapsed">
                     <local:SourceThumbnail FilePath="{Binding Text, ElementName=FolderBox}" Margin="0,0,12,0"/>
                     <TextBlock x:Name="SourceNameText" Text="No source selected" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                 </DockPanel>
-                <Expander Header="Source path" Margin="0,0,0,8"><TextBox x:Name="FolderBox" Height="36" FontSize="12" AutomationProperties.Name="Wallpaper source path"/></Expander>
-                <StackPanel Orientation="Horizontal" Margin="0,9,0,18">
+                <TextBox x:Name="FolderBox" Visibility="Collapsed"/>
+                <StackPanel x:Name="PathStatusPanel" Visibility="Collapsed" Orientation="Horizontal" Margin="0,9,0,18">
                     <Ellipse x:Name="PathStatusDot" Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,7,0" Fill="{DynamicResource TextTertiaryBrush}"/>
                     <TextBlock x:Name="PathStatusText" Style="{StaticResource HintText}" Text="No location set" TextWrapping="Wrap"/>
                 </StackPanel>
-                <StackPanel x:Name="AdditionalWallpaperPanel" Visibility="Collapsed" Margin="0,0,0,14">
-                    <TextBlock x:Name="AdditionalWallpaperCount" Style="{StaticResource FieldLabel}"/>
-                    <ScrollViewer MaxHeight="115" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl x:Name="AdditionalWallpaperList">
-                            <ItemsControl.ItemTemplate><DataTemplate>
-                                <DockPanel Margin="0,0,0,5">
-                                    <Button DockPanel.Dock="Right" Content="Remove" Tag="{Binding}" Click="RemoveProfileWallpaper_Click" Padding="8,3" FontSize="12" Margin="8,0,0,0"/>
-                                    <local:SourceThumbnail FilePath="{Binding FilePath}" Margin="0,0,12,0"/><TextBlock Text="{Binding Name}" ToolTip="{Binding FilePath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                </DockPanel>
-                            </DataTemplate></ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </StackPanel>
+                <ScrollViewer MaxHeight="132" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,0,0,14">
+                    <ScrollViewer.Style><Style TargetType="ScrollViewer">
+                        <Style.Triggers><DataTrigger Binding="{Binding HasItems, ElementName=ProfileWallpaperList}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
+                    </Style></ScrollViewer.Style>
+                    <local:WallpaperThumbnailList x:Name="ProfileWallpaperList" OrderChanged="WallpaperOrder_Changed" Cursor="Hand" ToolTip="Drag wallpapers to change their order" AutomationProperties.Name="Wallpapers in this profile">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate><DataTemplate>
+                            <Border Padding="3" Margin="0,0,8,8" CornerRadius="5" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                <local:SourceThumbnail FilePath="{Binding}" Width="80" Height="50" AutomationProperties.Name="{Binding}"/>
+                            </Border>
+                        </DataTemplate></ItemsControl.ItemTemplate>
+                    </local:WallpaperThumbnailList>
+                </ScrollViewer>
                 <DockPanel><TextBlock Text="Image fit" VerticalAlignment="Center" Margin="0,0,18,0"/><ComboBox x:Name="FitCombo" Width="180" HorizontalAlignment="Left" ItemsSource="{x:Static local:EnumLists.FitModes}" AutomationProperties.Name="Image fit"/></DockPanel>
                 </StackPanel></TabItem>
                 <TabItem Header="Playback">

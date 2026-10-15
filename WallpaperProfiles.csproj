@@ -5,6 +5,7 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <UseWPF>true</UseWPF>
+    <StartupObject>WallpaperProfiles.App</StartupObject>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -12,9 +13,9 @@
     <AssemblyName>Belie</AssemblyName>
     <ApplicationIcon>appicon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>3.2.0</Version>
-    <FileVersion>3.2.0.0</FileVersion>
-    <AssemblyVersion>3.2.0.0</AssemblyVersion>
+    <Version>3.3.0</Version>
+    <FileVersion>3.3.0.0</FileVersion>
+    <AssemblyVersion>3.3.0.0</AssemblyVersion>
     <Product>Belie</Product>
     <Description>Personal desktop canvas and wallpaper profiles with desktop widgets, live wallpapers, scenes, schedules, and event triggers.</Description>
     <Copyright>Copyright © 2026</Copyright>
@@ -27,6 +28,12 @@
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
   </ItemGroup>
 
   <ItemGroup>

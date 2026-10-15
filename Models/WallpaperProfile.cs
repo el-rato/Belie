@@ -12,6 +12,8 @@ public class WallpaperProfile
 
     public List<string> AdditionalWallpaperPaths { get; set; } = new();
 
+    public List<string> WallpaperOrder { get; set; } = new();
+
     public FitMode FitMode { get; set; } = FitMode.Fill;
 
     public int SlideshowIntervalMinutes { get; set; }

@@ -10,7 +10,19 @@ know C# or .NET to use it. Choose from four dark themes and the light Daylight t
 
 ## Download
 
-[Download the latest Windows release](https://github.com/el-rato/Wallpaper-Profile-App/releases/latest/download/Belie.exe).
+[Download the latest Windows installer](https://github.com/el-rato/Belie/releases/latest/download/Belie-win-Setup.exe).
+For a portable app, download and extract the complete `Belie-win-Portable.zip` from the
+[latest release](https://github.com/el-rato/Belie/releases/latest).
+
+### New in 3.3
+
+- Velopack powers in-app updates, with smaller delta downloads when available.
+- Windows installer and a complete portable ZIP replace the standalone EXE distribution.
+- Drag wallpaper thumbnails to reorder a profile’s slideshow.
+- Refined settings, theme previews, and dialogs.
+
+Existing standalone EXE users: exit Belie and install the new package once. Profiles and
+settings are preserved; subsequent updates happen through **Update and restart**.
 
 ### New in 3.1.1
 
@@ -48,14 +60,18 @@ Unit tests (resolver, schedule rules, profile storage):
 dotnet test WallpaperProfiles.Tests\WallpaperProfiles.Tests.csproj
 ```
 
-## How to make a single, self-contained .exe (no install needed for other users)
+## How to package a release with in-app updates
 
 ```
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+dotnet tool install -g vpk --version 1.2.161
+dotnet publish WallpaperProfiles.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o release-output/app
+vpk pack --packId Belie --packVersion 3.3.0 --packDir release-output/app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon appicon.ico --outputDir release-output/packages
 ```
 
-Result: `publish\Belie.exe` (about 140 MB). This one file contains everything and runs
-on any Windows 10/11 PC with no .NET install. Copy it to a USB stick or share it directly.
+Result: a Windows installer, portable ZIP, full update package, and release feed in
+`release-output/packages`. No separate .NET installation is needed. Distribute the installer
+or complete portable ZIP; copying only `Belie.exe` does not include the updater or runtime.
+Keep the Velopack CLI version matched to the package version in `WallpaperProfiles.csproj`.
 
 > **One-time security prompt:** the first time you run a freshly published `.exe`, Windows
 > SmartScreen may show "Windows protected your PC". Click **More info → Run anyway**. This is
@@ -235,9 +251,10 @@ C:\Users\YOURNAME\AppData\Roaming\Belie\
   safe to clear while the app is closed).
 - `logs\` — rolling log files (old ones deleted after 14 days).
 
-**To uninstall / reset:** close the app (tray → Exit), then delete that `Belie` folder. Also
-uncheck "Start with Windows" first if you enabled it (or delete the `Belie` value under
-`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`).
+**To uninstall:** uncheck "Start with Windows", close the app (tray → Exit), then uninstall
+Belie from Windows Settings → Apps. For a portable copy, delete its extracted app folder.
+**To reset your data:** close Belie and delete the `%AppData%\Belie` folder above; this removes
+your profiles and settings.
 
 ---
 
@@ -248,17 +265,26 @@ uncheck "Start with Windows" first if you enabled it (or delete the `Belie` valu
 
 ### In-app updates
 
-Belie checks this repository’s latest stable GitHub release at startup and every six hours.
+Belie uses Velopack to check this repository’s stable GitHub releases at startup and every six hours.
 An available update appears in the sidebar and as a tray notification. Use **Update and restart**
-to download, verify, and replace the executable in its existing location. Profiles, settings,
+to download, verify, and apply the update. Delta packages reduce download size when available;
+Velopack falls back to a full package when needed. Profiles, settings,
 widgets, and startup shortcuts are preserved. **Settings → App updates → Check for updates**
 checks immediately. Unsaved changes are handled before restarting.
 
-This requires the published, self-contained `Belie.exe` in a writable folder. Older builds
-without the updater need one manual upgrade to a build containing it. Developers: publish
-a numeric tag such as `v3.2.0`; the release workflow stamps that version into the executable
-and attaches `Belie.exe`. The updater verifies the release asset’s SHA-256 digest supplied
-by GitHub and skips draft/prerelease versions. Source archives alone cannot be installed.
+Existing standalone EXE users need to close Belie (tray → Exit) and run the new installer once,
+or switch to the complete portable ZIP. Existing profiles and settings in `%AppData%\Belie`
+are reused. Subsequent updates happen inside the app; unzipping only the EXE is unsupported.
+Downloaded updates apply only after **Update and restart**, so detached wallpaper/widget
+processes cannot unexpectedly trigger an update.
+
+Developers: push a new three-part numeric tag such as `v3.3.1`. The release workflow tests
+the app, stamps the tag version into the build, downloads the previous Velopack package,
+generates a delta when a base package exists, and publishes the installer, portable ZIP,
+packages, and `releases.win.json` feed to GitHub Releases. The first Velopack release has
+no delta. Keep previous releases available so users can update across skipped versions.
+Adding or removing app code still requires a release build; delta updates reduce the
+download, while replacing the installed app as a consistent version.
 
 ---
 
@@ -311,6 +337,6 @@ Belie.exe --help
 7. Main window UI (profiles + editor + settings), modern dialogs, drag & drop.
 8. Autostart + start-minimized.
 9. Single-instance activation + CLI.
-10. Unit tests + single self-contained `.exe` publish.
+10. Unit tests + self-contained installer, portable ZIP, and delta updates.
 11. Live wallpapers — `WorkerW`-hosted window playing videos (MediaElement) and animated GIFs
     (frame stepping), wired into profiles, schedules, triggers, UI, and CLI.

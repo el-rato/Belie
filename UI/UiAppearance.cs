@@ -9,6 +9,7 @@ using System.Globalization;
 using System.Windows.Data;
 using Brushes = System.Windows.Media.Brushes;
 using SystemColors = System.Windows.SystemColors;
+using Controls = System.Windows.Controls;
 
 namespace WallpaperProfiles.UI;
 
@@ -141,6 +142,53 @@ internal static class UiAppearance
         using var stream = new MemoryStream(IconBytes(Current, 32));
         using var icon = new System.Drawing.Icon(stream);
         return (System.Drawing.Icon)icon.Clone();
+    }
+
+    public static void SetDialogContent(Window dialog, UIElement content, string title)
+    {
+        dialog.WindowStyle = WindowStyle.None;
+        dialog.BorderThickness = new Thickness(1);
+        dialog.UseLayoutRounding = true;
+        dialog.SetResourceReference(Window.FontFamilyProperty, "AppFont");
+        dialog.SetResourceReference(Window.BackgroundProperty, "BgBrush");
+        dialog.SetResourceReference(Window.ForegroundProperty, "TextPrimaryBrush");
+        dialog.SetResourceReference(Window.BorderBrushProperty, "BorderBrush");
+        var layout = new Controls.Grid();
+        layout.RowDefinitions.Add(new Controls.RowDefinition { Height = new GridLength(48) });
+        layout.RowDefinitions.Add(new Controls.RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        var header = new Controls.Border { BorderThickness = new Thickness(0, 0, 0, 1) };
+        header.SetResourceReference(Controls.Border.BackgroundProperty, "SurfaceBrush");
+        header.SetResourceReference(Controls.Border.BorderBrushProperty, "BorderBrush");
+        header.MouseLeftButtonDown += (_, args) =>
+        {
+            if (args.LeftButton == System.Windows.Input.MouseButtonState.Pressed) dialog.DragMove();
+        };
+        var headerContent = new Controls.DockPanel();
+        var close = new Controls.Button
+        {
+            Content = "\uE8BB", Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center, ToolTip = "Close", Focusable = true
+        };
+        close.SetResourceReference(FrameworkElement.StyleProperty, "TitleBarCloseButton");
+        System.Windows.Automation.AutomationProperties.SetName(close, "Close " + title.ToLowerInvariant());
+        close.Click += (_, _) => dialog.Close();
+        Controls.DockPanel.SetDock(close, Controls.Dock.Right);
+        headerContent.Children.Add(close);
+        var label = new Controls.StackPanel { Orientation = Controls.Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(18, 0, 0, 0), IsHitTestVisible = false };
+        var icon = new Controls.Image { Width = 18, Height = 18 };
+        icon.SetBinding(Controls.Image.SourceProperty, new System.Windows.Data.Binding(nameof(Window.Icon)) { Source = dialog });
+        RenderOptions.SetBitmapScalingMode(icon, BitmapScalingMode.HighQuality);
+        label.Children.Add(icon);
+        label.Children.Add(new Controls.TextBlock { Text = title, FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) });
+        headerContent.Children.Add(label);
+        header.Child = headerContent;
+        layout.Children.Add(header);
+        Controls.Grid.SetRow(content, 1);
+        layout.Children.Add(content);
+        dialog.Content = layout;
+        Attach(dialog);
     }
 
     public static void Attach(Window window)

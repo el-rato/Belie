@@ -26,6 +26,7 @@ internal partial class ProfileEditorWindow : Window
     private readonly WallpaperProfile _model;
     private readonly LibraryStore _libraryStore;
     private readonly ObservableCollection<WallpaperAsset> _additionalWallpapers = new();
+    private List<string> _wallpaperOrder = new();
     private readonly ObservableCollection<ScheduleRuleVm> _rules = new();
     private readonly ObservableCollection<TriggerVm> _triggers = new();
 
@@ -42,6 +43,7 @@ internal partial class ProfileEditorWindow : Window
     {
         InitializeComponent();
         _model = model = DraftGuard.Clone(model);
+        _wallpaperOrder = new List<string>(model.WallpaperOrder ?? new());
         _libraryStore = libraryStore ?? new LibraryStore(Path.Combine(AppPaths.BaseDir, "library.json"));
         TitleText.Text = isNew ? "New Profile" : $"Edit Profile – {model.Name}";
         TrySetAppIcon();
@@ -72,11 +74,8 @@ internal partial class ProfileEditorWindow : Window
             _pathDebounce.Stop();
             _pathDebounce.Start();
         };
-        AdditionalWallpaperList.ItemsSource = _additionalWallpapers;
         _additionalWallpapers.CollectionChanged += (_, _) =>
         {
-            AdditionalWallpaperPanel.Visibility = _additionalWallpapers.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            AdditionalWallpaperCount.Text = $"{_additionalWallpapers.Count} additional {(_additionalWallpapers.Count == 1 ? "wallpaper" : "wallpapers")}";
             ++_pathVersion;
             _pathDebounce.Stop();
             _pathDebounce.Start();
@@ -160,13 +159,15 @@ internal partial class ProfileEditorWindow : Window
         SourceNameText.Text = path.Length == 0 ? "No source selected" : Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar));
         SourceNameText.ToolTip = path;
         var version = ++_pathVersion;
+        ProfileWallpaperList.SetWallpapers(Array.Empty<string>());
 
         if (_additionalWallpapers.Count > 0)
         {
             var profile = new WallpaperProfile { FolderPath = path,
-                AdditionalWallpaperPaths = _additionalWallpapers.Select(a => a.FilePath).ToList() };
+                AdditionalWallpaperPaths = _additionalWallpapers.Select(a => a.FilePath).ToList(), WallpaperOrder = _wallpaperOrder.ToList() };
             var media = await Task.Run(() => WallpaperEngine.GetProfileMedia(profile));
             if (_closed || version != _pathVersion) return;
+            ProfileWallpaperList.SetWallpapers(media);
             SetPathStatus(media.Count > 0 ? "GoodBrush" : "DangerBrush",
                 media.Count > 0 ? $"{media.Count} wallpapers in this profile" : "No available wallpapers");
             var first = media.FirstOrDefault();
@@ -233,27 +234,33 @@ internal partial class ProfileEditorWindow : Window
             SetPathStatus("GoodBrush", text);
         }
 
-        var image = info.FirstMedia is null
+        var available = await Task.Run(() => WallpaperEngine.GetProfileMedia(new WallpaperProfile { FolderPath = path, WallpaperOrder = _wallpaperOrder.ToList() }));
+        if (_closed || version != _pathVersion) return;
+        var previewFile = available.FirstOrDefault();
+        var image = previewFile is null
             ? null
-            : await Task.Run(() => ThumbnailLoader.Load(info.FirstMedia, 640));
+            : await Task.Run(() => ThumbnailLoader.Load(previewFile, 640));
         if (_closed || version != _pathVersion)
         {
             return;
         }
         var previous = EditorPreview.ScreenSource;
-        EditorPreview.PreviewFilePath = info.FirstMedia ?? "";
+        EditorPreview.PreviewFilePath = previewFile ?? "";
         EditorPreview.ScreenSource = image;
         EditorPreview.IsVideo = info.IsFile && info.VideoCount > 0;
         if (image != null && !ReferenceEquals(previous, image))
         {
             EditorPreview.Pulse();
         }
+        if (!_closed && version == _pathVersion) ProfileWallpaperList.SetWallpapers(available);
     }
 
     private void SetPathStatus(string brushKey, string text)
     {
         PathStatusDot.Fill = (Brush)FindResource(brushKey);
         PathStatusText.Text = text;
+        PathStatusPanel.Visibility = brushKey == "DangerBrush" || text.Contains("missing", StringComparison.OrdinalIgnoreCase)
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ============ Pickers & drag-drop ============
@@ -279,6 +286,13 @@ internal partial class ProfileEditorWindow : Window
     }
 
     private void RemoveSource_Click(object sender, RoutedEventArgs e) => FolderBox.Clear();
+
+    private void WallpaperOrder_Changed(object sender, RoutedEventArgs e)
+    {
+        var media = ProfileWallpaperList.Items.Cast<string>().ToList();
+        _wallpaperOrder = media.Concat(_wallpaperOrder).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        ++_pathVersion;
+    }
 
     private void RemoveProfileWallpaper_Click(object sender, RoutedEventArgs e)
     {
@@ -430,6 +444,7 @@ internal partial class ProfileEditorWindow : Window
         Fit = FitCombo.SelectedItem, RandomOrderCheck.IsChecked, Video = VideoMuteCheck.IsChecked, Icons = IconSafeCheck.IsChecked,
         Accent = SceneAccentBox.Text, Audio = AudioPathBox.Text, Volume = AmbientVolumeSlider.Value, Muted = AmbientMuteBox.IsChecked,
         Additional = _additionalWallpapers.Select(a => a.FilePath).ToArray(),
+        Order = _wallpaperOrder.ToArray(),
         Rules = _rules.Select(r => new { r.StartTimeText, r.EndTimeText, r.Days }).ToArray(),
         Triggers = _triggers.Select(t => new { t.Type, t.Condition, t.PriorityText }).ToArray() });
     private void UpdatePreviewFit()
@@ -559,6 +574,7 @@ internal partial class ProfileEditorWindow : Window
 
         _model.Name = name;
         _model.FolderPath = folder;
+        _model.WallpaperOrder = _wallpaperOrder.ToList();
         _model.AdditionalWallpaperPaths = _additionalWallpapers.Select(a => a.FilePath)
             .Where(p => !string.Equals(p, folder, StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -595,7 +611,7 @@ internal partial class ProfileEditorWindow : Window
             : message.Contains("schedule", StringComparison.OrdinalIgnoreCase) || message.Contains("trigger", StringComparison.OrdinalIgnoreCase) ? 2
             : message.Contains("interval", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
         EditorTabs.SelectedIndex = tab;
-        var field = tab == 3 ? SceneAccentBox : tab == 1 ? IntervalBox : message.Contains("name") ? NameBox : FolderBox;
+        System.Windows.Controls.Control field = tab == 3 ? SceneAccentBox : tab == 1 ? IntervalBox : message.Contains("name") ? NameBox : AddFromLibraryButton;
         if (tab == 2)
         {
             EditorTabs.UpdateLayout();
