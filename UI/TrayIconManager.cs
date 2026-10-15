@@ -29,6 +29,7 @@ internal sealed class TrayIconManager : IDisposable
             Visible = true,
         };
         _icon.DoubleClick += (_, _) => _openMain();
+        _icon.BalloonTipClicked += (_, _) => _openMain();
         _icon.MouseClick += (_, e) =>
         {
             if (e.Button == WinForms.MouseButtons.Left)
@@ -41,6 +42,9 @@ internal sealed class TrayIconManager : IDisposable
     }
 
     public void Refresh() => RebuildMenu();
+
+    public void ShowUpdateAvailable() => _icon.ShowBalloonTip(8000, "Belie update available",
+        "Open Belie to download the update and restart.", WinForms.ToolTipIcon.Info);
 
     private void RebuildMenu()
     {

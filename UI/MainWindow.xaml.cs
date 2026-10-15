@@ -76,6 +76,13 @@ internal partial class MainWindow : Window
     public MainWindow(WallpaperCoordinator coordinator, ProfileStore store, SettingsStore settingsStore, LibraryStore? libraryStore = null, ProfileShortcutManager? profileShortcuts = null)
     {
         InitializeComponent();
+        InstalledVersionText.Text = $"Belie {AppUpdater.CurrentVersion.ToString(3)}";
+        if (System.Windows.Application.Current is App app)
+        {
+            app.Updates.Changed += RefreshUpdateStatus;
+            Closed += (_, _) => app.Updates.Changed -= RefreshUpdateStatus;
+            RefreshUpdateStatus();
+        }
         foreach (FrameworkElement pane in new FrameworkElement[] { ProfilePane, DashboardPane, LibraryPane, CanvasPane })
             pane.IsVisibleChanged += (_, e) => { if (e.NewValue is true) AnimatePane(pane); };
 
@@ -1236,6 +1243,26 @@ internal partial class MainWindow : Window
             _savedDraft = DraftSnapshot(); BuildRail(); SelectProfile(editor.Result.Id, true);
             ProfileMessage.Text = "Changes saved";
         }
+    }
+
+    private void RefreshUpdateStatus()
+    {
+        if (System.Windows.Application.Current is not App app) return;
+        var updates = app.Updates;
+        UpdateStatusText.Text = updates.Status;
+        UpdateNoticeText.Text = updates.Status;
+        UpdateNotice.Visibility = SettingsUpdateButton.Visibility = updates.Available != null ? Visibility.Visible : Visibility.Collapsed;
+        CheckUpdatesButton.IsEnabled = UpdateNowButton.IsEnabled = SettingsUpdateButton.IsEnabled = !updates.Busy;
+    }
+
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.Application.Current is App app) await app.Updates.CheckAsync();
+    }
+
+    private async void UpdateNow_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.Application.Current is App app) await app.InstallUpdateAsync();
     }
 
     private void Settings_Click(object sender, RoutedEventArgs e)

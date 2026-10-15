@@ -246,6 +246,20 @@ uncheck "Start with Windows" first if you enabled it (or delete the `Belie` valu
 - **Start with Windows** — adds the app to your login startup (writes a `Run` registry key).
 - **Minimized to tray** — the window stays hidden on launch; use the tray icon.
 
+### In-app updates
+
+Belie checks this repository’s latest stable GitHub release at startup and every six hours.
+An available update appears in the sidebar and as a tray notification. Use **Update and restart**
+to download, verify, and replace the executable in its existing location. Profiles, settings,
+widgets, and startup shortcuts are preserved. **Settings → App updates → Check for updates**
+checks immediately. Unsaved changes are handled before restarting.
+
+This requires the published, self-contained `Belie.exe` in a writable folder. Older builds
+without the updater need one manual upgrade to a build containing it. Developers: publish
+a numeric tag such as `v3.2.0`; the release workflow stamps that version into the executable
+and attaches `Belie.exe`. The updater verifies the release asset’s SHA-256 digest supplied
+by GitHub and skips draft/prerelease versions. Source archives alone cannot be installed.
+
 ---
 
 ## Command-line (optional, for testing)

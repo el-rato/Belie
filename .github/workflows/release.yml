@@ -19,7 +19,12 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Publish self-contained Windows executable
-        run: dotnet publish .\WallpaperProfiles.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o .\release-output
+        shell: pwsh
+        run: |
+          $releaseVersion = $env:GITHUB_REF_NAME -replace '^v', ''
+          if ($releaseVersion -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw 'Release tags must use vMAJOR.MINOR.PATCH (or four numeric parts).' }
+          dotnet publish .\WallpaperProfiles.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:Version=$releaseVersion" "-p:FileVersion=$releaseVersion" "-p:AssemblyVersion=$releaseVersion" -o .\release-output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Create GitHub release and upload executable
         env:

@@ -26,10 +26,22 @@ internal partial class App : System.Windows.Application
     private EventWaitHandle? _canvasActivateEvent;
     private EventWaitHandle? _exitEvent;
     private volatile bool _sessionEnding;
+    private bool _updating;
+    private bool _updateHelper;
+    private System.Windows.Threading.DispatcherTimer? _updateTimer;
+    private readonly CancellationTokenSource _updateCancellation = new();
+    internal AppUpdater Updates { get; } = new();
     internal static bool IsExiting { get; private set; }
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        if (e.Args.Contains("--install-update"))
+        {
+            _updateHelper = true;
+            AppUpdater.RunInstaller();
+            Shutdown();
+            return;
+        }
         base.OnStartup(e);
 
         DispatcherUnhandledException += (_, args) =>
@@ -153,6 +165,14 @@ internal partial class App : System.Windows.Application
             if (e.Args.Any(a => a.Equals("--desktop-canvas", StringComparison.OrdinalIgnoreCase)))
             { OpenMainWindow(); _main?.OpenCanvas(); }
             Logger.Info(startMinimized ? "Started minimized to tray." : "Started with main window visible.");
+            Updates.UpdateFound += () => _tray?.ShowUpdateAvailable();
+            _updateTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(6) };
+            _updateTimer.Tick += async (_, _) => await Updates.CheckAsync();
+            _updateTimer.Start();
+            _ = Updates.CheckAsync();
+            var updatedFrom = Array.IndexOf(e.Args, "--updated-from");
+            if (updatedFrom >= 0 && updatedFrom + 1 < e.Args.Length)
+                _ = AppUpdater.CleanupAfterRestartAsync(e.Args[updatedFrom + 1]);
         }
         catch (Exception ex)
         {
@@ -221,8 +241,22 @@ internal partial class App : System.Windows.Application
         Shutdown();
     }
 
+    internal Task InstallUpdateAsync() => Updates.InstallAsync(
+        () => _main?.TryLeaveAllDrafts() ?? true,
+        () =>
+        {
+            _updating = true;
+            IsExiting = true;
+            DesktopCanvasProcess.Stop(DesktopCanvasProcess.DefaultFile);
+            LiveHostProcess.StopRunning();
+            Shutdown();
+        }, _updateCancellation.Token);
+
     protected override void OnExit(ExitEventArgs e)
     {
+        if (_updateHelper) { base.OnExit(e); return; }
+        _updateTimer?.Stop();
+        _updateCancellation.Cancel();
         Logger.Info("Shutting down.");
         if (_profileShortcuts != null && _coordinator != null) _coordinator.StateChanged -= _profileShortcuts.Reload;
         _profileShortcuts?.Dispose();
@@ -230,7 +264,7 @@ internal partial class App : System.Windows.Application
         _widgetHost = null;
         // Hand the live wallpaper over to a detached host process so it keeps playing
         // after this process is gone (skipped when the session itself is ending).
-        var handoff = _sessionEnding ? null : _coordinator?.CaptureLiveHandoff();
+        var handoff = _sessionEnding || _updating ? null : _coordinator?.CaptureLiveHandoff();
         try
         {
             _coordinator?.Dispose();
