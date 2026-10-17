@@ -105,6 +105,7 @@
                     </Button>
                     <StackPanel x:Name="UpdateNotice" Visibility="Collapsed" Margin="0,0,0,14">
                         <TextBlock x:Name="UpdateNoticeText" TextWrapping="Wrap" Style="{StaticResource HintText}" Margin="0,0,0,8"/>
+                        <Button Content="Release notes" Tag="Update" Click="ReleaseNotes_Click" Margin="0,0,0,8"/>
                         <Button x:Name="UpdateNowButton" Content="Update and restart" Click="UpdateNow_Click" Style="{StaticResource PrimaryButton}"/>
                     </StackPanel>
                     <Button x:Name="NewProfileButton" Content="+  New profile" Style="{StaticResource PrimaryButton}" Click="NewProfile_Click" Height="38" HorizontalContentAlignment="Center"/>
@@ -124,6 +125,10 @@
                         <Button Grid.Column="1" x:Name="CheckUpdatesButton" Content="Check for updates" Click="CheckUpdates_Click" Padding="12,8" FontSize="12" VerticalAlignment="Center" AutomationProperties.Name="Check for updates"/>
                     </Grid>
                     <TextBlock x:Name="UpdateStatusText" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,12,0,0" AutomationProperties.LiveSetting="Polite"/>
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button x:Name="WhatsNewButton" Content="What's new" Click="ReleaseNotes_Click" Padding="12,8" FontSize="12" Margin="0,0,8,0"/>
+                        <Button x:Name="AvailableReleaseNotesButton" Content="Release notes" Tag="Update" Click="ReleaseNotes_Click" Padding="12,8" FontSize="12" Visibility="Collapsed"/>
+                    </WrapPanel>
                     <Button x:Name="SettingsUpdateButton" Content="Update and restart" Click="UpdateNow_Click" Visibility="Collapsed" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right" Margin="0,12,0,0"/>
                     <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,22,0,22"/>
                     <TextBlock Text="Appearance" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,14"/>

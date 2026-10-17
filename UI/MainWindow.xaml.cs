@@ -1275,13 +1275,31 @@ internal partial class MainWindow : Window
         var updates = app.Updates;
         UpdateStatusText.Text = updates.Status;
         UpdateNoticeText.Text = updates.Status;
-        UpdateNotice.Visibility = SettingsUpdateButton.Visibility = updates.Available != null ? Visibility.Visible : Visibility.Collapsed;
+        UpdateNotice.Visibility = SettingsUpdateButton.Visibility = AvailableReleaseNotesButton.Visibility = updates.Available != null ? Visibility.Visible : Visibility.Collapsed;
         CheckUpdatesButton.IsEnabled = UpdateNowButton.IsEnabled = SettingsUpdateButton.IsEnabled = !updates.Busy;
     }
 
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
     {
         if (System.Windows.Application.Current is App app) await app.Updates.CheckAsync();
+    }
+
+    private void ReleaseNotes_Click(object sender, RoutedEventArgs e)
+    {
+        var version = AppUpdater.CurrentVersion.ToString(3);
+        var notes = ReleaseNotesWindow.BundledNotes;
+        var available = (sender as FrameworkElement)?.Tag as string == "Update"
+            ? (System.Windows.Application.Current as App)?.Updates.Available : null;
+        if (available != null)
+        {
+            version = available.TargetFullRelease.Version.ToString();
+            notes = ReleaseNotesWindow.UpdateNotes(version, available.TargetFullRelease.NotesMarkdown);
+        }
+        var dialog = new ReleaseNotesWindow(version, notes, available != null)
+        {
+            Owner = (sender as DependencyObject) is { } source ? Window.GetWindow(source) ?? this : this
+        };
+        dialog.ShowDialog();
     }
 
     private async void UpdateNow_Click(object sender, RoutedEventArgs e)

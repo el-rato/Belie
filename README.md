@@ -14,6 +14,11 @@ know C# or .NET to use it. Choose from four dark themes and the light Daylight t
 For a portable app, download and extract the complete `Belie-win-Portable.zip` from the
 [latest release](https://github.com/el-rato/Belie/releases/latest).
 
+### New in 3.4.1
+
+Read patch notes and the Wallpaper Studio guide inside the app at **Settings → App updates → What's new**, including while offline.
+Available updates also have a **Release notes** button. The full history is in [CHANGELOG.md](CHANGELOG.md).
+
 ### New in 3.4
 
 - Wallpaper studio with widgets you can drag directly over the wallpaper canvas.
@@ -77,7 +82,7 @@ dotnet test WallpaperProfiles.Tests\WallpaperProfiles.Tests.csproj
 ```
 dotnet tool install -g vpk --version 1.2.161
 dotnet publish WallpaperProfiles.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o release-output/app
-vpk pack --packId Belie --packVersion 3.4.0 --packDir release-output/app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon appicon.ico --outputDir release-output/packages
+vpk pack --packId Belie --packVersion 3.4.1 --packDir release-output/app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon appicon.ico --outputDir release-output/packages
 ```
 
 Result: a Windows installer, portable ZIP, full update package, and release feed in

@@ -2,12 +2,37 @@ using System.IO;
 using System.Net.Http;
 using Velopack;
 using WallpaperProfiles.Infrastructure;
+using WallpaperProfiles.UI;
 using Xunit;
 
 namespace WallpaperProfiles.Tests;
 
 public sealed class AppUpdaterTests
 {
+    [Fact]
+    public void PatchNotes_AreBundledOffline_AndKeepTheStudioGuide()
+    {
+        var current = ReleaseNotesWindow.VersionNotes(AppUpdater.CurrentVersion.ToString(3));
+        Assert.NotNull(current);
+        Assert.Contains("Settings → App updates → What’s new", current);
+        Assert.DoesNotContain("## [3.4.0]", current);
+        var studio = ReleaseNotesWindow.VersionNotes("3.4.0");
+        Assert.NotNull(studio);
+        Assert.Contains("Customize wallpaper", studio);
+        Assert.Contains("How slideshow and shuffle work", studio);
+        Assert.Contains("Save skin", studio);
+    }
+
+    [Fact]
+    public void PatchNotes_PreferTheAvailableUpdatesNotes_AndExplainMissingNotes()
+    {
+        const string future = "### New features\n\nNotes supplied with the future update.";
+        Assert.Equal(future, ReleaseNotesWindow.UpdateNotes("9.0.0", future));
+        Assert.Contains("Customize wallpaper", ReleaseNotesWindow.UpdateNotes("3.4.0", null));
+        Assert.Contains("View on GitHub", ReleaseNotesWindow.UpdateNotes("9.0.0", ""));
+        Assert.Null(ReleaseNotesWindow.VersionNotes("3.4.0.*"));
+    }
+
     private static UpdateInfo Release(int patch = 1) => new(new VelopackAsset
     {
         PackageId = "Belie",

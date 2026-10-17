@@ -445,6 +445,7 @@ public sealed class LibraryWindowTests
         profileTabs.SelectedIndex = 0;
         Click(main, "SettingsButton");
         Assert.Contains(System.Windows.Application.Current.Windows.OfType<Window>(), w => w.Owner == main && w.Title == "Belie settings");
+        CheckPatchNotes(main);
         Click(main, "SettingsButton");
         Assert.DoesNotContain(System.Windows.Application.Current.Windows.OfType<Window>(), w => w.Owner == main && w.Title == "Belie settings");
         CheckAppearance(main, coordinator, settings, profile);
@@ -550,6 +551,38 @@ public sealed class LibraryWindowTests
             Assert.False(card.IsMouseCaptured);
         }
         finally { window.Close(); }
+    }
+
+    private static void CheckPatchNotes(MainWindow main)
+    {
+        Exception? failure = null;
+        main.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() =>
+        {
+            var notes = System.Windows.Application.Current.Windows.OfType<ReleaseNotesWindow>().Single();
+            try
+            {
+                Assert.Equal("Belie settings", notes.Owner.Title);
+                var paragraphs = VisualChildren(notes).OfType<TextBlock>()
+                    .Select(text => new System.Windows.Documents.TextRange(text.ContentStart, text.ContentEnd).Text).ToArray();
+                Assert.Contains(paragraphs, text => text.Contains("What changed"));
+                Assert.Contains(paragraphs, text => text.Contains("Customize wallpaper"));
+                Assert.DoesNotContain(paragraphs, text => text.Contains("**"));
+                RenderWorkspace(notes, "patch-notes", 700, 740);
+                notes.Width = 460; notes.Height = 560; notes.UpdateLayout();
+                RenderWorkspace(notes, "patch-notes-compact", 460, 560);
+                var scroll = VisualChildren(notes).OfType<ScrollViewer>().First(viewer => viewer.Content is StackPanel);
+                Assert.True(scroll.ScrollableHeight > 0);
+                scroll.ScrollToEnd(); notes.UpdateLayout();
+                RenderWorkspace(notes, "patch-notes-guide", 460, 560);
+                var close = VisualChildren(notes).OfType<Button>().Single(button => Equals(button.Content, "Close"));
+                var position = close.TranslatePoint(new System.Windows.Point(), (UIElement)notes.Content);
+                Assert.InRange(position.Y + close.ActualHeight, 1, ((FrameworkElement)notes.Content).ActualHeight);
+            }
+            catch (Exception ex) { failure = ex; }
+            finally { notes.Close(); }
+        }));
+        Click(main, "WhatsNewButton");
+        if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
     }
 
     private static void CheckWallpaperStudio(string dir, string imagePath)

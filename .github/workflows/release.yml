@@ -33,6 +33,12 @@ jobs:
           $releaseVersion = $env:GITHUB_REF_NAME -replace '^v', ''
           if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Release tags must use vMAJOR.MINOR.PATCH.' }
           "RELEASE_VERSION=$releaseVersion" >> $env:GITHUB_ENV
+          $changelog = Get-Content -Raw .\CHANGELOG.md
+          $notesPattern = '(?ms)^## \[' + [regex]::Escape($releaseVersion) + '\][^\r\n]*\r?\n(?<notes>.*?)(?=^## \[|\z)'
+          $notes = [regex]::Match($changelog, $notesPattern)
+          if (-not $notes.Success) { throw "Missing patch notes for $releaseVersion in CHANGELOG.md." }
+          New-Item -ItemType Directory -Force -Path .\release-output | Out-Null
+          Set-Content -LiteralPath .\release-output\release-notes.md -Value $notes.Groups['notes'].Value.Trim() -Encoding utf8
           [xml]$project = Get-Content .\WallpaperProfiles.csproj
           $velopackVersion = ($project.Project.ItemGroup.PackageReference | Where-Object Include -eq 'Velopack').Version
           dotnet tool install -g vpk --version $velopackVersion
@@ -61,7 +67,7 @@ jobs:
 
       - name: Package installer, portable app and delta updates
         run: |
-          vpk pack --packId Belie --packVersion $env:RELEASE_VERSION --packDir .\release-output\app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon .\appicon.ico --outputDir .\release-output\packages
+          vpk pack --packId Belie --packVersion $env:RELEASE_VERSION --packDir .\release-output\app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon .\appicon.ico --releaseNotes .\release-output\release-notes.md --outputDir .\release-output\packages
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Publish GitHub release
