@@ -141,6 +141,7 @@ public sealed class LibraryWindowTests
                 if (failure == null)
                 {
                     CheckWorkspaceNavigation(dir, store, imagePath);
+                    CheckWallpaperStudio(dir, imagePath);
                     CheckAmbientPlayback(dir);
                 }
             }
@@ -549,6 +550,78 @@ public sealed class LibraryWindowTests
             Assert.False(card.IsMouseCaptured);
         }
         finally { window.Close(); }
+    }
+
+    private static void CheckWallpaperStudio(string dir, string imagePath)
+    {
+        var second = Path.Combine(dir, "city.png"); File.Copy(imagePath, second);
+        var profile = new WallpaperProfile { Name = "Evening", FolderPath = imagePath, AdditionalWallpaperPaths = new() { second }, SlideshowRandom = true, SlideshowIntervalMinutes = 1 };
+        var store = new DesktopCanvasStore(Path.Combine(dir, "studio.json"));
+        var clock = new DesktopWidget { ProfileId = profile.Id, Kind = DesktopWidgetKind.Clock, FontSize = 76, Width = 520, Height = 310,
+            Alignment = WidgetTextAlignment.Center, FontFamily = ClockWidgetView.ScriptFont, ShowHeader = false, ShowBackground = false, ShowBorder = false };
+        var document = new DesktopCanvasDocument { Enabled = true, ActiveProfileId = profile.Id, ActiveWallpaperPath = imagePath, Widgets = new() { clock } };
+        document.CustomizeWallpaper(profile.Id, second); store.Save(document);
+        var studio = new DesktopCanvasView(store, () => { }, () => new[] { profile }, () => profile.Id) { ChooseDraftAction = () => DraftChoice.Discard };
+        var window = new Window { Width = 1000, Height = 790, Content = studio, ShowInTaskbar = false, Opacity = 0 };
+        window.Show(); studio.OpenWallpaper(profile.Id, second);
+        var picker = (ComboBox)studio.FindName("WallpaperCanvasPicker");
+        PumpUntil(() => picker.Items.Count == 3 && picker.SelectedIndex == 2);
+        var list = (ListBox)studio.FindName("WidgetList"); Assert.Single(list.Items);
+        list.SelectedIndex = 0;
+        ((ComboBox)studio.FindName("ClockSkinPicker")).SelectedItem = ClockSkin.Stacked;
+        ((ComboBox)studio.FindName("VisualizerSkinPicker")).SelectedItem = SpectrumSkin.Ring;
+        ((TextBox)studio.FindName("WidgetPositionX")).Text = "520";
+        ((Button)studio.FindName("SaveWidgetButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var custom = store.Load().Composition(profile.Id, second, false).Single();
+        Assert.Equal(ClockSkin.Stacked, custom.ClockSkin); Assert.Equal(520, custom.X); Assert.Equal(SpectrumSkin.Ring, custom.SpectrumSkin);
+        Assert.Equal(ClockSkin.Script, store.Load().Composition(profile.Id, imagePath, false).Single().ClockSkin);
+        RenderWorkspace(window, "wallpaper-studio", 1000, 790);
+        RenderWorkspace(window, "wallpaper-studio-compact", 650, 600);
+        picker.SelectedIndex = 1; Assert.Equal(clock.Id, Assert.IsType<DesktopWidget>(list.Items[0]).Id);
+        ((Button)studio.FindName("CustomizeWallpaperLayoutButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(store.Load().HasLayout(profile.Id, imagePath));
+        list.SelectedIndex = 0;
+        ((TextBox)studio.FindName("WidgetTitle")).Text = "Pending";
+        studio.ChooseDraftAction = () => DraftChoice.Cancel;
+        picker.SelectedIndex = 2; Assert.Equal(1, picker.SelectedIndex); Assert.True(studio.IsDraftDirty);
+        studio.ChooseDraftAction = () => DraftChoice.Discard;
+        ((Button)studio.FindName("CloseWidgetEditorButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        ((CheckBox)studio.FindName("FollowDesktopWallpaper")).IsChecked = true;
+        store.Update(saved => saved.ActiveWallpaperPath = second);
+        typeof(DesktopCanvasView).GetMethod("RefreshStatus", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(studio, null);
+        Assert.Equal(2, picker.SelectedIndex);
+        Assert.Equal(custom.Id, Assert.IsType<DesktopWidget>(list.Items[0]).Id);
+        // Exercise the real shuffle callback while the same profile stays active.
+        var applied = new List<string>();
+        using (var slideshow = new WallpaperProfiles.Engine.SlideshowController((path, _) =>
+        {
+            store.Update(saved => saved.ActiveWallpaperPath = path);
+            Assert.Single(store.Load().VisibleWidgets()); applied.Add(path);
+        }))
+        {
+            slideshow.Start(profile); PumpUntil(() => applied.Count > 0);
+            var advance = typeof(WallpaperProfiles.Engine.SlideshowController).GetMethod("AdvanceAndApplyAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            for (var i = 0; i < 4; i++)
+            {
+                var task = (Task)advance.Invoke(slideshow, null)!; PumpUntil(() => task.IsCompleted); task.GetAwaiter().GetResult();
+                Assert.NotEqual(applied[^2], applied[^1]);
+            }
+        }
+        window.Close();
+        var catalogue = new WidgetStyleCatalogWindow(store, imagePath) { Opacity = 0, ShowInTaskbar = false };
+        catalogue.Show(); RenderWorkspace(catalogue, "clock-style-catalogue", 880, 720);
+        VisualChildren(catalogue).OfType<Button>().Single(button => Equals(button.Content, "Visualizers")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        RenderWorkspace(catalogue, "visualizer-style-catalogue", 880, 720);
+        Assert.Equal(8, VisualChildren(catalogue).OfType<AudioSpectrumView>().Count());
+        catalogue.Close();
+        // Every clock skin must survive changing skins on the same live view.
+        var view = new ClockWidgetView(clock);
+        foreach (var skin in Enum.GetValues<ClockSkin>())
+        {
+            clock.ClockSkin = skin; view.UpdateAppearance(clock);
+            view.Measure(new Size(520, 400)); view.Arrange(new Rect(0, 0, 520, 400));
+            new RenderTargetBitmap(520, 400, 96, 96, PixelFormats.Pbgra32).Render(view);
+        }
     }
 
     private static void CheckWidgetDrafts(MainWindow main)
@@ -1534,6 +1607,7 @@ public sealed class LibraryWindowTests
         window.UpdateLayout();
         var list = (WallpaperThumbnailList)window.FindName("ProfileWallpaperList");
         PumpUntil(() => VisualChildren(list).OfType<SourceThumbnail>().All(image => image.Source != null));
+        window.UpdateLayout();
         var originalThumbnails = VisualChildren(list).OfType<SourceThumbnail>().ToDictionary(image => image.FilePath);
         var originalImages = originalThumbnails.ToDictionary(pair => pair.Key, pair => pair.Value.Source);
         var preview = (MonitorThumbnail)window.FindName(window is MainWindow ? "PreviewMon" : "EditorPreview");

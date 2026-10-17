@@ -118,7 +118,7 @@ internal sealed class DesktopCanvasHost : IDisposable
             if (!document.Enabled || !document.Widgets.Any(w => w.Enabled))
             { System.Windows.Application.Current.Shutdown(); return; }
             // Stay alive when the current profile has no widgets; the next switch can reveal them.
-            var enabled = document.Widgets.Where(w => w.IsVisibleOn(document.ActiveProfileId)).ToDictionary(w => w.Id);
+            var enabled = document.VisibleWidgets().ToDictionary(w => w.Id);
             foreach (var id in _windows.Keys.Where(id => !enabled.ContainsKey(id)).ToArray())
             {
                 var window = _windows[id];
@@ -454,7 +454,7 @@ internal sealed class DesktopWidgetWindow : Window
         _title.Text = widget.Title;
         Title = "Belie widget · " + widget.DisplayTitle;
         var appearance = widget.Kind + "\n" + widget.Content + "\n" + widget.FontSize + "\n" + widget.Alignment + "\n" + widget.ImageFit;
-        if (widget.Kind == DesktopWidgetKind.Clock) appearance = $"Clock|{widget.Id}";
+        if (widget.Kind is DesktopWidgetKind.Clock or DesktopWidgetKind.Visualizer) appearance = $"{widget.Kind}|{widget.Id}";
         if (widget.Kind == DesktopWidgetKind.Link)
             appearance += $"|{widget.LinkPageTitle}|{widget.LinkDescription}|{widget.LinkCustomDescription}|{widget.LeetCodeUsername}|{widget.LinkUpdatedAt}|{DateTime.UtcNow.Date}";
         if (widget.Kind == DesktopWidgetKind.Sketch)
@@ -506,11 +506,15 @@ internal sealed class DesktopWidgetWindow : Window
                 case DesktopWidgetKind.Clock:
                     _body.Content = new ClockWidgetView(widget);
                     break;
+                case DesktopWidgetKind.Visualizer:
+                    _body.Content = new AudioSpectrumView();
+                    break;
             }
         }
         if (widget.Kind == DesktopWidgetKind.Sketch) _sketch?.UpdateDrawing(widget);
         if (_body.Content is NowPlayingView music) music.UpdateAppearance(widget);
         if (_body.Content is ClockWidgetView clock) clock.UpdateAppearance(widget);
+        if (_body.Content is AudioSpectrumView spectrum) spectrum.UpdateAppearance(true, Foreground, widget);
         RefreshCountdown();
         Place();
     }

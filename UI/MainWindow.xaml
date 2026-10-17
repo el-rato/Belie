@@ -275,6 +275,7 @@
                 <TextBlock Text="Wallpaper source" Style="{StaticResource FieldLabel}"/>
                 <WrapPanel Margin="0,4,0,12">
                     <Button x:Name="AddFromLibraryButton" Content="Add from library" Click="OpenLibrary_Click" Margin="0,0,8,8"/>
+                    <Button Content="Compose widgets" Click="ComposeWallpaper_Click" Margin="0,0,8,8" ToolTip="Arrange widgets for the wallpaper in this preview"/>
                     <Button Content="Choose folder" Click="Browse_Click" Margin="0,0,8,8"/>
                     <Button Content="Choose image" Click="PickImage_Click" Margin="0,0,8,8"/>
                     <Button Content="Choose video" Click="PickVideo_Click" Margin="0,0,0,8"/>

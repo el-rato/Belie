@@ -18,12 +18,13 @@ using ComboBox = System.Windows.Controls.ComboBox;
 
 namespace WallpaperProfiles.UI;
 
-internal sealed class DesktopCanvasView : UserControl
+internal sealed partial class DesktopCanvasView : UserControl
 {
     private readonly DesktopCanvasStore _store;
     private readonly Action _startHost;
     private readonly Func<IReadOnlyList<WallpaperProfile>> _profiles;
     private readonly Func<Guid?> _activeProfile;
+    private readonly Func<string> _activeWallpaper;
     private sealed record ProfileChoice(Guid? Id, string Label, bool All = false);
     private readonly ComboBox _profile = new() { DisplayMemberPath = nameof(ProfileChoice.Label), MaxDropDownHeight = 280 };
     private readonly ComboBox _scopeFilter = new() { DisplayMemberPath = nameof(ProfileChoice.Label), Width = 190, Margin = new Thickness(0, 0, 16, 0) };
@@ -116,7 +117,10 @@ internal sealed class DesktopCanvasView : UserControl
         Description = _linkDescription.Text, User = _leetCodeUser.Text,
         MusicLayout = _musicLayout.SelectedItem, Art = _albumArt.IsChecked, Controls = _playbackControls.IsChecked,
         Progress = _playbackProgress.IsChecked, AudioVisualizer = _audioVisualizer.IsChecked, MusicAccent = _musicAccent.Text,
-        Clock24Hour = _clock24Hour.IsChecked, ClockGreeting = _clockGreeting.IsChecked, ClockVisualizer = _clockVisualizer.IsChecked });
+        Clock24Hour = _clock24Hour.IsChecked, ClockGreeting = _clockGreeting.IsChecked, ClockVisualizer = _clockVisualizer.IsChecked,
+        ClockSkin = _clockSkin.SelectedItem, Spectrum = _spectrumSkin.SelectedItem, Density = _density.Value,
+        Thickness = _spectrumThickness.Value, Sensitivity = _sensitivity.Value, Smoothing = _smoothing.Value,
+        X = _positionX.Text, Y = _positionY.Text });
     internal bool IsDraftDirty => !_loading && _selected != null && (_isNew || _savedDraft != DraftSnapshot());
     internal bool TryLeaveDraft()
     {
@@ -138,17 +142,18 @@ internal sealed class DesktopCanvasView : UserControl
     }
 
     public DesktopCanvasView(DesktopCanvasStore? store = null, Action? startHost = null,
-        Func<IReadOnlyList<WallpaperProfile>>? profiles = null, Func<Guid?>? activeProfile = null)
+        Func<IReadOnlyList<WallpaperProfile>>? profiles = null, Func<Guid?>? activeProfile = null, Func<string>? activeWallpaper = null)
     {
         _store = store ?? new DesktopCanvasStore(DesktopCanvasProcess.DefaultFile);
         _startHost = startHost ?? (() => DesktopCanvasProcess.Start(_store.FilePath));
         _profiles = profiles ?? (() => Array.Empty<WallpaperProfile>());
         _activeProfile = activeProfile ?? (() => _store.Load().ActiveProfileId);
+        _activeWallpaper = activeWallpaper ?? (() => _store.Load().ActiveWallpaperPath);
         NameScope.SetNameScope(this, new NameScope());
         Content = BuildWorkspace();
         foreach (var preview in new FrameworkElement[] { _preview, _list, _desktopOverview })
             TextOptions.SetTextRenderingMode(preview, TextRenderingMode.Grayscale);
-        SizeChanged += (_, _) => _preview.Height = ActualHeight < 640 ? 96 : Math.Min(300, 140 + (ActualHeight - 640) * .4);
+        SizeChanged += (_, _) => _preview.Height = ActualHeight < 640 ? 48 : 96;
         AllowDrop = true;
         PreviewDragOver += (_, e) => { e.Effects = System.Windows.DragDropEffects.Copy; e.Handled = true; };
         PreviewDrop += (_, e) => { Run(() => CreateFromDrop(e.Data)); e.Handled = true; };
@@ -165,6 +170,7 @@ internal sealed class DesktopCanvasView : UserControl
                 _loading = true; _scopeFilter.SelectedItem = _previousScope; _loading = false; return;
             }
             _previousScope = _scopeFilter.SelectedItem as ProfileChoice;
+            LoadWallpaperChoices();
             Run(RefreshList);
         };
         RegisterName("WidgetDate", _date); RegisterName("WidgetTime", _time); RegisterName("WidgetEnabled", _enabled);
@@ -241,7 +247,7 @@ internal sealed class DesktopCanvasView : UserControl
         _date.SelectedDateChanged += (_, _) => RefreshPreview();
         _profile.SelectionChanged += (_, _) => RefreshPreview();
         _enabled.Checked += (_, _) => RefreshPreview(); _enabled.Unchecked += (_, _) => RefreshPreview();
-        RefreshProfiles(); Run(RefreshList);
+        InitializeStudio(); RefreshProfiles(); Run(RefreshList);
     }
 
     private FrameworkElement BuildWorkspace()
@@ -255,11 +261,11 @@ internal sealed class DesktopCanvasView : UserControl
         var header = new Grid(); headerFrame.Child = header;
         header.ColumnDefinitions.Add(new ColumnDefinition()); header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var heading = new StackPanel();
-        heading.Children.Add(new TextBlock { Text = "Widgets", Style = (Style)FindResource("WorkspaceHeading") });
-        var subtitle = new TextBlock { Text = "Add, arrange, and customize your desktop widgets.", Style = (Style)FindResource("WorkspaceCaption") };
+        heading.Children.Add(new TextBlock { Text = "Wallpaper studio", Style = (Style)FindResource("WorkspaceHeading") });
+        var subtitle = new TextBlock { Text = "Compose a look. Each wallpaper remembers its widgets.", Style = (Style)FindResource("WorkspaceCaption") };
         heading.Children.Add(subtitle);
         var quickAdd = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };
-        foreach (var kind in new[] { DesktopWidgetKind.Note, DesktopWidgetKind.Image, DesktopWidgetKind.Countdown, DesktopWidgetKind.NowPlaying, DesktopWidgetKind.Clock })
+        foreach (var kind in new[] { DesktopWidgetKind.Clock, DesktopWidgetKind.Visualizer, DesktopWidgetKind.NowPlaying })
         {
             var captured = kind;
             var quick = ActionButton("+ " + (kind == DesktopWidgetKind.NowPlaying ? "Now playing" : kind.ToString()), "QuickAdd" + kind + "Button", () => Add(captured));
@@ -277,7 +283,10 @@ internal sealed class DesktopCanvasView : UserControl
         heading.Children.Add(quickAdd); header.Children.Add(heading);
         var add = ActionButton("+  Add widget", "AddWidgetButton", () => _addPopup.IsOpen = !_addPopup.IsOpen);
         add.SetResourceReference(StyleProperty, "PrimaryButton"); add.VerticalAlignment = VerticalAlignment.Center; add.Margin = new Thickness(0);
-        Grid.SetColumn(add, 1); header.Children.Add(add); workspace.Children.Add(headerFrame);
+        var headerActions = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        headerActions.Children.Add(ActionButton("Styles catalogue", "OpenStyleCatalogueButton", () => OpenCatalogue(false)));
+        add.Margin = new Thickness(0, 8, 8, 0); headerActions.Children.Add(add);
+        Grid.SetColumn(headerActions, 1); header.Children.Add(headerActions); workspace.Children.Add(headerFrame);
         _addPopup.PlacementTarget = add; _addPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
         var picker = new StackPanel();
         foreach (var kind in Enum.GetValues<DesktopWidgetKind>())
@@ -294,7 +303,7 @@ internal sealed class DesktopCanvasView : UserControl
 
         var body = new Grid(); Grid.SetRow(body, 2); workspace.Children.Add(body);
         body.ColumnDefinitions.Add(_galleryColumn); body.ColumnDefinitions.Add(_editorColumn);
-        var gallery = new Grid { Margin = new Thickness(0, 0, 16, 0) }; body.Children.Add(gallery);
+        var gallery = _galleryFrame; gallery.Margin = new Thickness(0, 0, 16, 0); body.Children.Add(gallery);
         var toolbar = new DockPanel { Margin = new Thickness(0, 0, 0, 14) };
         var actions = new WrapPanel { MaxWidth = 270 };
         _showAll = ActionButton("Show widgets", "ShowWidgetsButton", ShowWidgets); _hideAll = ActionButton("Hide widgets", "HideWidgetsButton", HideWidgets);
@@ -303,7 +312,9 @@ internal sealed class DesktopCanvasView : UserControl
         DockPanel.SetDock(actions, Dock.Right); toolbar.Children.Add(actions);
         DockPanel.SetDock(_scopeFilter, Dock.Left); toolbar.Children.Add(_scopeFilter);
         _status.Margin = new Thickness(0); _status.FontSize = 12; _status.VerticalAlignment = VerticalAlignment.Center;
-        _status.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); toolbar.Children.Add(_status); Grid.SetRow(toolbar, 1); workspace.Children.Add(toolbar);
+        _status.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); toolbar.Children.Add(_status);
+        var studioToolbar = new StackPanel(); studioToolbar.Children.Add(toolbar); studioToolbar.Children.Add(BuildCanvasToolbar());
+        Grid.SetRow(studioToolbar, 1); workspace.Children.Add(studioToolbar);
         var galleryArea = new Grid(); gallery.Children.Add(galleryArea);
         _list.Background = System.Windows.Media.Brushes.Transparent; _list.BorderThickness = new Thickness(0); _list.Padding = new Thickness(0);
         _list.SetResourceReference(Control.ForegroundProperty, "TextPrimaryBrush");
@@ -326,13 +337,13 @@ internal sealed class DesktopCanvasView : UserControl
         _overviewCaption.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); overviewHeading.Children.Add(_overviewCaption); overview.Children.Add(overviewHeading);
         var desktopPreview = new Viewbox { Child = _desktopOverview, Stretch = Stretch.Uniform };
         Grid.SetRow(desktopPreview, 1); overview.Children.Add(desktopPreview);
-        var overviewHint = new TextBlock { Text = "Select a widget to edit its content, style, and position.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 14, 0, 0), FontSize = 12 };
+        var overviewHint = new TextBlock { Text = "Drag widgets on the canvas. Save to keep your composition. Shuffle restores each wallpaper’s layout automatically.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 14, 0, 0), FontSize = 12 };
         Grid.SetRow(overviewHint, 2); overview.Children.Add(overviewHint);
         Grid.SetColumn(_overviewFrame, 1); body.Children.Add(_overviewFrame);
 
         _editorFrame.CornerRadius = new CornerRadius(16); _editorFrame.Padding = new Thickness(16); _editorFrame.BorderThickness = new Thickness(1);
         _editorFrame.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); _editorFrame.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
-        Grid.SetColumn(_editorFrame, 1); body.Children.Add(_editorFrame);
+        _editorFrame.Margin = new Thickness(0, 0, 14, 0); body.Children.Add(_editorFrame);
         var editor = new Grid(); _editorFrame.Child = editor;
         foreach (var height in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto }) editor.RowDefinitions.Add(new RowDefinition { Height = height });
         var editorHeader = new DockPanel(); _kindLabel.Margin = new Thickness(0); _kindLabel.VerticalAlignment = VerticalAlignment.Center;
@@ -356,13 +367,14 @@ internal sealed class DesktopCanvasView : UserControl
         foreach (var option in new[] { _albumArt, _playbackControls, _playbackProgress, _audioVisualizer }) { option.Margin = new Thickness(0, 10, 0, 0); _musicFields.Children.Add(option); }
         ColorField("Playback accent", _musicAccent, _musicFields);
         _contentPage.Children.Add(_musicFields);
-        _clockFields.Children.Add(new TextBlock { Text = "A script weekday, date, time, and live desktop audio. Bars react to your default speakers or headphones and settle when silent.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), FontSize = 12 });
+        _clockFields.Children.Add(new TextBlock { Text = "Choose a clock design in Style. Pair it with any visualizer, or add a visualizer as a separate widget.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), FontSize = 12 });
         foreach (var (name, option) in new[] { ("Clock24Hour", _clock24Hour), ("ClockGreeting", _clockGreeting), ("ClockVisualizer", _clockVisualizer) })
         {
             option.Margin = new Thickness(0, 10, 0, 0); _clockFields.Children.Add(option); RegisterName(name, option);
             System.Windows.Automation.AutomationProperties.SetName(option, option.Content.ToString());
         }
         _contentPage.Children.Add(_clockFields);
+        BuildSkinControls();
         Field(_targetFields, "Date", _date); Field(_targetFields, "Time · HH:mm", _time); _contentPage.Children.Add(_targetFields);
         var presets = new WrapPanel();
         foreach (var name in new[] { "Rainmeter", "Glass", "Paper", "Minimal", "Gothic", "Cathedral", "Crimson", "Parchment", "Royal", "Neon", "Terminal" })
@@ -376,6 +388,7 @@ internal sealed class DesktopCanvasView : UserControl
         ColorField("Text", _textColor, _stylePage); ColorField("Background", _backgroundColor, _stylePage); ColorField("Border", _borderColor, _stylePage);
         Field(_stylePage, "Border width", _borderWidth); Field(_stylePage, "Opacity", _opacity); Field(_stylePage, "Corners", _radius);
         foreach (var option in new[] { _showHeader, _showBorder, _showBackground }) { option.Margin = new Thickness(0, 8, 0, 0); _stylePage.Children.Add(option); }
+        Field(_layoutPage, "Position X", _positionX); Field(_layoutPage, "Position Y", _positionY);
         Field(_layoutPage, "Width", _width); Field(_layoutPage, "Height", _height); Field(_layoutPage, "Image fit", _imageFit);
         _layoutPage.Children.Add(_enabled); _layoutPage.Children.Add(_locked);
         _editorScroll.Content = _fields; Grid.SetRow(_editorScroll, 3); editor.Children.Add(_editorScroll); RegisterName("WidgetEditorScroll", _editorScroll);
@@ -405,7 +418,9 @@ internal sealed class DesktopCanvasView : UserControl
     private void SetEditorVisible(bool visible)
     {
         _editorFrame.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        _overviewFrame.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
+        _overviewFrame.Visibility = Visibility.Visible;
+        _galleryFrame.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
+        _galleryColumn.Width = new GridLength(visible ? 310 : 208);
         _editorColumn.Width = new GridLength(1, GridUnitType.Star);
     }
     private void CloseEditor()
@@ -509,7 +524,13 @@ internal sealed class DesktopCanvasView : UserControl
     }
     internal void CreateFromDrop(System.Windows.IDataObject data)
     {
+        if (!TryLeaveDraft()) return;
         var widgets = DesktopCanvasFeatures.ReadDrop(data);
+        foreach (var widget in widgets)
+        {
+            widget.ProfileId = string.IsNullOrEmpty(CanvasPath) ? (_scopeFilter.SelectedItem as ProfileChoice)?.Id : CanvasProfile;
+            widget.WallpaperPath = EditableCanvasPath();
+        }
         var area = System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;
         DesktopCanvasFeatures.SaveDrop(_store, widgets, area.Right - 340, area.Top + 70);
         _selected = widgets[0]; RefreshList(); _startHost(); _message.Text = $"Created {widgets.Count} widget(s).";
@@ -554,6 +575,7 @@ internal sealed class DesktopCanvasView : UserControl
         widget.ClockUse24Hour = _clock24Hour.IsChecked == true;
         widget.ClockShowGreeting = _clockGreeting.IsChecked == true;
         widget.ClockShowVisualizer = _clockVisualizer.IsChecked == true;
+        ReadSkin(widget);
         widget.BorderColor = _borderColor.Text.Trim().ToUpperInvariant(); widget.BorderWidth = _borderWidth.Value;
     }
     private void QueuePreview()
@@ -574,6 +596,7 @@ internal sealed class DesktopCanvasView : UserControl
         else if (_message.Text == "Unsaved changes") _message.Text = "";
         var draft = _selected.Duplicate(); draft.Id = _selected.Id;
         draft.Title = _title.Text; draft.Content = _content.Text;
+        draft.Enabled = _enabled.IsChecked == true;
         draft.LinkCustomDescription = _linkDescription.Text; draft.LeetCodeUsername = _leetCodeUser.Text.Trim();
         draft.Locked = _locked.IsChecked == true;
         draft.Width = _width.Value; draft.Height = _height.Value;
@@ -593,6 +616,8 @@ internal sealed class DesktopCanvasView : UserControl
         }
         var previewContent = (FrameworkElement)_preview.Child;
         previewContent.Width = draft.Width; previewContent.Height = draft.Height;
+        ReadPosition(draft);
+        RefreshOverview(_store.Load(), draft);
     }
     private void ApplyStyle(string name)
     {
@@ -650,11 +675,12 @@ internal sealed class DesktopCanvasView : UserControl
         {
             var document = _store.Load();
             var count = document.Widgets.Count;
-            var visible = document.Enabled ? document.Widgets.Count(w => w.IsVisibleOn(_activeProfile())) : 0;
+            var visible = document.Enabled ? document.VisibleWidgets().Count() : 0;
             _status.Text = count == 0 ? "No widgets yet" : $"{visible} on desktop · {count} {(count == 1 ? "widget" : "widgets")} in gallery";
             _showAll.Visibility = document.Enabled ? Visibility.Collapsed : Visibility.Visible;
             _hideAll.Visibility = document.Enabled ? Visibility.Visible : Visibility.Collapsed;
-            if (_overviewFrame.Visibility == Visibility.Visible) RefreshOverview(document);
+            FollowDesktop(document);
+            if (_overviewFrame.Visibility == Visibility.Visible && _selected == null) RefreshOverview(document);
         }
         catch (Exception ex) { _status.Text = ex.Message; }
     }
@@ -663,7 +689,9 @@ internal sealed class DesktopCanvasView : UserControl
         var selected = _selected?.Id;
         var document = _store.Load();
         var filter = _scopeFilter.SelectedItem as ProfileChoice;
-        var widgets = document.Widgets.Where(w => filter == null || filter.All || w.ProfileId == filter.Id).ToList();
+        var widgets = (string.IsNullOrEmpty(CanvasPath)
+            ? document.Widgets.Where(w => (filter == null || filter.All || w.ProfileId == filter.Id) && string.IsNullOrEmpty(w.WallpaperPath))
+            : document.Composition(CanvasProfile, CanvasPath)).ToList();
         var loading = _loading; _loading = true;
         _list.ItemsSource = widgets;
         _list.SelectedItem = widgets.FirstOrDefault(w => w.Id == selected);
@@ -672,6 +700,7 @@ internal sealed class DesktopCanvasView : UserControl
         _empty.Text = document.Widgets.Count == 0 ? "Drop an image, link, or note here.\nOr add your first widget." : "No widgets in this group.";
         _empty.Visibility = widgets.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         RefreshStatus();
+        RefreshLayoutActions(document);
     }
     private string ProfileLabel(Guid? id) => id.HasValue ? _profiles().FirstOrDefault(profile => profile.Id == id)?.Name ?? "Missing profile" : "General · all profiles";
 
@@ -692,21 +721,24 @@ internal sealed class DesktopCanvasView : UserControl
             _previousScope = _scopeFilter.SelectedItem as ProfileChoice;
             _loading = loading;
             if (!_loading && _selected == null) Run(RefreshList);
+            LoadWallpaperChoices();
         }
         RefreshStatus();
     }
 
-    private void RefreshOverview(DesktopCanvasDocument document)
+    private void RefreshOverview(DesktopCanvasDocument document, DesktopWidget? draft = null)
     {
-        var active = _activeProfile();
-        var widgets = document.Widgets.Where(widget => widget.IsVisibleOn(active)).ToArray();
+        var active = CanvasProfile;
+        var widgets = document.Composition(active, CanvasPath).Where(widget => widget.Enabled).ToList();
+        if (draft != null) { widgets.RemoveAll(widget => widget.Id == draft.Id); if (draft.Enabled) widgets.Add(draft); }
         _overviewCaption.Text = "Preview: " + (active.HasValue ? ProfileLabel(active) : "Global widgets")
-            + (document.Enabled ? " · includes global widgets" : " · widgets hidden")
-            + (widgets.Length == 0 ? "\nNo widgets assigned here. Other profiles' widgets remain in the gallery." : "");
+            + (string.IsNullOrEmpty(CanvasPath) ? " · default layout" : " · " + Path.GetFileName(CanvasPath))
+            + (document.Enabled ? "" : " · widgets hidden")
+            + (widgets.Count == 0 ? "\nAdd a clock, visualizer, or another widget to compose this look." : "");
         var area = System.Windows.Forms.SystemInformation.VirtualScreen;
-        var key = $"{File.GetLastWriteTimeUtc(_store.FilePath).Ticks}|{active}|{ProfileLabel(active)}|{DesktopWidgetWindow.WallpaperKey}|{area}|{VisualTreeHelper.GetDpi(this).DpiScaleX}";
-        if (_overviewKey == key) return;
-        _overviewKey = key;
+        var key = $"{File.GetLastWriteTimeUtc(_store.FilePath).Ticks}|{active}|{CanvasPath}|{ProfileLabel(active)}|{DesktopWidgetWindow.WallpaperKey}|{area}|{VisualTreeHelper.GetDpi(this).DpiScaleX}";
+        if (draft == null && _overviewKey == key) return;
+        _overviewKey = draft == null ? key : "";
         _desktopOverview.Width = area.Width; _desktopOverview.Height = area.Height; _desktopOverview.ClipToBounds = true;
         _desktopOverview.SetResourceReference(System.Windows.Controls.Panel.BackgroundProperty, "BgBrush");
         _desktopOverview.Children.Clear();
@@ -714,7 +746,7 @@ internal sealed class DesktopCanvasView : UserControl
         {
             var backdrop = new Border { Width = screen.Bounds.Width, Height = screen.Bounds.Height, BorderThickness = new Thickness(1) };
             backdrop.SetResourceReference(Border.BorderBrushProperty, "BorderStrongBrush");
-            backdrop.Background = DesktopWidgetWindow.WallpaperBrush(new Rect(screen.Bounds.Left, screen.Bounds.Top, screen.Bounds.Width, screen.Bounds.Height), screen.Bounds);
+            backdrop.Background = CanvasWallpaperBrush() ?? DesktopWidgetWindow.WallpaperBrush(new Rect(screen.Bounds.Left, screen.Bounds.Top, screen.Bounds.Width, screen.Bounds.Height), screen.Bounds);
             System.Windows.Controls.Canvas.SetLeft(backdrop, screen.Bounds.Left - area.Left);
             System.Windows.Controls.Canvas.SetTop(backdrop, screen.Bounds.Top - area.Top); _desktopOverview.Children.Add(backdrop);
         }
@@ -726,7 +758,7 @@ internal sealed class DesktopCanvasView : UserControl
             content.Width = widget.Width; content.Height = widget.Height;
             var item = new Border { Width = bounds.Width, Height = bounds.Height, Child = new Viewbox { Child = content, Stretch = Stretch.Fill }, Cursor = System.Windows.Input.Cursors.Hand,
                 ToolTip = widget.DisplayTitle, Opacity = document.Enabled ? 1 : .4 };
-            item.PreviewMouseLeftButtonDown += (_, e) => { _list.SelectedItem = widget; e.Handled = true; };
+            item.PreviewMouseLeftButtonDown += (_, e) => StartCanvasDrag(widget, e);
             System.Windows.Controls.Canvas.SetLeft(item, bounds.X - area.Left); System.Windows.Controls.Canvas.SetTop(item, bounds.Y - area.Top);
             _desktopOverview.Children.Add(item);
         }
@@ -738,14 +770,15 @@ internal sealed class DesktopCanvasView : UserControl
         var area = System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;
         var offset = document.Widgets.Count % 8 * 28;
         Select(new DesktopWidget { Kind = kind, Title = kind == DesktopWidgetKind.NowPlaying ? "Now playing" : kind == DesktopWidgetKind.Note ? "A little reminder" : "New " + kind.ToString().ToLowerInvariant(),
-            ProfileId = (_scopeFilter.SelectedItem as ProfileChoice)?.Id,
+            ProfileId = string.IsNullOrEmpty(CanvasPath) ? (_scopeFilter.SelectedItem as ProfileChoice)?.Id : CanvasProfile,
+            WallpaperPath = EditableCanvasPath(),
             Content = kind == DesktopWidgetKind.Note ? "Make room for what matters." : "", FontSize = kind == DesktopWidgetKind.Clock ? 76 : kind == DesktopWidgetKind.NowPlaying ? 24 : kind == DesktopWidgetKind.Countdown ? 30 : 16,
             FontFamily = kind == DesktopWidgetKind.Clock ? ClockWidgetView.ScriptFont : "Segoe UI",
             Alignment = kind == DesktopWidgetKind.Clock ? WidgetTextAlignment.Center : WidgetTextAlignment.Left,
             Width = kind == DesktopWidgetKind.Clock ? 520 : kind == DesktopWidgetKind.NowPlaying ? 360 : 300, Height = kind == DesktopWidgetKind.Clock ? 310 : kind == DesktopWidgetKind.NowPlaying ? 140 : 230,
             MusicLayout = NowPlayingLayout.Minimal, ShowAlbumArt = kind != DesktopWidgetKind.NowPlaying, ShowPlaybackControls = kind != DesktopWidgetKind.NowPlaying,
             MusicAccentColor = "#F1F2EE",
-            ShowHeader = kind is not (DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock), ShowBorder = kind is not (DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock), ShowBackground = kind is not (DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock),
+            ShowHeader = kind is not (DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock or DesktopWidgetKind.Visualizer), ShowBorder = kind is not (DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock or DesktopWidgetKind.Visualizer), ShowBackground = kind is not (DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock or DesktopWidgetKind.Visualizer),
             X = area.Right - 340 - offset, Y = area.Top + 70 + offset }, true);
         if (kind == DesktopWidgetKind.Link) _leetCodeUser.Text = "_Unkillable__Demon_King";
         _loading = true; _list.SelectedItem = null; _loading = false;
@@ -757,6 +790,7 @@ internal sealed class DesktopCanvasView : UserControl
         if (!changedWidget && IsDraftDirty) return;
         _loading = true;
         _selected = widget; _isNew = isNew;
+        LoadSkin(widget);
         if (widget.ProfileId.HasValue && !_profile.Items.Cast<ProfileChoice>().Any(choice => choice.Id == widget.ProfileId))
             _profile.ItemsSource = _profile.Items.Cast<ProfileChoice>().Append(new ProfileChoice(widget.ProfileId, "Missing profile")).ToList();
         _profile.SelectedItem = _profile.Items.Cast<ProfileChoice>().First(choice => choice.Id == widget.ProfileId);
@@ -788,7 +822,7 @@ internal sealed class DesktopCanvasView : UserControl
         _showBackground.IsChecked = widget.ShowBackground;
         _enabled.IsChecked = widget.Enabled; _locked.IsChecked = widget.Locked;
         _targetFields.Visibility = widget.Kind == DesktopWidgetKind.Countdown ? Visibility.Visible : Visibility.Collapsed;
-        _content.Visibility = widget.Kind is DesktopWidgetKind.Countdown or DesktopWidgetKind.Sketch or DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock ? Visibility.Collapsed : Visibility.Visible;
+        _content.Visibility = widget.Kind is DesktopWidgetKind.Countdown or DesktopWidgetKind.Sketch or DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock or DesktopWidgetKind.Visualizer ? Visibility.Collapsed : Visibility.Visible;
         _contentLabel.Visibility = _content.Visibility;
         _contentLabel.Text = widget.Kind switch { DesktopWidgetKind.Image => "Image file", DesktopWidgetKind.Link => "Website address (https://…)", _ => "Your note" };
         _browse.Visibility = widget.Kind == DesktopWidgetKind.Image ? Visibility.Visible : Visibility.Collapsed;
@@ -837,12 +871,15 @@ internal sealed class DesktopCanvasView : UserControl
             }
             saved.Title = title; saved.Content = content; saved.Target = target;
             saved.ProfileId = (_profile.SelectedItem as ProfileChoice)?.Id;
+            if (!saved.ProfileId.HasValue) saved.WallpaperPath = "";
             document.ActiveProfileId = _activeProfile();
+            document.ActiveWallpaperPath = _activeWallpaper();
             saved.LinkCustomDescription = _linkDescription.Text.Trim(); saved.LeetCodeUsername = _leetCodeUser.Text.Trim();
             if (_width.Value != _loadedWidth) saved.Width = _width.Value;
             if (_height.Value != _loadedHeight) saved.Height = _height.Value;
             saved.Enabled = _enabled.IsChecked == true; saved.Locked = _locked.IsChecked == true;
             ReadAppearance(saved);
+            ReadPosition(saved, changedOnly: true);
             if (saved.Enabled) document.Enabled = true;
         });
         _isNew = false;
@@ -854,11 +891,50 @@ internal sealed class DesktopCanvasView : UserControl
     private void Delete()
     {
         if (_selected == null || _isNew) return;
-        if (!(ConfirmDeleteAction?.Invoke() ?? (System.Windows.MessageBox.Show(Window.GetWindow(this), "Delete this widget?", "Delete widget", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes))) return;
+        if (!(ConfirmDeleteAction?.Invoke() ?? ConfirmWidgetDeletion())) return;
         _store.Update(document => document.Widgets.RemoveAll(w => w.Id == _selected.Id));
         _selected = null; _isNew = false;
         CloseEditor();
         RefreshList();
+    }
+    private bool ConfirmWidgetDeletion()
+    {
+        var owner = Window.GetWindow(this);
+        var dialog = new Window
+        {
+            Title = "Delete widget", Width = 430, SizeToContent = SizeToContent.Height,
+            ResizeMode = ResizeMode.NoResize, Owner = owner, ShowInTaskbar = false,
+            WindowStartupLocation = owner == null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            FontSize = 14
+        };
+        var content = new StackPanel { Margin = new Thickness(24) };
+        content.Children.Add(new TextBlock
+        {
+            Text = "Delete this widget?", FontSize = 22, FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        });
+        var description = new TextBlock
+        {
+            Text = "This widget will be removed from your desktop canvas.",
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 24)
+        };
+        description.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        content.Children.Add(description);
+        var commands = new StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+        };
+        var cancel = new Button { Content = "Cancel", MinWidth = 82, MinHeight = 36, IsCancel = true, IsDefault = true };
+        var delete = new Button { Content = "Delete widget", MinWidth = 110, MinHeight = 36, Margin = new Thickness(8, 0, 0, 0) };
+        delete.SetResourceReference(StyleProperty, "DangerButton");
+        delete.Click += (_, _) => dialog.DialogResult = true;
+        commands.Children.Add(cancel);
+        commands.Children.Add(delete);
+        content.Children.Add(commands);
+        UiAppearance.SetDialogContent(dialog, content, "Delete widget");
+        dialog.Loaded += (_, _) => cancel.Focus();
+        return dialog.ShowDialog() == true;
     }
     private void ShowWidgets()
     {

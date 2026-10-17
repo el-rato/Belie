@@ -42,6 +42,7 @@ internal sealed class WallpaperCoordinator : IDisposable
     private string _summary = "Starting…";
 
     public event Action? StateChanged;
+    public event Action<Guid, string>? WallpaperChanged;
 
     public WallpaperCoordinator(ProfileStore store, SettingsStore settingsStore, AppSettings settings,
         TimeProvider? timeProvider = null, Action<WallpaperProfile>? applyWallpaper = null)
@@ -64,6 +65,7 @@ internal sealed class WallpaperCoordinator : IDisposable
     internal AppSettings Settings => _settings;
 
     public Guid? ActiveProfileId => _currentId;
+    public string CurrentMediaPath => _currentMediaPath;
 
     public bool Paused { get; private set; }
 
@@ -304,14 +306,13 @@ internal sealed class WallpaperCoordinator : IDisposable
         _slideshow.Start(profile);
     }
 
-    private void ApplyMedia(string path, WallpaperProfile profile)
+    private async void ApplyMedia(string path, WallpaperProfile profile)
     {
-        _currentMediaPath = path;
         // GIFs discovered in a folder retain their existing static slideshow behavior.
         var live = WallpaperEngine.IsLiveFile(path) && (!Directory.Exists(profile.FolderPath)
             || profile.AdditionalWallpaperPaths.Contains(path, StringComparer.OrdinalIgnoreCase));
         App.ConfigureRendering(live);
-        WallpaperEngine.NextApplyGeneration();
+        var generation = WallpaperEngine.NextApplyGeneration();
         if (live)
         {
             var media = new WallpaperProfile { FolderPath = path, FitMode = profile.FitMode,
@@ -333,8 +334,11 @@ internal sealed class WallpaperCoordinator : IDisposable
         {
             _live.Stop();
             _iconSafeLive.Stop();
-            _ = WallpaperEngine.SetWallpaperAsync(path, profile.FitMode, WallpaperEngine.ApplyGeneration);
+            if (!await WallpaperEngine.SetWallpaperAsync(path, profile.FitMode, generation)) return;
         }
+        if (generation != WallpaperEngine.ApplyGeneration || _currentId != profile.Id) return;
+        _currentMediaPath = path;
+        WallpaperChanged?.Invoke(profile.Id, path);
         UpdateSummary();
     }
 

@@ -121,15 +121,15 @@ internal partial class App : System.Windows.Application
             var profileStore = new ProfileStore(AppPaths.ProfilesDir);
 
             _coordinator = new WallpaperCoordinator(profileStore, settingsStore, settings);
-            _coordinator.StateChanged += () =>
+            _coordinator.WallpaperChanged += (active, wallpaper) =>
             {
                 try
                 {
                     var canvasStore = new DesktopCanvasStore(DesktopCanvasProcess.DefaultFile);
                     if (!File.Exists(canvasStore.FilePath)) return;
-                    var active = _coordinator.ActiveProfileId;
-                    if (canvasStore.Load().ActiveProfileId != active)
-                        canvasStore.Update(canvas => canvas.ActiveProfileId = active);
+                    var canvas = canvasStore.Load();
+                    if (canvas.ActiveProfileId != active || !DesktopCanvasDocument.SameWallpaper(canvas.ActiveWallpaperPath, wallpaper))
+                        canvasStore.Update(saved => { saved.ActiveProfileId = active; saved.ActiveWallpaperPath = wallpaper; });
                 }
                 catch (Exception ex) { Logger.Error("Updating profile widgets failed.", ex); }
             };

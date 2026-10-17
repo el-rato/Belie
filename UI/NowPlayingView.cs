@@ -146,7 +146,7 @@ internal sealed class NowPlayingView : System.Windows.Controls.UserControl
         FontStyle = widget.Italic ? FontStyles.Italic : FontStyles.Normal;
         _track.FontSize = widget.FontSize;
         var accent = ColorBrush(widget.MusicAccentColor, Color.FromRgb(169, 201, 180));
-        _spectrum.UpdateAppearance(widget.ShowAudioVisualizer, accent);
+        _spectrum.UpdateAppearance(widget.ShowAudioVisualizer, accent, widget);
         _toggle.Background = accent;
         _toggle.Foreground = AccentInkConverter.Luminance(accent.Color) < .179 ? Brushes.White : Brushes.Black;
         _previous.Foreground = _next.Foreground = Foreground;

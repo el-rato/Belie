@@ -287,7 +287,7 @@ internal partial class MainWindow : Window
 
     private void ShowCanvas_Click(object sender, RoutedEventArgs e)
     {
-        CanvasPane.Content ??= new DesktopCanvasView(profiles: () => _coordinator.Profiles, activeProfile: () => _coordinator.ActiveProfileId);
+        CanvasPane.Content ??= new DesktopCanvasView(profiles: () => _coordinator.Profiles, activeProfile: () => _coordinator.ActiveProfileId, activeWallpaper: () => _coordinator.CurrentMediaPath);
         CanvasPane.Visibility = Visibility.Visible;
         ProfilePane.Visibility = Visibility.Collapsed;
         LibraryPane.Visibility = Visibility.Collapsed;
@@ -298,6 +298,15 @@ internal partial class MainWindow : Window
         DashboardNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
         WorkspaceTitle.Text = "/  Widgets";
         UpdateNavigation(CanvasNavButton);
+    }
+
+    private void ComposeWallpaper_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected == null || !TryLeaveAllDrafts()) return;
+        var profile = _selected.Id;
+        var path = _previewMedia.Count > 0 ? _previewMedia[Math.Clamp(_previewIndex, 0, _previewMedia.Count - 1)] : "";
+        ShowCanvas_Click(sender, e);
+        if (CanvasPane.Content is DesktopCanvasView studio) studio.OpenWallpaper(profile, path);
     }
 
     private bool TryLeaveWidgetDraft() => CanvasPane.Visibility != Visibility.Visible

@@ -2,7 +2,9 @@ using System.Text.Json;
 
 namespace WallpaperProfiles.Persistence;
 
-internal enum DesktopWidgetKind { Note, Countdown, Image, Link, Sketch, NowPlaying, Clock }
+internal enum DesktopWidgetKind { Note, Countdown, Image, Link, Sketch, NowPlaying, Clock, Visualizer }
+internal enum ClockSkin { Script, Editorial, Minimal, Stacked, Analog, Digital, Terminal, Split, Words, DateCard }
+internal enum SpectrumSkin { Mirrored, Bars, Wave, Line, Dots, Ring, Arc, Radial }
 internal enum NowPlayingLayout { Horizontal, Stacked, Minimal }
 internal enum WidgetTextAlignment { Left, Center, Right }
 internal enum WidgetImageFit { Fit, Fill, Stretch }
@@ -22,6 +24,7 @@ internal sealed class DesktopWidget
     public double Height { get; set; } = 230;
     public bool Enabled { get; set; } = true;
     public Guid? ProfileId { get; set; }
+    public string WallpaperPath { get; set; } = "";
     public bool IsVisibleOn(Guid? activeProfileId) => Enabled && (!ProfileId.HasValue || ProfileId == activeProfileId);
     public bool Locked { get; set; }
     public string FontFamily { get; set; } = "Segoe UI";
@@ -48,6 +51,12 @@ internal sealed class DesktopWidget
     public bool ClockUse24Hour { get; set; }
     public bool ClockShowGreeting { get; set; } = true;
     public bool ClockShowVisualizer { get; set; } = true;
+    public ClockSkin ClockSkin { get; set; }
+    public SpectrumSkin SpectrumSkin { get; set; }
+    public int SpectrumDensity { get; set; } = 48;
+    public double SpectrumThickness { get; set; } = 2;
+    public double SpectrumSensitivity { get; set; } = 1;
+    public double SpectrumSmoothing { get; set; } = .65;
     public WidgetImageFit ImageFit { get; set; }
     public string Drawing { get; set; } = "";
     public double DrawingWidth { get; set; } = 300;
@@ -104,11 +113,69 @@ internal sealed class DesktopWidget
     }
 }
 
+internal sealed class WallpaperWidgetLayout
+{
+    public Guid ProfileId { get; set; }
+    public string WallpaperPath { get; set; } = "";
+}
+
+internal sealed class WidgetLayoutPreset
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public List<DesktopWidget> Widgets { get; set; } = new();
+}
+
+internal sealed class WidgetStylePreset
+{
+    public string Name { get; set; } = "";
+    public DesktopWidget Style { get; set; } = new();
+}
+
 internal sealed class DesktopCanvasDocument
 {
     public bool Enabled { get; set; }
     public Guid? ActiveProfileId { get; set; }
+    public string ActiveWallpaperPath { get; set; } = "";
     public List<DesktopWidget> Widgets { get; set; } = new();
+    public List<WallpaperWidgetLayout> WallpaperLayouts { get; set; } = new();
+    public List<WidgetLayoutPreset> LayoutPresets { get; set; } = new();
+    public List<WidgetStylePreset> StylePresets { get; set; } = new();
+
+    public static bool SameWallpaper(string? left, string? right) =>
+        string.Equals(left?.Replace('/', '\\'), right?.Replace('/', '\\'), StringComparison.OrdinalIgnoreCase);
+
+    public bool HasLayout(Guid? profileId, string path) => profileId.HasValue && !string.IsNullOrEmpty(path)
+        && WallpaperLayouts.Any(layout => layout.ProfileId == profileId && SameWallpaper(layout.WallpaperPath, path));
+
+    public IEnumerable<DesktopWidget> Composition(Guid? profileId, string path, bool includeGlobal = true)
+    {
+        var scopedPath = HasLayout(profileId, path) ? path : "";
+        return Widgets.Where(widget => widget.ProfileId == null
+            ? includeGlobal && string.IsNullOrEmpty(widget.WallpaperPath)
+            : widget.ProfileId == profileId && SameWallpaper(widget.WallpaperPath, scopedPath));
+    }
+
+    public IEnumerable<DesktopWidget> VisibleWidgets() => Composition(ActiveProfileId, ActiveWallpaperPath).Where(widget => widget.Enabled);
+
+    public void CustomizeWallpaper(Guid profileId, string path)
+    {
+        if (HasLayout(profileId, path) || string.IsNullOrWhiteSpace(path)) return;
+        var originals = Composition(profileId, "", false).ToArray();
+        WallpaperLayouts.Add(new() { ProfileId = profileId, WallpaperPath = path });
+        foreach (var original in originals)
+        {
+            var copy = original.Duplicate();
+            copy.Title = original.Title; copy.X = original.X; copy.Y = original.Y;
+            copy.WallpaperPath = path; Widgets.Add(copy);
+        }
+    }
+
+    public void ResetWallpaper(Guid profileId, string path)
+    {
+        Widgets.RemoveAll(widget => widget.ProfileId == profileId && SameWallpaper(widget.WallpaperPath, path));
+        WallpaperLayouts.RemoveAll(layout => layout.ProfileId == profileId && SameWallpaper(layout.WallpaperPath, path));
+    }
 }
 
 internal sealed class DesktopCanvasStore
@@ -125,6 +192,8 @@ internal sealed class DesktopCanvasStore
         stream.Position = 0;
         using var json = JsonDocument.Parse(stream);
         document.Widgets ??= new();
+        document.ActiveWallpaperPath ??= "";
+        document.WallpaperLayouts ??= new(); document.LayoutPresets ??= new(); document.StylePresets ??= new();
         if (TryGetSavedBoards(json.RootElement, out var boards))
         {
             var existing = document.Widgets.Where(widget => widget != null).Select(widget => widget.Id).ToHashSet();
@@ -144,33 +213,59 @@ internal sealed class DesktopCanvasStore
         foreach (var widget in document.Widgets)
         {
             if (widget == null || !seen.Add(widget.Id)) throw new InvalidDataException("The canvas contains an invalid widget.");
-            if (!Enum.IsDefined(widget.Kind)) throw new InvalidDataException("Unknown widget type.");
-            widget.Title ??= "";
-            widget.Content ??= "";
-            widget.Width = Clamp(widget.Width, 120, 1600, 300);
-            widget.Height = Clamp(widget.Height, 80, 1200, 230);
-            widget.X = Clamp(widget.X, -100000, 100000, 160);
-            widget.Y = Clamp(widget.Y, -100000, 100000, 100);
-            widget.FontFamily = string.IsNullOrWhiteSpace(widget.FontFamily) ? "Segoe UI" : widget.FontFamily;
-            widget.FontSize = Clamp(widget.FontSize, 10, 96, 16);
-            widget.Opacity = Clamp(widget.Opacity, .2, 1, 1);
-            widget.CornerRadius = Clamp(widget.CornerRadius, 0, 60, 12);
-            widget.TextColor ??= "#F1F2EE";
-            widget.BackgroundColor ??= "#1D201E";
-            widget.BorderColor ??= "#738579";
-            widget.MusicAccentColor ??= "#A9C9B4";
-            if (!Enum.IsDefined(widget.MusicLayout)) widget.MusicLayout = NowPlayingLayout.Horizontal;
-            widget.BorderWidth = Clamp(widget.BorderWidth, 0, 6, 1);
-            widget.Drawing ??= ""; widget.LeetCodeUsername ??= ""; widget.PotdCompletions ??= new();
-            widget.LinkDescription ??= ""; widget.LinkCustomDescription ??= ""; widget.LinkPageTitle ??= "";
-            widget.LinkStatus ??= ""; widget.PotdTitle ??= ""; widget.PotdUrl ??= "";
-            widget.DrawingWidth = Clamp(widget.DrawingWidth, 1, 1600, 300);
-            widget.DrawingHeight = Clamp(widget.DrawingHeight, 1, 1200, 180);
-            if (widget.Drawing.Length > 6000000) throw new InvalidDataException("The drawing is too large.");
-            if (!Enum.IsDefined(widget.Alignment)) widget.Alignment = WidgetTextAlignment.Left;
-            if (!Enum.IsDefined(widget.ImageFit)) widget.ImageFit = WidgetImageFit.Fit;
+            NormalizeWidget(widget);
+        }
+        foreach (var layout in document.WallpaperLayouts)
+            if (layout == null || string.IsNullOrWhiteSpace(layout.WallpaperPath)) throw new InvalidDataException("The canvas contains an invalid wallpaper layout.");
+        foreach (var preset in document.LayoutPresets)
+        {
+            if (preset == null) throw new InvalidDataException("The canvas contains an invalid layout preset.");
+            preset.Name ??= "Untitled layout"; preset.Widgets ??= new();
+            foreach (var widget in preset.Widgets) NormalizeWidget(widget);
+        }
+        foreach (var preset in document.StylePresets)
+        {
+            if (preset == null) throw new InvalidDataException("The canvas contains an invalid skin.");
+            preset.Name ??= "Untitled skin"; NormalizeWidget(preset.Style);
         }
         return document;
+    }
+
+    internal static void NormalizeWidget(DesktopWidget widget)
+    {
+        if (widget == null) throw new InvalidDataException("The canvas contains an invalid widget.");
+        if (!Enum.IsDefined(widget.Kind)) throw new InvalidDataException("Unknown widget type.");
+        widget.Title ??= "";
+        widget.Content ??= "";
+        widget.WallpaperPath ??= "";
+        if (!Enum.IsDefined(widget.ClockSkin)) widget.ClockSkin = ClockSkin.Script;
+        if (!Enum.IsDefined(widget.SpectrumSkin)) widget.SpectrumSkin = SpectrumSkin.Mirrored;
+        widget.SpectrumDensity = Math.Clamp(widget.SpectrumDensity, 12, 96);
+        widget.SpectrumThickness = Clamp(widget.SpectrumThickness, 1, 10, 2);
+        widget.SpectrumSensitivity = Clamp(widget.SpectrumSensitivity, .25, 3, 1);
+        widget.SpectrumSmoothing = Clamp(widget.SpectrumSmoothing, 0, .95, .65);
+        widget.Width = Clamp(widget.Width, 120, 1600, 300);
+        widget.Height = Clamp(widget.Height, 80, 1200, 230);
+        widget.X = Clamp(widget.X, -100000, 100000, 160);
+        widget.Y = Clamp(widget.Y, -100000, 100000, 100);
+        widget.FontFamily = string.IsNullOrWhiteSpace(widget.FontFamily) ? "Segoe UI" : widget.FontFamily;
+        widget.FontSize = Clamp(widget.FontSize, 10, 96, 16);
+        widget.Opacity = Clamp(widget.Opacity, .2, 1, 1);
+        widget.CornerRadius = Clamp(widget.CornerRadius, 0, 60, 12);
+        widget.TextColor ??= "#F1F2EE";
+        widget.BackgroundColor ??= "#1D201E";
+        widget.BorderColor ??= "#738579";
+        widget.MusicAccentColor ??= "#A9C9B4";
+        if (!Enum.IsDefined(widget.MusicLayout)) widget.MusicLayout = NowPlayingLayout.Horizontal;
+        widget.BorderWidth = Clamp(widget.BorderWidth, 0, 6, 1);
+        widget.Drawing ??= ""; widget.LeetCodeUsername ??= ""; widget.PotdCompletions ??= new();
+        widget.LinkDescription ??= ""; widget.LinkCustomDescription ??= ""; widget.LinkPageTitle ??= "";
+        widget.LinkStatus ??= ""; widget.PotdTitle ??= ""; widget.PotdUrl ??= "";
+        widget.DrawingWidth = Clamp(widget.DrawingWidth, 1, 1600, 300);
+        widget.DrawingHeight = Clamp(widget.DrawingHeight, 1, 1200, 180);
+        if (widget.Drawing.Length > 6000000) throw new InvalidDataException("The drawing is too large.");
+        if (!Enum.IsDefined(widget.Alignment)) widget.Alignment = WidgetTextAlignment.Left;
+        if (!Enum.IsDefined(widget.ImageFit)) widget.ImageFit = WidgetImageFit.Fit;
     }
 
     private static double Clamp(double value, double min, double max, double fallback)

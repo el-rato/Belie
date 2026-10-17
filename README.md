@@ -1,9 +1,9 @@
 # Belie
 
-A small Windows app (Windows 10/11) that lets you create **profiles**, each linked to a folder
-of images, a single image, or a **video/GIF**, and switch your desktop wallpaper **manually**
-(tray menu), on a **schedule** (days/times), or **automatically** when something happens
-(battery, idle, or a program launches).
+A Windows app (Windows 10/11) for creating complete desktop looks with wallpapers,
+styled clocks, audio visualizers, and widgets. Create **profiles** with images, folders,
+or **video/GIF** wallpapers, then switch **manually** (tray menu), on a **schedule**,
+or **automatically** when something happens (battery, idle, or a program launches).
 
 It lives quietly in the **system tray** (bottom-right corner of the taskbar). You never need to
 know C# or .NET to use it. Choose from four dark themes and the light Daylight theme.
@@ -13,6 +13,18 @@ know C# or .NET to use it. Choose from four dark themes and the light Daylight t
 [Download the latest Windows installer](https://github.com/el-rato/Belie/releases/latest/download/Belie-win-Setup.exe).
 For a portable app, download and extract the complete `Belie-win-Portable.zip` from the
 [latest release](https://github.com/el-rato/Belie/releases/latest).
+
+### New in 3.4
+
+- Wallpaper studio with widgets you can drag directly over the wallpaper canvas.
+- Independent widget layouts for individual wallpapers, restored automatically during slideshows and shuffle.
+- Profile default layouts and global widgets that stay visible across wallpaper changes.
+- A visual styles catalogue with 10 clock designs and 8 visualizer styles, including standalone visualizers.
+- Editable fonts, colors, visualizer density and motion, plus wallpaper color matching.
+- Saved layout presets and custom skins, with skin import and export.
+
+Choose **Compose widgets** on a profile or **Widgets → Styles catalogue** to get started.
+Installed users can upgrade through **Settings → App updates → Check for updates → Update and restart**.
 
 ### New in 3.3
 
@@ -65,7 +77,7 @@ dotnet test WallpaperProfiles.Tests\WallpaperProfiles.Tests.csproj
 ```
 dotnet tool install -g vpk --version 1.2.161
 dotnet publish WallpaperProfiles.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o release-output/app
-vpk pack --packId Belie --packVersion 3.3.0 --packDir release-output/app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon appicon.ico --outputDir release-output/packages
+vpk pack --packId Belie --packVersion 3.4.0 --packDir release-output/app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon appicon.ico --outputDir release-output/packages
 ```
 
 Result: a Windows installer, portable ZIP, full update package, and release feed in
