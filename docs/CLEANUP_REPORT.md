@@ -52,3 +52,10 @@ These are observations from this machine, not performance guarantees or timing a
 The dedicated stress run finished in 4.83 seconds. Tests use disposable fixtures. They do not measure a long-running GPU/video soak, physical multi-monitor changes, or independent writer processes.
 
 Machine-readable results and detailed logs are under `TestResults/cleanup/`. Reproduction commands are in the codebase guide.
+
+
+## 3.4.2 release validation follow-up
+
+The first GitHub release gate reproduced a transient Windows file-replacement failure in the library stress scenario (130 passed, 1 failed). Atomic publication now retries access/sharing violations at most four times over 300 ms, without reserializing, deleting the destination, or swallowing permanent failures. Added a regression scenario with an external read lock that is released during a save. The existing permanent-lock check still verifies preservation and temporary-file cleanup.
+
+The updated local suite has 132 tests: 131 passed and the same restricted-host desktop media-session check failed. All ten stress scenarios, UI integration, and updater checks pass. Publishing remains gated on the complete GitHub Windows test run.

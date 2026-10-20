@@ -49,7 +49,22 @@ internal static class AtomicJsonFile
         {
             using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 JsonSerializer.Serialize(stream, value, JsonOptions.Shared);
-            File.Move(temporary, path, overwrite: true);
+            for (var attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    File.Move(temporary, path, overwrite: true);
+                    break;
+                }
+                catch (Exception error) when (attempt < 4
+                    && error is IOException or UnauthorizedAccessException
+                    && (error.HResult & 0xffff) is 5 or 32 or 33)
+                {
+                    // Windows can briefly deny replacement even with delete sharing enabled.
+                    // Retry publication only; permanent failures retain the previous file.
+                    Thread.Sleep(20 << attempt);
+                }
+            }
         }
         finally
         {

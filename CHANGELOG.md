@@ -16,6 +16,7 @@
 - The main window uses WPF's hardware-capable rendering path; background widgets retain their existing rendering configuration.
 - Widget editing reuses preview visuals instead of rebuilding each widget on every adjustment. Saved layouts change only through the existing save actions.
 - Removed pane slide/fade and moving hover effects for steadier navigation.
+- Retry brief Windows file-replacement contention without rewriting or discarding the previous saved data.
 - Consolidated atomic JSON writes, preserved profiles after temporary read failures, and reduced repeated resolver work.
 - Split large UI, model, and engine files into focused partials; added a codebase guide and nine stress scenarios.
 

@@ -13,6 +13,7 @@
     <AssemblyName>Belie</AssemblyName>
     <ApplicationIcon>appicon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Keep this release version aligned with CHANGELOG.md; changes on main publish an update. -->
     <Version>3.4.2</Version>
     <FileVersion>3.4.2.0</FileVersion>
     <AssemblyVersion>3.4.2.0</AssemblyVersion>

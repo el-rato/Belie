@@ -261,6 +261,26 @@ public sealed class StressTests : IDisposable
         }
     }
 
+    [Fact]
+    public void AtomicSave_TemporaryExternalReadLock_PublishesAfterRelease()
+    {
+        var path = Path.Combine(_directory, "locked-snapshot.json");
+        AtomicJsonFile.Write(path, new[] { 1, 2, 3 });
+        var held = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var save = Task.Run(() => AtomicJsonFile.Write(path, new[] { 4, 5, 6 }));
+        try
+        {
+            Assert.True(SpinWait.SpinUntil(() => Directory.GetFiles(_directory, "*.tmp").Length > 0,
+                TimeSpan.FromSeconds(5)));
+            Assert.False(save.IsCompleted);
+            Assert.Equal(new[] { 1, 2, 3 }, System.Text.Json.JsonSerializer.Deserialize<int[]>(held));
+        }
+        finally { held.Dispose(); }
+        save.GetAwaiter().GetResult();
+        Assert.Equal(new[] { 4, 5, 6 }, AtomicJsonFile.Read<int[]>(path));
+        Assert.Empty(Directory.GetFiles(_directory, "*.tmp"));
+    }
+
     private static void RunWorkers(Action<int> worker)
     {
         try { Parallel.For(0, 8, new ParallelOptions { MaxDegreeOfParallelism = 8 }, worker); }
