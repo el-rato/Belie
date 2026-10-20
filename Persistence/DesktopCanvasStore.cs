@@ -1,196 +1,23 @@
 using System.Text.Json;
+using WallpaperProfiles.Models;
 
 namespace WallpaperProfiles.Persistence;
-
-internal enum DesktopWidgetKind { Note, Countdown, Image, Link, Sketch, NowPlaying, Clock, Visualizer }
-internal enum ClockSkin { Script, Editorial, Minimal, Stacked, Analog, Digital, Terminal, Split, Words, DateCard }
-internal enum SpectrumSkin { Mirrored, Bars, Wave, Line, Dots, Ring, Arc, Radial }
-internal enum NowPlayingLayout { Horizontal, Stacked, Minimal }
-internal enum WidgetTextAlignment { Left, Center, Right }
-internal enum WidgetImageFit { Fit, Fill, Stretch }
-
-internal sealed class DesktopWidget
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public DesktopWidgetKind Kind { get; set; }
-    public string Title { get; set; } = "New note";
-    [System.Text.Json.Serialization.JsonIgnore]
-    public string DisplayTitle => string.IsNullOrWhiteSpace(Title) ? "Untitled " + Kind.ToString().ToLowerInvariant() : Title;
-    public string Content { get; set; } = "";
-    public DateTimeOffset Target { get; set; } = DateTimeOffset.Now.AddDays(7);
-    public double X { get; set; } = 160;
-    public double Y { get; set; } = 100;
-    public double Width { get; set; } = 300;
-    public double Height { get; set; } = 230;
-    public bool Enabled { get; set; } = true;
-    public Guid? ProfileId { get; set; }
-    public string WallpaperPath { get; set; } = "";
-    public bool IsVisibleOn(Guid? activeProfileId) => Enabled && (!ProfileId.HasValue || ProfileId == activeProfileId);
-    public bool Locked { get; set; }
-    public string FontFamily { get; set; } = "Segoe UI";
-    public double FontSize { get; set; } = 16;
-    public bool Bold { get; set; }
-    public bool Italic { get; set; }
-    public WidgetTextAlignment Alignment { get; set; }
-    public string TextColor { get; set; } = "#F1F2EE";
-    public string BackgroundColor { get; set; } = "#1D201E";
-    public double Opacity { get; set; } = 1;
-    public double CornerRadius { get; set; } = 12;
-    public bool ShowHeader { get; set; } = true;
-    public bool ShowBorder { get; set; } = true;
-    public string BorderColor { get; set; } = "#738579";
-    public double BorderWidth { get; set; } = 1;
-    public bool ShowBackground { get; set; } = true;
-    public bool GlassEffect { get; set; }
-    public NowPlayingLayout MusicLayout { get; set; }
-    public bool ShowAlbumArt { get; set; } = true;
-    public bool ShowPlaybackControls { get; set; } = true;
-    public bool ShowPlaybackProgress { get; set; } = true;
-    public bool ShowAudioVisualizer { get; set; }
-    public string MusicAccentColor { get; set; } = "#A9C9B4";
-    public bool ClockUse24Hour { get; set; }
-    public bool ClockShowGreeting { get; set; } = true;
-    public bool ClockShowVisualizer { get; set; } = true;
-    public ClockSkin ClockSkin { get; set; }
-    public SpectrumSkin SpectrumSkin { get; set; }
-    public int SpectrumDensity { get; set; } = 48;
-    public double SpectrumThickness { get; set; } = 2;
-    public double SpectrumSensitivity { get; set; } = 1;
-    public double SpectrumSmoothing { get; set; } = .65;
-    public WidgetImageFit ImageFit { get; set; }
-    public string Drawing { get; set; } = "";
-    public double DrawingWidth { get; set; } = 300;
-    public double DrawingHeight { get; set; } = 180;
-    public string LinkDescription { get; set; } = "";
-    public string LinkCustomDescription { get; set; } = "";
-    public string LinkPageTitle { get; set; } = "";
-    public string LeetCodeUsername { get; set; } = "";
-    public List<DateOnly> PotdCompletions { get; set; } = new();
-    public string PotdTitle { get; set; } = "";
-    public string PotdUrl { get; set; } = "";
-    public DateOnly? PotdDate { get; set; }
-    public int ActivityStreak { get; set; }
-    public DateTimeOffset? LinkUpdatedAt { get; set; }
-    public string LinkStatus { get; set; } = "";
-
-    public DesktopWidget Duplicate()
-    {
-        var copy = (DesktopWidget)MemberwiseClone();
-        copy.PotdCompletions = new(PotdCompletions);
-        copy.Id = Guid.NewGuid();
-        if (!string.IsNullOrWhiteSpace(copy.Title)) copy.Title += " copy";
-        copy.X += 24; copy.Y += 24;
-        return copy;
-    }
-    [System.Text.Json.Serialization.JsonIgnore]
-    public bool IsLeetCode => TryGetLink(Content, out var link)
-        && (link!.Host.Equals("leetcode.com", StringComparison.OrdinalIgnoreCase) || link.Host.Equals("www.leetcode.com", StringComparison.OrdinalIgnoreCase));
-    public int PotdStreak(DateOnly today)
-    {
-        var completed = PotdCompletions.ToHashSet();
-        var day = completed.Contains(today) ? today : today.AddDays(-1);
-        var streak = 0;
-        while (completed.Contains(day)) { streak++; day = day.AddDays(-1); }
-        return streak;
-    }
-
-    public static bool TryGetLink(string text, out Uri? uri)
-    {
-        uri = null;
-        if (!Uri.TryCreate(text.Trim(), UriKind.Absolute, out var parsed)
-            || (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp)) return false;
-        uri = parsed;
-        return true;
-    }
-
-    public string CountdownText(DateTimeOffset now)
-    {
-        var remaining = Target - now;
-        if (remaining <= TimeSpan.Zero) return "It’s time";
-        return remaining.TotalDays >= 1
-            ? $"{(int)remaining.TotalDays}d {remaining.Hours:00}h {remaining.Minutes:00}m"
-            : $"{(int)remaining.TotalHours:00}:{remaining.Minutes:00}:{remaining.Seconds:00}";
-    }
-}
-
-internal sealed class WallpaperWidgetLayout
-{
-    public Guid ProfileId { get; set; }
-    public string WallpaperPath { get; set; } = "";
-}
-
-internal sealed class WidgetLayoutPreset
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string Name { get; set; } = "";
-    public List<DesktopWidget> Widgets { get; set; } = new();
-}
-
-internal sealed class WidgetStylePreset
-{
-    public string Name { get; set; } = "";
-    public DesktopWidget Style { get; set; } = new();
-}
-
-internal sealed class DesktopCanvasDocument
-{
-    public bool Enabled { get; set; }
-    public Guid? ActiveProfileId { get; set; }
-    public string ActiveWallpaperPath { get; set; } = "";
-    public List<DesktopWidget> Widgets { get; set; } = new();
-    public List<WallpaperWidgetLayout> WallpaperLayouts { get; set; } = new();
-    public List<WidgetLayoutPreset> LayoutPresets { get; set; } = new();
-    public List<WidgetStylePreset> StylePresets { get; set; } = new();
-
-    public static bool SameWallpaper(string? left, string? right) =>
-        string.Equals(left?.Replace('/', '\\'), right?.Replace('/', '\\'), StringComparison.OrdinalIgnoreCase);
-
-    public bool HasLayout(Guid? profileId, string path) => profileId.HasValue && !string.IsNullOrEmpty(path)
-        && WallpaperLayouts.Any(layout => layout.ProfileId == profileId && SameWallpaper(layout.WallpaperPath, path));
-
-    public IEnumerable<DesktopWidget> Composition(Guid? profileId, string path, bool includeGlobal = true)
-    {
-        var scopedPath = HasLayout(profileId, path) ? path : "";
-        return Widgets.Where(widget => widget.ProfileId == null
-            ? includeGlobal && string.IsNullOrEmpty(widget.WallpaperPath)
-            : widget.ProfileId == profileId && SameWallpaper(widget.WallpaperPath, scopedPath));
-    }
-
-    public IEnumerable<DesktopWidget> VisibleWidgets() => Composition(ActiveProfileId, ActiveWallpaperPath).Where(widget => widget.Enabled);
-
-    public void CustomizeWallpaper(Guid profileId, string path)
-    {
-        if (HasLayout(profileId, path) || string.IsNullOrWhiteSpace(path)) return;
-        var originals = Composition(profileId, "", false).ToArray();
-        WallpaperLayouts.Add(new() { ProfileId = profileId, WallpaperPath = path });
-        foreach (var original in originals)
-        {
-            var copy = original.Duplicate();
-            copy.Title = original.Title; copy.X = original.X; copy.Y = original.Y;
-            copy.WallpaperPath = path; Widgets.Add(copy);
-        }
-    }
-
-    public void ResetWallpaper(Guid profileId, string path)
-    {
-        Widgets.RemoveAll(widget => widget.ProfileId == profileId && SameWallpaper(widget.WallpaperPath, path));
-        WallpaperLayouts.RemoveAll(layout => layout.ProfileId == profileId && SameWallpaper(layout.WallpaperPath, path));
-    }
-}
 
 internal sealed class DesktopCanvasStore
 {
     public string FilePath { get; }
     public DesktopCanvasStore(string path) => FilePath = Path.GetFullPath(path);
 
-    public DesktopCanvasDocument Load()
+    public DesktopCanvasDocument Load() => AtomicJsonFile.WithLock(FilePath, LoadCore);
+
+    private DesktopCanvasDocument LoadCore()
     {
         if (!File.Exists(FilePath)) return new DesktopCanvasDocument();
-        using var stream = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        var document = JsonSerializer.Deserialize<DesktopCanvasDocument>(stream, JsonOptions.Shared)
+        using var stream = AtomicJsonFile.OpenRead(FilePath);
+        using var json = JsonSerializer.Deserialize<JsonDocument>(stream, JsonOptions.Shared)
             ?? throw new InvalidDataException("The desktop canvas could not be read.");
-        stream.Position = 0;
-        using var json = JsonDocument.Parse(stream);
+        var document = json.RootElement.Deserialize<DesktopCanvasDocument>(JsonOptions.Shared)
+            ?? throw new InvalidDataException("The desktop canvas could not be read.");
         document.Widgets ??= new();
         document.ActiveWallpaperPath ??= "";
         document.WallpaperLayouts ??= new(); document.LayoutPresets ??= new(); document.StylePresets ??= new();
@@ -298,7 +125,8 @@ internal sealed class DesktopCanvasStore
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         if (File.Exists(FilePath))
         {
-            using var previous = JsonDocument.Parse(File.ReadAllText(FilePath));
+            using var stream = AtomicJsonFile.OpenRead(FilePath);
+            using var previous = JsonDocument.Parse(stream);
             if (TryGetSavedBoards(previous.RootElement, out _))
             {
                 var backup = FilePath + ".boards-backup.json";
@@ -306,15 +134,9 @@ internal sealed class DesktopCanvasStore
                 File.Copy(FilePath, backup);
             }
         }
-        var temporary = FilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            File.WriteAllText(temporary, JsonSerializer.Serialize(document, JsonOptions.Shared));
-            File.Move(temporary, FilePath, overwrite: true);
-            if (EventWaitHandle.TryOpenExisting(WallpaperProfiles.Engine.DesktopCanvasProcess.MutexName(FilePath) + ".Changed", out var changed))
-            { using (changed) changed.Set(); }
-        }
-        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+        AtomicJsonFile.Write(FilePath, document);
+        if (EventWaitHandle.TryOpenExisting(WallpaperProfiles.Engine.DesktopCanvasProcess.MutexName(FilePath) + ".Changed", out var changed))
+        { using (changed) changed.Set(); }
     }
 
     public bool UpdateLayout(Guid id, double x, double y, double width, double height)

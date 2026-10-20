@@ -1,4 +1,3 @@
-using System.Text.Json;
 using WallpaperProfiles.Infrastructure;
 using WallpaperProfiles.Models;
 
@@ -16,7 +15,7 @@ internal sealed class SettingsStore
         {
             if (File.Exists(_path))
             {
-                var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_path), JsonOptions.Shared);
+                var settings = AtomicJsonFile.Read<AppSettings>(_path);
                 if (settings != null)
                 {
                     settings.LastActiveProfileId ??= "";
@@ -32,29 +31,5 @@ internal sealed class SettingsStore
         return new AppSettings();
     }
 
-    public void Save(AppSettings settings)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        var temp = _path + ".tmp";
-        try
-        {
-            File.WriteAllText(temp, JsonSerializer.Serialize(settings, JsonOptions.Shared));
-            File.Move(temp, _path, overwrite: true);
-        }
-        catch
-        {
-            try
-            {
-                if (File.Exists(temp))
-                {
-                    File.Delete(temp);
-                }
-            }
-            catch
-            {
-                // best effort cleanup
-            }
-            throw;
-        }
-    }
+    public void Save(AppSettings settings) => AtomicJsonFile.Write(_path, settings);
 }

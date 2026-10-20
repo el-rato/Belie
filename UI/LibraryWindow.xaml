@@ -31,7 +31,7 @@
                 </Style></Border.Style>
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <StackPanel><TextBlock Text="Library" Style="{StaticResource WorkspaceHeading}"/><TextBlock Text="Your collection and new wallpapers, in one place." Style="{StaticResource WorkspaceCaption}"/></StackPanel>
+                    <StackPanel><TextBlock Text="Library" Style="{StaticResource WorkspaceHeading}"/></StackPanel>
 
                 </Grid>
             </Border>
@@ -115,7 +115,7 @@
                                 <Setter.Value>
                                     <ControlTemplate TargetType="ListBoxItem">
                                         <Border x:Name="Card" Style="{StaticResource InteractiveCard}" CornerRadius="14" BorderThickness="1"
-                                                Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}">
+                                                Background="Transparent" BorderBrush="Transparent">
                                             <ContentPresenter/>
                                         </Border>
                                         <ControlTemplate.Triggers>
@@ -156,7 +156,7 @@
                 <TextBlock x:Name="EmptyText" TextWrapping="Wrap" Style="{StaticResource HintText}" FontSize="14"
                            TextAlignment="Center" VerticalAlignment="Center" Margin="35" IsHitTestVisible="False"/>
             </Grid>
-            <Border x:Name="DetailsFrame" Visibility="Collapsed" Grid.Column="1" Background="{DynamicResource SurfaceBrush}" CornerRadius="16" Padding="16" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <Border x:Name="DetailsFrame" Visibility="Collapsed" Grid.Column="1" Background="Transparent" CornerRadius="0" Padding="16,0,0,0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <Button x:Name="BackToCollectionButton" Content="Back to collection" Click="BackToCollection_Click" HorizontalAlignment="Left" Visibility="Collapsed" Margin="0,0,0,16"/>
@@ -231,9 +231,9 @@
                 </ListBox>
                 <TextBlock x:Name="MarketEmptyText" Text="Search tags to discover wallpapers" Style="{StaticResource HintText}" TextAlignment="Center" TextWrapping="Wrap" VerticalAlignment="Center" Margin="25" IsHitTestVisible="False"/>
             </Grid>
-            <Border x:Name="MarketDetails" Grid.Column="1" Visibility="Collapsed" Background="{DynamicResource SurfaceBrush}" CornerRadius="16" Padding="16" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <Border x:Name="MarketDetails" Grid.Column="1" Visibility="Collapsed" Background="Transparent" CornerRadius="0" Padding="16,0,0,0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
                 <Grid>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <DockPanel Margin="0,0,0,12">
                         <Button x:Name="MarketBackToGalleryButton" DockPanel.Dock="Right" Content="← All wallpapers" Click="MarketBackToGallery_Click" VerticalAlignment="Top" Margin="10,0,0,0" Padding="8,5" FontSize="12"/>
                         <StackPanel>
@@ -242,7 +242,8 @@
                             <TextBlock x:Name="MarketUploaderText" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
                         </StackPanel>
                     </DockPanel>
-                    <Button Grid.Row="1" x:Name="MarketExpandPreviewButton" Click="MarketExpandPreview_Click" Padding="0" BorderThickness="0" ToolTip="Open full-screen preview" AutomationProperties.Name="Open large wallpaper preview" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                    <Grid Grid.Row="1">
+                    <Button x:Name="MarketExpandPreviewButton" Click="MarketExpandPreview_Click" Padding="0" BorderThickness="0" ToolTip="Open full-screen preview" AutomationProperties.Name="Open large wallpaper preview" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
                             <Grid Background="{DynamicResource BgBrush}">
                                 <Image x:Name="MarketPreview" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
                                 <TextBlock x:Name="MarketPreviewStatus" Style="{StaticResource HintText}" VerticalAlignment="Bottom" Margin="10" IsHitTestVisible="False"/>
@@ -251,18 +252,33 @@
                                 </Border>
                             </Grid>
                     </Button>
-                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" MaxHeight="88" Margin="0,12,0,0">
-                        <StackPanel>
-                        <TextBlock x:Name="MarketTagStatus" Style="{StaticResource HintText}" TextWrapping="Wrap"/>
-                        <ItemsControl x:Name="MarketTags">
-                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate><DataTemplate>
-                                <Button Content="{Binding Name}" Tag="{Binding Id}" Click="MarketTag_Click" Margin="0,0,5,5" Padding="8,4" FontSize="12" ToolTip="Search this exact website tag"/>
-                            </DataTemplate></ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        </StackPanel>
-                    </ScrollViewer>
-                    <WrapPanel Grid.Row="3" Margin="0,10,0,0">
+                        <Button x:Name="MarketTagsButton"
+                                Click="MarketTags_Click" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" Padding="12,6"
+                                Background="{DynamicResource SurfaceRaisedBrush}" ToolTip="Browse and search wallpaper tags" AutomationProperties.Name="Browse wallpaper tags">
+                            <TextBlock Text="{Binding Items.Count, ElementName=MarketTags, StringFormat=Tags ({0})}"/>
+                        </Button>
+                        <Popup x:Name="MarketTagsPopup" PlacementTarget="{Binding ElementName=MarketTagsButton}" Placement="Bottom"
+                               StaysOpen="False" AllowsTransparency="True" Opened="MarketTagsPopup_Opened">
+                            <Border Width="336" Padding="8" CornerRadius="12" Background="{DynamicResource SurfaceRaisedBrush}"
+                                    BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1">
+                                <ScrollViewer x:Name="MarketTagsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="180">
+                                    <StackPanel PreviewKeyDown="MarketTagsPopup_KeyDown" KeyboardNavigation.TabNavigation="Cycle">
+                                        <TextBlock x:Name="MarketTagStatus" Style="{StaticResource HintText}" TextWrapping="Wrap"/>
+                                        <ItemsControl x:Name="MarketTags">
+                                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate><DataTemplate>
+                                                <Button Tag="{Binding Id}" Click="MarketTag_Click" Margin="0,0,4,4" Padding="8,4" FontSize="12" MaxWidth="304"
+                                                        ToolTip="{Binding Name}" AutomationProperties.Name="{Binding Name}" AutomationProperties.HelpText="Search this exact website tag">
+                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                                </Button>
+                                            </DataTemplate></ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <WrapPanel Grid.Row="2" Margin="0,10,0,0">
                         <Button x:Name="MarketDownloadButton" Content="Download to library" Style="{StaticResource PrimaryButton}" Click="MarketDownload_Click" IsEnabled="False" Margin="0,0,8,4"/>
                         <Button x:Name="MarketUseButton" Content="Use in profile" Click="MarketUse_Click" Visibility="Collapsed" Margin="0,0,8,4"/>
                         <Button x:Name="MarketSourceButton" Content="View on Wallhaven ↗" Click="MarketSource_Click" Margin="0,0,0,4" ToolTip="Images belong to their original owners. Downloads are saved to your Belie library."/>

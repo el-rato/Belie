@@ -277,6 +277,7 @@ internal partial class LibraryWindow
 
     private void ShowMarketSelection(MarketEntry? entry)
     {
+        MarketTagsPopup.IsOpen = false;
         _marketSelected = entry?.Wallpaper;
         _marketDownloadedAsset = null;
         MarketUseButton.Visibility = Visibility.Collapsed;
@@ -414,9 +415,26 @@ internal partial class LibraryWindow
         finally { _marketPreviewWindow = null; }
     }
 
+    private void MarketTags_Click(object sender, RoutedEventArgs e) => MarketTagsPopup.IsOpen = !MarketTagsPopup.IsOpen;
+
+    private void MarketTagsPopup_Opened(object? sender, EventArgs e)
+    {
+        if (MarketTagsPopup.Child is FrameworkElement content)
+            content.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
+    }
+
+    private void MarketTagsPopup_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Escape) return;
+        MarketTagsPopup.IsOpen = false;
+        MarketTagsButton.Focus();
+        e.Handled = true;
+    }
+
     private async void MarketTag_Click(object sender, RoutedEventArgs e)
     {
         if (_marketDownloading || sender is not Button { Tag: int id }) return;
+        MarketTagsPopup.IsOpen = false;
         MarketSearchBox.Text = "id:" + id;
         await SearchMarketplaceAsync();
     }

@@ -89,6 +89,23 @@ public class ProfileStoreTests : IDisposable
     }
 
     [Fact]
+    public void Load_TemporarilyUnreadableProfile_IsNotQuarantined()
+    {
+        var store = CreateStore();
+        var profile = new WallpaperProfile { Name = "Keep me" };
+        store.Save(profile);
+        var path = Path.Combine(_dir, profile.Id + ".json");
+        // Deny reads but allow rename: the old catch-all quarantine could move valid data.
+        using (new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.Write | FileShare.Delete))
+        {
+            Assert.Empty(store.LoadAll());
+            Assert.True(File.Exists(path));
+            Assert.Empty(Directory.GetFiles(_dir, "*.corrupt-*"));
+        }
+        Assert.Equal(profile.Id, Assert.Single(store.LoadAll()).Id);
+    }
+
+    [Fact]
     public void Load_NormalizesOutOfRangeValues()
     {
         var store = CreateStore();

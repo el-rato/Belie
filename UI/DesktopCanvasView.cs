@@ -97,7 +97,7 @@ internal sealed partial class DesktopCanvasView : UserControl
     private readonly ScrollViewer _editorScroll = new() { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
     private readonly Border _editorFrame = new();
     private readonly ColumnDefinition _editorColumn = new() { Width = new GridLength(340) };
-    private readonly System.Windows.Controls.Primitives.Popup _addPopup = new() { StaysOpen = false, AllowsTransparency = true, PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade };
+    private readonly System.Windows.Controls.Primitives.Popup _addPopup = new() { StaysOpen = false, AllowsTransparency = true, PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.None };
     private readonly List<Button> _tabButtons = new();
     private Button _showAll = null!, _hideAll = null!;
     private string _overviewKey = "";
@@ -215,7 +215,7 @@ internal sealed partial class DesktopCanvasView : UserControl
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => RefreshStatus();
         IsVisibleChanged += (_, _) => _timer.IsEnabled = IsVisible;
-        Unloaded += (_, _) => { _timer.Stop(); _addPopup.IsOpen = false; };
+        Unloaded += (_, _) => { _timer.Stop(); _addPopup.IsOpen = false; ClearCanvasPreviews(); };
         Loaded += (_, _) => { RefreshProfiles(); Run(RefreshList); RefreshStatus(); _timer.Start(); };
         _fields.Visibility = Visibility.Collapsed;
         _save.IsEnabled = false; _duplicate.IsEnabled = false; _delete.IsEnabled = false;
@@ -250,278 +250,6 @@ internal sealed partial class DesktopCanvasView : UserControl
         InitializeStudio(); RefreshProfiles(); Run(RefreshList);
     }
 
-    private FrameworkElement BuildWorkspace()
-    {
-        var workspace = new Grid { Margin = new Thickness(24) };
-        workspace.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        workspace.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        workspace.RowDefinitions.Add(new RowDefinition());
-        workspace.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var headerFrame = new Border { Style = (Style)FindResource("WorkspaceBanner"), Margin = new Thickness(0, 0, 0, 18) };
-        var header = new Grid(); headerFrame.Child = header;
-        header.ColumnDefinitions.Add(new ColumnDefinition()); header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var heading = new StackPanel();
-        heading.Children.Add(new TextBlock { Text = "Wallpaper studio", Style = (Style)FindResource("WorkspaceHeading") });
-        var subtitle = new TextBlock { Text = "Compose a look. Each wallpaper remembers its widgets.", Style = (Style)FindResource("WorkspaceCaption") };
-        heading.Children.Add(subtitle);
-        var quickAdd = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };
-        foreach (var kind in new[] { DesktopWidgetKind.Clock, DesktopWidgetKind.Visualizer, DesktopWidgetKind.NowPlaying })
-        {
-            var captured = kind;
-            var quick = ActionButton("+ " + (kind == DesktopWidgetKind.NowPlaying ? "Now playing" : kind.ToString()), "QuickAdd" + kind + "Button", () => Add(captured));
-            quick.Padding = new Thickness(12, 9, 12, 9); quick.FontSize = 12;
-            quick.SetResourceReference(Control.BackgroundProperty, "SurfaceRaisedBrush");
-            var glyph = kind switch { DesktopWidgetKind.Note => "\uE70B", DesktopWidgetKind.Image => "\uEB9F", DesktopWidgetKind.Countdown => "\uE916", _ => "\uE8D6" };
-            var quickContent = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
-            var icon = new TextBlock { Text = glyph, FontFamily = (System.Windows.Media.FontFamily)FindResource("IconFont"), FontSize = 14, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
-            icon.SetResourceReference(TextBlock.ForegroundProperty, "AccentTextBrush");
-            quickContent.Children.Add(icon);
-            quickContent.Children.Add(new TextBlock { Text = kind == DesktopWidgetKind.NowPlaying ? "Now playing" : kind.ToString(), VerticalAlignment = VerticalAlignment.Center });
-            quick.Content = quickContent;
-            quickAdd.Children.Add(quick);
-        }
-        heading.Children.Add(quickAdd); header.Children.Add(heading);
-        var add = ActionButton("+  Add widget", "AddWidgetButton", () => _addPopup.IsOpen = !_addPopup.IsOpen);
-        add.SetResourceReference(StyleProperty, "PrimaryButton"); add.VerticalAlignment = VerticalAlignment.Center; add.Margin = new Thickness(0);
-        var headerActions = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        headerActions.Children.Add(ActionButton("Styles catalogue", "OpenStyleCatalogueButton", () => OpenCatalogue(false)));
-        add.Margin = new Thickness(0, 8, 8, 0); headerActions.Children.Add(add);
-        Grid.SetColumn(headerActions, 1); header.Children.Add(headerActions); workspace.Children.Add(headerFrame);
-        _addPopup.PlacementTarget = add; _addPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-        var picker = new StackPanel();
-        foreach (var kind in Enum.GetValues<DesktopWidgetKind>())
-        {
-            var captured = kind;
-            var label = kind == DesktopWidgetKind.NowPlaying ? "Now playing" : kind.ToString();
-            var choice = ActionButton(label, "Add" + kind + "Button", () => { _addPopup.IsOpen = false; Add(captured); });
-            choice.Content = new TextBlock { Text = label, FontSize = 14 }; choice.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
-            choice.Margin = new Thickness(0, 2, 0, 2); choice.BorderThickness = new Thickness(0); choice.MinWidth = 170; picker.Children.Add(choice);
-        }
-        var pickerFrame = new Border { Child = picker, CornerRadius = new CornerRadius(12), Padding = new Thickness(8), BorderThickness = new Thickness(1) };
-        pickerFrame.SetResourceReference(Border.BackgroundProperty, "SurfaceRaisedBrush"); pickerFrame.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
-        _addPopup.Child = pickerFrame; workspace.Children.Add(_addPopup); RegisterName("WidgetTypePicker", _addPopup);
-
-        var body = new Grid(); Grid.SetRow(body, 2); workspace.Children.Add(body);
-        body.ColumnDefinitions.Add(_galleryColumn); body.ColumnDefinitions.Add(_editorColumn);
-        var gallery = _galleryFrame; gallery.Margin = new Thickness(0, 0, 16, 0); body.Children.Add(gallery);
-        var toolbar = new DockPanel { Margin = new Thickness(0, 0, 0, 14) };
-        var actions = new WrapPanel { MaxWidth = 270 };
-        _showAll = ActionButton("Show widgets", "ShowWidgetsButton", ShowWidgets); _hideAll = ActionButton("Hide widgets", "HideWidgetsButton", HideWidgets);
-        actions.Children.Add(_showAll); actions.Children.Add(_hideAll);
-        var find = ActionButton("Find widgets", "FindWidgetsButton", FindWidgets); find.ToolTip = "Bring widgets into view"; find.FontSize = 12; find.Padding = new Thickness(8, 2, 8, 2); actions.Children.Add(find);
-        DockPanel.SetDock(actions, Dock.Right); toolbar.Children.Add(actions);
-        DockPanel.SetDock(_scopeFilter, Dock.Left); toolbar.Children.Add(_scopeFilter);
-        _status.Margin = new Thickness(0); _status.FontSize = 12; _status.VerticalAlignment = VerticalAlignment.Center;
-        _status.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); toolbar.Children.Add(_status);
-        var studioToolbar = new StackPanel(); studioToolbar.Children.Add(toolbar); studioToolbar.Children.Add(BuildCanvasToolbar());
-        Grid.SetRow(studioToolbar, 1); workspace.Children.Add(studioToolbar);
-        var galleryArea = new Grid(); gallery.Children.Add(galleryArea);
-        _list.Background = System.Windows.Media.Brushes.Transparent; _list.BorderThickness = new Thickness(0); _list.Padding = new Thickness(0);
-        _list.SetResourceReference(Control.ForegroundProperty, "TextPrimaryBrush");
-        ScrollViewer.SetHorizontalScrollBarVisibility(_list, ScrollBarVisibility.Disabled);
-        _list.ItemsPanel = new ItemsPanelTemplate(new FrameworkElementFactory(typeof(WrapPanel)));
-        _list.ItemContainerStyle = GalleryItemStyle(); _list.DisplayMemberPath = ""; _list.ItemTemplate = GalleryCardTemplate(); galleryArea.Children.Add(_list);
-        _empty.Text = "Drop an image, link, or note here.\nOr add your first widget."; _empty.FontSize = 15; _empty.TextAlignment = TextAlignment.Center;
-        _empty.VerticalAlignment = VerticalAlignment.Center; _empty.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
-        _empty.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); _empty.IsHitTestVisible = false; galleryArea.Children.Add(_empty);
-
-        _overviewFrame.CornerRadius = new CornerRadius(16); _overviewFrame.Padding = new Thickness(18);
-        _overviewFrame.BorderThickness = new Thickness(1);
-        _overviewFrame.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
-        _overviewFrame.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
-        var overview = new Grid(); _overviewFrame.Child = overview;
-        overview.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); overview.RowDefinitions.Add(new RowDefinition()); overview.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var overviewHeading = new StackPanel();
-        overviewHeading.Children.Add(new TextBlock { Text = "Desktop preview", FontSize = 22, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
-        _overviewCaption.Margin = new Thickness(0, 6, 0, 14); _overviewCaption.TextWrapping = TextWrapping.Wrap;
-        _overviewCaption.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); overviewHeading.Children.Add(_overviewCaption); overview.Children.Add(overviewHeading);
-        var desktopPreview = new Viewbox { Child = _desktopOverview, Stretch = Stretch.Uniform };
-        Grid.SetRow(desktopPreview, 1); overview.Children.Add(desktopPreview);
-        var overviewHint = new TextBlock { Text = "Drag widgets on the canvas. Save to keep your composition. Shuffle restores each wallpaper’s layout automatically.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 14, 0, 0), FontSize = 12 };
-        Grid.SetRow(overviewHint, 2); overview.Children.Add(overviewHint);
-        Grid.SetColumn(_overviewFrame, 1); body.Children.Add(_overviewFrame);
-
-        _editorFrame.CornerRadius = new CornerRadius(16); _editorFrame.Padding = new Thickness(16); _editorFrame.BorderThickness = new Thickness(1);
-        _editorFrame.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); _editorFrame.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
-        _editorFrame.Margin = new Thickness(0, 0, 14, 0); body.Children.Add(_editorFrame);
-        var editor = new Grid(); _editorFrame.Child = editor;
-        foreach (var height in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto }) editor.RowDefinitions.Add(new RowDefinition { Height = height });
-        var editorHeader = new DockPanel(); _kindLabel.Margin = new Thickness(0); _kindLabel.VerticalAlignment = VerticalAlignment.Center;
-        var close = ActionButton("Close", "CloseWidgetEditorButton", CloseEditor); close.ToolTip = "Close editor"; close.Padding = new Thickness(8, 2, 8, 2); close.Margin = new Thickness(0); close.FontSize = 12;
-        DockPanel.SetDock(close, Dock.Right); editorHeader.Children.Add(close); editorHeader.Children.Add(_kindLabel); editor.Children.Add(editorHeader);
-        Grid.SetRow(_preview, 1); editor.Children.Add(_preview);
-        var tabs = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new Thickness(0, 0, 0, 12) };
-        foreach (var (label, index) in new[] { ("Content", 0), ("Style", 1), ("Layout", 2) })
-        {
-            var tab = ActionButton(label, "Widget" + label + "Tab", () => SetEditorTab(index)); tab.Margin = new Thickness(0, 0, 4, 0); tab.BorderThickness = new Thickness(0); _tabButtons.Add(tab); tabs.Children.Add(tab);
-        }
-        Grid.SetRow(tabs, 2); editor.Children.Add(tabs);
-        _fields.Children.Add(_contentPage); _fields.Children.Add(_stylePage); _fields.Children.Add(_layoutPage);
-        Field(_contentPage, "Title · optional", _title);
-        Field(_contentPage, "Show on", _profile);
-        _contentLabel.Margin = new Thickness(0, 12, 0, 6); _contentPage.Children.Add(_contentLabel); _contentPage.Children.Add(_content); _contentPage.Children.Add(_browse);
-        Field(_linkFields, "Description · optional", _linkDescription); Field(_linkFields, "LeetCode username", _leetCodeUser);
-        _linkFields.Children.Add(ActionButton("Refresh details", "RefreshLinkButton", RefreshLink)); _contentPage.Children.Add(_linkFields);
-        _musicFields.Children.Add(new TextBlock { Text = "Song details and controls use music players such as Spotify, Apple Music, and TIDAL. The audio spectrum reacts to all desktop audio. Drag the song text or spectrum to move the widget.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), FontSize = 12 });
-        Field(_musicFields, "Player layout", _musicLayout);
-        foreach (var option in new[] { _albumArt, _playbackControls, _playbackProgress, _audioVisualizer }) { option.Margin = new Thickness(0, 10, 0, 0); _musicFields.Children.Add(option); }
-        ColorField("Playback accent", _musicAccent, _musicFields);
-        _contentPage.Children.Add(_musicFields);
-        _clockFields.Children.Add(new TextBlock { Text = "Choose a clock design in Style. Pair it with any visualizer, or add a visualizer as a separate widget.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), FontSize = 12 });
-        foreach (var (name, option) in new[] { ("Clock24Hour", _clock24Hour), ("ClockGreeting", _clockGreeting), ("ClockVisualizer", _clockVisualizer) })
-        {
-            option.Margin = new Thickness(0, 10, 0, 0); _clockFields.Children.Add(option); RegisterName(name, option);
-            System.Windows.Automation.AutomationProperties.SetName(option, option.Content.ToString());
-        }
-        _contentPage.Children.Add(_clockFields);
-        BuildSkinControls();
-        Field(_targetFields, "Date", _date); Field(_targetFields, "Time · HH:mm", _time); _contentPage.Children.Add(_targetFields);
-        var presets = new WrapPanel();
-        foreach (var name in new[] { "Rainmeter", "Glass", "Paper", "Minimal", "Gothic", "Cathedral", "Crimson", "Parchment", "Royal", "Neon", "Terminal" })
-        {
-            var preset = name; var chip = ActionButton(preset, "Style" + preset + "Button", () => ApplyStyle(preset)); chip.Margin = new Thickness(0, 0, 6, 6); chip.FontSize = 12; presets.Children.Add(chip);
-        }
-        _stylePage.Children.Add(presets); _glassEffect.Content = "Glass finish"; _stylePage.Children.Add(_glassEffect);
-        Field(_stylePage, "Font", _font); Field(_stylePage, "Text size", _fontSize); Field(_stylePage, "Alignment", _alignment);
-        var emphasis = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-        _bold.Content = "Bold"; _italic.Content = "Italic"; _italic.Margin = new Thickness(16, 0, 0, 0); emphasis.Children.Add(_bold); emphasis.Children.Add(_italic); _stylePage.Children.Add(emphasis);
-        ColorField("Text", _textColor, _stylePage); ColorField("Background", _backgroundColor, _stylePage); ColorField("Border", _borderColor, _stylePage);
-        Field(_stylePage, "Border width", _borderWidth); Field(_stylePage, "Opacity", _opacity); Field(_stylePage, "Corners", _radius);
-        foreach (var option in new[] { _showHeader, _showBorder, _showBackground }) { option.Margin = new Thickness(0, 8, 0, 0); _stylePage.Children.Add(option); }
-        Field(_layoutPage, "Position X", _positionX); Field(_layoutPage, "Position Y", _positionY);
-        Field(_layoutPage, "Width", _width); Field(_layoutPage, "Height", _height); Field(_layoutPage, "Image fit", _imageFit);
-        _layoutPage.Children.Add(_enabled); _layoutPage.Children.Add(_locked);
-        _editorScroll.Content = _fields; Grid.SetRow(_editorScroll, 3); editor.Children.Add(_editorScroll); RegisterName("WidgetEditorScroll", _editorScroll);
-        var footer = new Grid { Margin = new Thickness(0, 14, 0, 0) };
-        footer.ColumnDefinitions.Add(new ColumnDefinition()); footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        _save = ActionButton("Create", "SaveWidgetButton", Save); _save.SetResourceReference(StyleProperty, "PrimaryButton"); footer.Children.Add(_save);
-        _duplicate.Content = "Duplicate"; _duplicate.ToolTip = "Duplicate widget"; _duplicate.Padding = new Thickness(10, 6, 10, 6); _duplicate.Margin = new Thickness(0, 0, 6, 0);
-        _duplicate.Click += (_, _) => Run(Duplicate); Grid.SetColumn(_duplicate, 1); footer.Children.Add(_duplicate); RegisterName("DuplicateWidgetButton", _duplicate);
-        _delete.Content = "Delete widget"; _delete.SetResourceReference(StyleProperty, "DangerButton"); _delete.ToolTip = "Delete widget"; _delete.Padding = new Thickness(10, 6, 10, 6); _delete.Margin = new Thickness(0);
-        _delete.Click += (_, _) => Run(Delete); Grid.SetColumn(_delete, 2); footer.Children.Add(_delete); RegisterName("DeleteWidgetButton", _delete);
-        Grid.SetRow(footer, 4); editor.Children.Add(footer);
-        _message.Margin = new Thickness(0, 10, 0, 0); Grid.SetRow(_message, 3); workspace.Children.Add(_message);
-        SetEditorTab(0); SetEditorVisible(false); return workspace;
-    }
-
-    private void SetEditorTab(int index)
-    {
-        var pages = new[] { _contentPage, _stylePage, _layoutPage };
-        for (var i = 0; i < pages.Length; i++)
-        {
-            pages[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
-            _tabButtons[i].SetResourceReference(Control.BackgroundProperty, i == index ? "AccentSubtleBrush" : "SurfaceRaisedBrush");
-            _tabButtons[i].SetResourceReference(Control.ForegroundProperty, i == index ? "AccentTextBrush" : "TextSecondaryBrush");
-        }
-        _editorScroll.ScrollToTop();
-    }
-    private void SetEditorVisible(bool visible)
-    {
-        _editorFrame.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        _overviewFrame.Visibility = Visibility.Visible;
-        _galleryFrame.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
-        _galleryColumn.Width = new GridLength(visible ? 310 : 208);
-        _editorColumn.Width = new GridLength(1, GridUnitType.Star);
-    }
-    private void CloseEditor()
-    {
-        if (!TryLeaveDraft()) return;
-        _loading = true; _selected = null; _list.SelectedItem = null; _loading = false; _fields.Visibility = Visibility.Collapsed; SetEditorVisible(false);
-        _preview.Child = null; _previewWindow?.Close(); _previewWindow = null;
-        _save.IsEnabled = _delete.IsEnabled = _duplicate.IsEnabled = false;
-        RefreshOverview(_store.Load());
-    }
-
-    private static string WidgetGlyph(DesktopWidgetKind kind) => kind switch
-    { DesktopWidgetKind.Note => "✎", DesktopWidgetKind.Countdown => "◷", DesktopWidgetKind.Image => "▧", DesktopWidgetKind.Link => "↗", _ => "〰" };
-
-    private static Style GalleryItemStyle()
-    {
-        var style = new Style(typeof(ListBoxItem));
-        style.Setters.Add(new Setter(MarginProperty, new Thickness(0, 0, 12, 12)));
-        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(12)));
-        style.Setters.Add(new Setter(Control.CursorProperty, System.Windows.Input.Cursors.Hand));
-        var frame = new FrameworkElementFactory(typeof(Border)); frame.Name = "Card";
-        frame.SetResourceReference(StyleProperty, "InteractiveCard");
-        frame.SetValue(Border.CornerRadiusProperty, new CornerRadius(14));
-        frame.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-        frame.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
-        frame.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
-        frame.SetBinding(Border.PaddingProperty, new System.Windows.Data.Binding("Padding") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
-        frame.AppendChild(new FrameworkElementFactory(typeof(ContentPresenter)));
-        var template = new ControlTemplate(typeof(ListBoxItem)) { VisualTree = frame };
-        var hover = new Trigger { Property = IsMouseOverProperty, Value = true };
-        hover.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("SurfaceHoverBrush"), "Card"));
-        hover.Setters.Add(new Setter(Border.BorderBrushProperty, new DynamicResourceExtension("AccentBrush"), "Card")); template.Triggers.Add(hover);
-        var selected = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
-        selected.Setters.Add(new Setter(Border.BorderBrushProperty, new DynamicResourceExtension("AccentBrush"), "Card"));
-        selected.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("AccentSubtleBrush"), "Card")); template.Triggers.Add(selected);
-        style.Setters.Add(new Setter(Control.TemplateProperty, template)); return style;
-    }
-    private DataTemplate GalleryCardTemplate()
-    {
-        var content = new FrameworkElementFactory(typeof(ContentControl));
-        content.SetBinding(ContentControl.ContentProperty, new System.Windows.Data.Binding { Converter = new GalleryConverter(BuildGalleryCard) });
-        return new DataTemplate { VisualTree = content };
-    }
-    private sealed class GalleryConverter(Func<DesktopWidget, FrameworkElement> render) : System.Windows.Data.IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is DesktopWidget widget ? render(widget) : DependencyProperty.UnsetValue;
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
-    }
-    private FrameworkElement BuildGalleryCard(DesktopWidget widget)
-    {
-        var panel = new StackPanel { Width = 152 };
-        var renderer = new DesktopWidgetWindow(widget, _store);
-        renderer.UpdatePreview(widget, DesktopWidgetWindow.PreviewScale(widget));
-        var visual = (FrameworkElement)renderer.Content; renderer.Content = null;
-        visual.Width = widget.Width; visual.Height = widget.Height; renderer.Close();
-        var preview = new Viewbox { Height = 106, Stretch = Stretch.Uniform, Child = visual, IsHitTestVisible = false };
-        var previewFrame = new Border { CornerRadius = new CornerRadius(10), Padding = new Thickness(8), Child = preview };
-        previewFrame.SetResourceReference(Border.BackgroundProperty, "SurfaceRaisedBrush");
-        panel.Children.Add(previewFrame);
-        var row = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
-        var toggle = new Button { Name = "CardVisibilityButton", Content = widget.Enabled ? "Hide" : "Show", FontSize = 12, Padding = new Thickness(6, 4, 6, 4), BorderThickness = new Thickness(0),
-            ToolTip = widget.Enabled ? "Hide widget" : "Show widget" };
-        System.Windows.Automation.AutomationProperties.SetName(toggle, widget.Enabled ? "Hide " + widget.DisplayTitle : "Show " + widget.DisplayTitle);
-        toggle.SetResourceReference(Control.ForegroundProperty, widget.Enabled ? "AccentTextBrush" : "TextTertiaryBrush");
-        toggle.Click += (_, e) => { e.Handled = true; Run(() => ToggleWidget(widget)); };
-        DockPanel.SetDock(toggle, Dock.Right); row.Children.Add(toggle);
-        row.Children.Add(new TextBlock { Text = widget.DisplayTitle, TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }); panel.Children.Add(row);
-        var caption = new TextBlock { Text = (widget.Kind == DesktopWidgetKind.NowPlaying ? "Now playing" : widget.Kind.ToString()) + (widget.Enabled ? "" : " · Hidden"), FontSize = 12, Margin = new Thickness(0, 4, 0, 0) };
-        caption.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); panel.Children.Add(caption);
-        var scope = new TextBlock { Text = ProfileLabel(widget.ProfileId), FontSize = 12, Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
-        scope.SetResourceReference(TextBlock.ForegroundProperty, "TextTertiaryBrush"); panel.Children.Add(scope); return panel;
-    }
-    private void ToggleWidget(DesktopWidget widget)
-    {
-        var visible = false;
-        _store.Update(document =>
-        {
-            var saved = document.Widgets.FirstOrDefault(item => item.Id == widget.Id);
-            if (saved == null) return;
-            visible = saved.Enabled = !saved.Enabled;
-            if (visible) document.Enabled = true;
-        });
-        RefreshList(); if (visible) _startHost();
-    }
-
-    private Button ActionButton(string text, string name, Action action)
-    {
-        var button = new Button { Content = text, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(10, 8, 10, 8) };
-        button.Click += (_, _) => Run(action);
-        RegisterName(name, button);
-        System.Windows.Automation.AutomationProperties.SetName(button, text);
-        return button;
-    }
-    private static void Field(StackPanel panel, string label, FrameworkElement control)
-    {
-        var caption = new TextBlock { Text = label, Margin = new Thickness(0, 12, 0, 6), FontSize = 12 };
-        if (control is Slider slider)
-        { caption.Text = $"{label} · {slider.Value:0.#}"; slider.ValueChanged += (_, _) => caption.Text = $"{label} · {slider.Value:0.#}"; }
-        panel.Children.Add(caption);
-        panel.Children.Add(control);
-    }
     internal void CreateFromDrop(System.Windows.IDataObject data)
     {
         if (!TryLeaveDraft()) return;
@@ -535,135 +263,6 @@ internal sealed partial class DesktopCanvasView : UserControl
         DesktopCanvasFeatures.SaveDrop(_store, widgets, area.Right - 340, area.Top + 70);
         _selected = widgets[0]; RefreshList(); _startHost(); _message.Text = $"Created {widgets.Count} widget(s).";
     }
-    private sealed record ColorOwner(IntPtr Handle) : System.Windows.Forms.IWin32Window;
-    private void ColorField(string label, TextBox input, StackPanel panel)
-    {
-        var row = new Grid();
-        row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.Children.Add(input);
-        var choose = new Button { Content = "Choose", Margin = new Thickness(8, 0, 0, 0) };
-        Grid.SetColumn(choose, 1); row.Children.Add(choose);
-        choose.Click += (_, _) =>
-        {
-            using var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true };
-            if (SceneController.TryParseAccent(input.Text, out var color)) dialog.Color = System.Drawing.Color.FromArgb(color.R, color.G, color.B);
-            var window = Window.GetWindow(this);
-            if (window == null) return;
-            if (dialog.ShowDialog(new ColorOwner(new System.Windows.Interop.WindowInteropHelper(window).Handle)) == System.Windows.Forms.DialogResult.OK)
-                input.Text = $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
-        };
-        Field(panel, label, row);
-    }
-    private void ReadAppearance(DesktopWidget widget)
-    {
-        widget.FontFamily = string.IsNullOrWhiteSpace(_font.Text) ? "Segoe UI" : _font.Text.Trim();
-        widget.FontSize = _fontSize.Value; widget.Bold = _bold.IsChecked == true;
-        widget.Italic = _italic.IsChecked == true;
-        widget.Alignment = _alignment.SelectedItem is WidgetTextAlignment alignment ? alignment : WidgetTextAlignment.Left;
-        widget.ImageFit = _imageFit.SelectedItem is WidgetImageFit fit ? fit : WidgetImageFit.Fit;
-        widget.TextColor = _textColor.Text.Trim().ToUpperInvariant(); widget.BackgroundColor = _backgroundColor.Text.Trim().ToUpperInvariant();
-        widget.Opacity = _opacity.Value / 100; widget.CornerRadius = _radius.Value;
-        widget.ShowHeader = _showHeader.IsChecked == true; widget.ShowBorder = _showBorder.IsChecked == true;
-        widget.ShowBackground = _showBackground.IsChecked == true;
-        widget.GlassEffect = _glassEffect.IsChecked == true;
-        widget.MusicLayout = _musicLayout.SelectedItem is NowPlayingLayout layout ? layout : NowPlayingLayout.Horizontal;
-        widget.ShowAlbumArt = _albumArt.IsChecked == true;
-        widget.ShowPlaybackControls = _playbackControls.IsChecked == true;
-        widget.ShowPlaybackProgress = _playbackProgress.IsChecked == true;
-        widget.ShowAudioVisualizer = _audioVisualizer.IsChecked == true;
-        widget.MusicAccentColor = _musicAccent.Text.Trim().ToUpperInvariant();
-        widget.ClockUse24Hour = _clock24Hour.IsChecked == true;
-        widget.ClockShowGreeting = _clockGreeting.IsChecked == true;
-        widget.ClockShowVisualizer = _clockVisualizer.IsChecked == true;
-        ReadSkin(widget);
-        widget.BorderColor = _borderColor.Text.Trim().ToUpperInvariant(); widget.BorderWidth = _borderWidth.Value;
-    }
-    private void QueuePreview()
-    {
-        if (_loading || _previewPending) return;
-        _previewPending = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(() =>
-        {
-            _previewPending = false;
-            RefreshPreview();
-        }));
-    }
-    private void RefreshPreview()
-    {
-        if (_loading || _selected == null) return;
-        _save.IsEnabled = IsDraftDirty;
-        if (IsDraftDirty) _message.Text = "Unsaved changes";
-        else if (_message.Text == "Unsaved changes") _message.Text = "";
-        var draft = _selected.Duplicate(); draft.Id = _selected.Id;
-        draft.Title = _title.Text; draft.Content = _content.Text;
-        draft.Enabled = _enabled.IsChecked == true;
-        draft.LinkCustomDescription = _linkDescription.Text; draft.LeetCodeUsername = _leetCodeUser.Text.Trim();
-        draft.Locked = _locked.IsChecked == true;
-        draft.Width = _width.Value; draft.Height = _height.Value;
-        ReadAppearance(draft);
-        if (_date.SelectedDate is { } date && TimeOnly.TryParseExact(_time.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
-        {
-            var local = DateTime.SpecifyKind(date.Date.Add(time.ToTimeSpan()), DateTimeKind.Unspecified);
-            if (!TimeZoneInfo.Local.IsInvalidTime(local)) draft.Target = new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local));
-        }
-        _previewWindow ??= new DesktopWidgetWindow(draft, _store);
-        _previewWindow.UpdatePreview(draft, DesktopWidgetWindow.PreviewScale(draft));
-        if (_preview.Child == null)
-        {
-            var content = (FrameworkElement)_previewWindow.Content;
-            _previewWindow.Content = null;
-            _preview.Child = content;
-        }
-        var previewContent = (FrameworkElement)_preview.Child;
-        previewContent.Width = draft.Width; previewContent.Height = draft.Height;
-        ReadPosition(draft);
-        RefreshOverview(_store.Load(), draft);
-    }
-    private void ApplyStyle(string name)
-    {
-        if (_selected == null) return;
-        _loading = true;
-        if (name == "Glass") _glassEffect.IsChecked = true;
-        string Available(params string[] fonts) => fonts.FirstOrDefault(font => InstalledFonts.Contains(font, StringComparer.OrdinalIgnoreCase)) ?? "Georgia";
-        var gothic = Available("Old English Text MT", "UnifrakturCook", "UnifrakturMaguntia", "Gabriola");
-        var style = name switch
-        {
-            "Glass" => ("Segoe UI", "#182333", "#FFFFFF", "#E1EFFF", 28d),
-            "Paper" => ("Georgia", "#EEE8D8", "#282A25", "#738579", 3d),
-            "Gothic" => (gothic, "#141018", "#E5D8F4", "#715577", 4d),
-            "Cathedral" => (gothic, "#1B1A22", "#E9DEBF", "#A39169", 0d),
-            "Crimson" => (gothic, "#270D15", "#F1D5CB", "#9D5263", 8d),
-            "Parchment" => (Available("Gabriola", "Palatino Linotype"), "#E4D3AA", "#463421", "#A18A5F", 3d),
-            "Royal" => (Available("Garamond", "Palatino Linotype"), "#20162D", "#EADBAF", "#A58B51", 16d),
-            "Neon" => (Available("Bahnschrift", "Segoe UI"), "#10221F", "#80FFCE", "#4DDDB3", 12d),
-            "Terminal" => (Available("Cascadia Mono", "Consolas"), "#0D1711", "#B7D9AC", "#477A52", 4d),
-            _ => ("Segoe UI", "#1D201E", "#F1F2EE", "#738579", 16d)
-        };
-        _font.Text = style.Item1; _backgroundColor.Text = style.Item2;
-        _textColor.Text = style.Item3; _borderColor.Text = style.Item4; _radius.Value = style.Item5;
-        _borderWidth.Value = 1; _italic.IsChecked = false;
-        if (name is "Gothic" or "Cathedral" or "Crimson") { _bold.IsChecked = false; _fontSize.Value = Math.Max(26, _fontSize.Value); }
-        _opacity.Value = 100;
-        _showHeader.IsChecked = name != "Minimal"; _showBorder.IsChecked = name != "Minimal";
-        _showBackground.IsChecked = name != "Minimal" || _glassEffect.IsChecked == true;
-        if (name == "Rainmeter")
-        {
-            _showHeader.IsChecked = _showBorder.IsChecked = _showBackground.IsChecked = _glassEffect.IsChecked = false;
-            if (_selected?.Kind == DesktopWidgetKind.Clock)
-            {
-                _font.Text = ClockWidgetView.ScriptFont; _fontSize.Value = 76;
-                _width.Value = 520; _height.Value = 310; _alignment.SelectedItem = WidgetTextAlignment.Center;
-            }
-            if (_selected?.Kind == DesktopWidgetKind.NowPlaying)
-            {
-                _musicLayout.SelectedItem = NowPlayingLayout.Minimal;
-                _albumArt.IsChecked = _playbackControls.IsChecked = false; _playbackProgress.IsChecked = true;
-                _fontSize.Value = 24; _width.Value = 360; _height.Value = _audioVisualizer.IsChecked == true ? 220 : 140;
-                _musicAccent.Text = _textColor.Text;
-            }
-        }
-        _loading = false; RefreshPreview();
-    }
     private void Run(Action action)
     {
         try { _message.Text = ""; action(); }
@@ -676,7 +275,7 @@ internal sealed partial class DesktopCanvasView : UserControl
             var document = _store.Load();
             var count = document.Widgets.Count;
             var visible = document.Enabled ? document.VisibleWidgets().Count() : 0;
-            _status.Text = count == 0 ? "No widgets yet" : $"{visible} on desktop · {count} {(count == 1 ? "widget" : "widgets")} in gallery";
+            _status.Text = count == 0 ? "No widgets yet" : $"{visible} active \u00B7 {count} total";
             _showAll.Visibility = document.Enabled ? Visibility.Collapsed : Visibility.Visible;
             _hideAll.Visibility = document.Enabled ? Visibility.Visible : Visibility.Collapsed;
             FollowDesktop(document);
@@ -726,43 +325,81 @@ internal sealed partial class DesktopCanvasView : UserControl
         RefreshStatus();
     }
 
+    private readonly Dictionary<Guid, (DesktopWidgetWindow Renderer, Border Item, FrameworkElement Content)> _canvasPreviews = new();
+    private bool _overviewHadDraft;
+
+    private void ClearCanvasPreviews()
+    {
+        _desktopOverview.Children.Clear();
+        foreach (var preview in _canvasPreviews.Values) preview.Renderer.Close();
+        _canvasPreviews.Clear();
+        _overviewKey = "";
+        _overviewHadDraft = false;
+    }
+
     private void RefreshOverview(DesktopCanvasDocument document, DesktopWidget? draft = null)
     {
         var active = CanvasProfile;
         var widgets = document.Composition(active, CanvasPath).Where(widget => widget.Enabled).ToList();
         if (draft != null) { widgets.RemoveAll(widget => widget.Id == draft.Id); if (draft.Enabled) widgets.Add(draft); }
-        _overviewCaption.Text = "Preview: " + (active.HasValue ? ProfileLabel(active) : "Global widgets")
-            + (string.IsNullOrEmpty(CanvasPath) ? " · default layout" : " · " + Path.GetFileName(CanvasPath))
-            + (document.Enabled ? "" : " · widgets hidden")
-            + (widgets.Count == 0 ? "\nAdd a clock, visualizer, or another widget to compose this look." : "");
+        _overviewCaption.Text = (active.HasValue ? ProfileLabel(active) : "Global")
+            + (string.IsNullOrEmpty(CanvasPath) ? " · Default" : " · " + Path.GetFileName(CanvasPath))
+            + (document.Enabled ? "" : " · Hidden");
         var area = System.Windows.Forms.SystemInformation.VirtualScreen;
         var key = $"{File.GetLastWriteTimeUtc(_store.FilePath).Ticks}|{active}|{CanvasPath}|{ProfileLabel(active)}|{DesktopWidgetWindow.WallpaperKey}|{area}|{VisualTreeHelper.GetDpi(this).DpiScaleX}";
-        if (draft == null && _overviewKey == key) return;
-        _overviewKey = draft == null ? key : "";
+        var documentChanged = _overviewKey != key;
+        var restoringSaved = draft == null && _overviewHadDraft;
+        if (draft == null && !documentChanged && !restoringSaved) return;
+        _overviewKey = key;
+        _overviewHadDraft = draft != null;
         _desktopOverview.Width = area.Width; _desktopOverview.Height = area.Height; _desktopOverview.ClipToBounds = true;
         _desktopOverview.SetResourceReference(System.Windows.Controls.Panel.BackgroundProperty, "BgBrush");
-        _desktopOverview.Children.Clear();
-        foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+        if (documentChanged)
         {
-            var backdrop = new Border { Width = screen.Bounds.Width, Height = screen.Bounds.Height, BorderThickness = new Thickness(1) };
-            backdrop.SetResourceReference(Border.BorderBrushProperty, "BorderStrongBrush");
-            backdrop.Background = CanvasWallpaperBrush() ?? DesktopWidgetWindow.WallpaperBrush(new Rect(screen.Bounds.Left, screen.Bounds.Top, screen.Bounds.Width, screen.Bounds.Height), screen.Bounds);
-            System.Windows.Controls.Canvas.SetLeft(backdrop, screen.Bounds.Left - area.Left);
-            System.Windows.Controls.Canvas.SetTop(backdrop, screen.Bounds.Top - area.Top); _desktopOverview.Children.Add(backdrop);
+            _desktopOverview.Children.Clear();
+            foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+            {
+                var backdrop = new Border { Width = screen.Bounds.Width, Height = screen.Bounds.Height, BorderThickness = new Thickness(1) };
+                backdrop.SetResourceReference(Border.BorderBrushProperty, "BorderStrongBrush");
+                backdrop.Background = CanvasWallpaperBrush() ?? DesktopWidgetWindow.WallpaperBrush(new Rect(screen.Bounds.Left, screen.Bounds.Top, screen.Bounds.Width, screen.Bounds.Height), screen.Bounds);
+                System.Windows.Controls.Canvas.SetLeft(backdrop, screen.Bounds.Left - area.Left);
+                System.Windows.Controls.Canvas.SetTop(backdrop, screen.Bounds.Top - area.Top); _desktopOverview.Children.Add(backdrop);
+            }
+        }
+        var visibleIds = widgets.Select(widget => widget.Id).ToHashSet();
+        foreach (var id in _canvasPreviews.Keys.Where(id => !visibleIds.Contains(id)).ToArray())
+        {
+            var removed = _canvasPreviews[id];
+            _desktopOverview.Children.Remove(removed.Item); removed.Renderer.Close(); _canvasPreviews.Remove(id);
         }
         foreach (var widget in widgets)
         {
-            var renderer = new DesktopWidgetWindow(widget, _store);
-            var bounds = renderer.UpdatePreview(widget, DesktopWidgetWindow.PreviewScale(widget));
-            var content = (FrameworkElement)renderer.Content; renderer.Content = null; renderer.Close();
-            content.Width = widget.Width; content.Height = widget.Height;
-            var item = new Border { Width = bounds.Width, Height = bounds.Height, Child = new Viewbox { Child = content, Stretch = Stretch.Fill }, Cursor = System.Windows.Input.Cursors.Hand,
-                ToolTip = widget.DisplayTitle, Opacity = document.Enabled ? 1 : .4 };
-            item.PreviewMouseLeftButtonDown += (_, e) => StartCanvasDrag(widget, e);
-            System.Windows.Controls.Canvas.SetLeft(item, bounds.X - area.Left); System.Windows.Controls.Canvas.SetTop(item, bounds.Y - area.Top);
-            _desktopOverview.Children.Add(item);
+            // Retain the visual tree so typing or dragging updates one widget rather than recreating the whole scene.
+            if (!_canvasPreviews.TryGetValue(widget.Id, out var preview))
+            {
+                var renderer = new DesktopWidgetWindow(widget, _store);
+                var content = (FrameworkElement)renderer.Content; renderer.Content = null;
+                var item = new Border { Child = new Viewbox { Child = content, Stretch = Stretch.Fill }, Cursor = System.Windows.Input.Cursors.Hand };
+                item.PreviewMouseLeftButtonDown += (sender, e) =>
+                {
+                    if (sender is Border { Tag: DesktopWidget current }) StartCanvasDrag(current, e);
+                };
+                preview = (renderer, item, content); _canvasPreviews.Add(widget.Id, preview);
+            }
+            if (documentChanged || restoringSaved || draft == null || widget.Id == draft.Id || preview.Item.Tag == null)
+            {
+                var bounds = preview.Renderer.UpdatePreview(widget, DesktopWidgetWindow.PreviewScale(widget));
+                preview.Content.Width = widget.Width; preview.Content.Height = widget.Height;
+                preview.Item.Width = bounds.Width; preview.Item.Height = bounds.Height;
+                preview.Item.ToolTip = widget.DisplayTitle; preview.Item.Tag = widget;
+                preview.Item.Opacity = document.Enabled ? 1 : .4;
+                System.Windows.Controls.Canvas.SetLeft(preview.Item, bounds.X - area.Left);
+                System.Windows.Controls.Canvas.SetTop(preview.Item, bounds.Y - area.Top);
+            }
+            if (!_desktopOverview.Children.Contains(preview.Item)) _desktopOverview.Children.Add(preview.Item);
         }
     }
+
     private void Add(DesktopWidgetKind kind)
     {
         if (!TryLeaveDraft()) return;

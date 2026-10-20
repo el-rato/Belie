@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:WallpaperProfiles.UI"
         x:ClassModifier="internal"
-        Title="Belie" Width="1180" Height="820" MinWidth="880" MinHeight="650"
+        Title="Belie" Width="1180" Height="820" MinWidth="640" MinHeight="650"
         WindowStyle="None" WindowStartupLocation="CenterScreen"
         Foreground="{DynamicResource TextPrimaryBrush}" FontFamily="{StaticResource AppFont}" FontSize="14"
         TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"
@@ -17,7 +17,7 @@
     </Window.Resources>
     <Grid Background="{DynamicResource BgBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="224"/>
+            <ColumnDefinition x:Name="SidebarColumn" Width="200"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
@@ -49,11 +49,11 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="1" Margin="8,12,0,12" CornerRadius="14" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+        <Border x:Name="SidebarFrame" Grid.Row="1" Background="{DynamicResource BgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Top" Margin="18,24,18,18">
-                    <StackPanel Margin="12,0,0,24">
-                        <TextBlock Text="Workspace" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <StackPanel x:Name="SidebarTop" DockPanel.Dock="Top" Margin="16,24,16,16">
+                    <StackPanel x:Name="SidebarHeading" Margin="12,0,0,24">
+                        <TextBlock Text="Workspace" FontSize="{StaticResource TypeBody}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </StackPanel>
                     <Button x:Name="DashboardNavButton" AutomationProperties.Name="Overview" Style="{StaticResource NavigationButton}" Click="ShowDashboard_Click">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80F;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Overview"/></StackPanel>
@@ -70,7 +70,7 @@
                     <Grid x:Name="ProfileSearchArea">
                         <TextBox x:Name="SearchBox" Height="36" Padding="10,7" TextChanged="SearchBox_TextChanged"
                                  AutomationProperties.Name="Search profiles" ToolTip="Filter profiles by name"/>
-                        <TextBlock Text="Search profiles" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                        <TextBlock x:Name="ProfileSearchHint" Text="Search profiles" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
                                    Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
@@ -85,7 +85,7 @@
                         </TextBlock>
                     </Grid>
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Bottom" Margin="18,14,18,20">
+                <StackPanel x:Name="SidebarBottom" DockPanel.Dock="Bottom" Margin="16,16,16,16">
                     <Button x:Name="DesktopContextButton" Click="EditActiveProfile_Click" Padding="0" Margin="0,0,0,16" HorizontalContentAlignment="Stretch" ToolTip="Edit the profile currently applied to your desktop" AutomationProperties.Name="Edit applied desktop profile">
                         <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
                             <Setter Property="Visibility" Value="Visible"/>
@@ -98,8 +98,8 @@
                         <StackPanel>
                             <Border Height="84" CornerRadius="7,7,0,0"><Border.Background><ImageBrush ImageSource="{Binding ImageSource, ElementName=ActivityWallpaperBrush}" Stretch="UniformToFill"/></Border.Background></Border>
                             <StackPanel Margin="12,9,12,11">
-                                <TextBlock Text="Applied to desktop" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
-                                <TextBlock Text="{Binding Text, ElementName=ActiveProfileText}" FontSize="13" FontWeight="SemiBold" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="Applied" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                <TextBlock Text="{Binding Text, ElementName=ActiveProfileText}" FontSize="{StaticResource TypeBody}" FontWeight="SemiBold" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </StackPanel>
                     </Button>
@@ -108,12 +108,12 @@
                         <Button Content="Release notes" Tag="Update" Click="ReleaseNotes_Click" Margin="0,0,0,8"/>
                         <Button x:Name="UpdateNowButton" Content="Update and restart" Click="UpdateNow_Click" Style="{StaticResource PrimaryButton}"/>
                     </StackPanel>
-                    <Button x:Name="NewProfileButton" Content="+  New profile" Style="{StaticResource PrimaryButton}" Click="NewProfile_Click" Height="38" HorizontalContentAlignment="Center"/>
+                    <Button x:Name="NewProfileButton" Content="+  New profile" ToolTip="New profile" Click="NewProfile_Click" Height="38" HorizontalContentAlignment="Center"/>
             <Grid Margin="0,10,0,0">
                 <Button x:Name="SettingsButton" AutomationProperties.Name="Settings" Style="{StaticResource NavigationButton}" Click="Settings_Click">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE713;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,12,0"/><TextBlock Text="Settings"/></StackPanel>
                 </Button>
-                <Popup x:Name="SettingsPopup" PlacementTarget="{Binding ElementName=SettingsButton}" Placement="Top" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                <Popup x:Name="SettingsPopup" PlacementTarget="{Binding ElementName=SettingsButton}" Placement="Top" StaysOpen="False" AllowsTransparency="True" PopupAnimation="None">
                 <Border Padding="24" Background="{DynamicResource BgBrush}">
                 <StackPanel>
                     <Grid>
@@ -136,8 +136,8 @@
                         <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="5"/></ItemsPanelTemplate></ListBox.ItemsPanel>
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
-                                <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
-                                <Setter Property="Margin" Value="3,0"/><Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property=" AutomationProperties.Name" Value="{Binding Name}"/>
+                                  <Setter Property="Margin" Value="3,0,3,12"/><Setter Property="Cursor" Value="Hand"/>
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                 <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
                                     <Border x:Name="Choice" CornerRadius="8" Padding="5,6" BorderThickness="1" Background="Transparent" BorderBrush="{DynamicResource BorderBrush}">
@@ -162,18 +162,18 @@
                                     </StackPanel>
                                 </Grid>
                             </Border>
-                            <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="11" HorizontalAlignment="Center" Margin="0,7,0,0"/>
+                            <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="{StaticResource TypeCaption}" HorizontalAlignment="Center" Margin="0,7,0,0"/>
                         </StackPanel></DataTemplate></ListBox.ItemTemplate>
                     </ListBox>
                     <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,22,0,22"/>
                     <TextBlock Text="Startup" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,14"/>
                     <Grid MinHeight="34" Margin="0,0,0,8">
-                        <TextBlock Text="Start with Windows" FontSize="13" VerticalAlignment="Center" Margin="0,0,62,0"/>
+                        <TextBlock Text="Start with Windows" FontSize="{StaticResource TypeBody}" VerticalAlignment="Center" Margin="0,0,62,0"/>
                         <CheckBox Style="{StaticResource SwitchStyle}" x:Name="AutostartToggle" HorizontalAlignment="Right" VerticalAlignment="Center"
                                   AutomationProperties.Name="Start with Windows" Checked="Toggle_Changed" Unchecked="Toggle_Changed"/>
                     </Grid>
                     <Grid MinHeight="34">
-                        <TextBlock Text="Start in tray" FontSize="13" VerticalAlignment="Center" Margin="0,0,62,0"/>
+                        <TextBlock Text="Start in tray" FontSize="{StaticResource TypeBody}" VerticalAlignment="Center" Margin="0,0,62,0"/>
                         <CheckBox Style="{StaticResource SwitchStyle}" x:Name="MinimizedToggle" HorizontalAlignment="Right" VerticalAlignment="Center"
                                   AutomationProperties.Name="Start in tray" Checked="Toggle_Changed" Unchecked="Toggle_Changed"/>
                     </Grid>
@@ -183,7 +183,7 @@
                 </StackPanel>
                 <ScrollViewer x:Name="ProfileRailArea" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="10,0,10,0">
                     <StackPanel>
-                        <TextBlock Text="YOUR PROFILES" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextTertiaryBrush}" Margin="18,0,0,10"/>
+                        <TextBlock x:Name="ProfileRailHeading" Text="Profiles" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextTertiaryBrush}" Margin="18,0,0,10"/>
                         <StackPanel x:Name="RailStack"/>
                         <TextBlock x:Name="SearchEmpty" Text="No matching profiles" Style="{StaticResource HintText}"
                                    Margin="8,12" Visibility="Collapsed" TextWrapping="Wrap"/>
@@ -201,12 +201,12 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0">
-                        <TextBox x:Name="NameBox" FontSize="30" FontFamily="Segoe UI Variable Display, Segoe UI" FontWeight="SemiBold" Padding="0,4" BorderThickness="0" Background="Transparent" AutomationProperties.Name="Profile name" ToolTip="Rename profile"/>
+                        <TextBox x:Name="NameBox" FontSize="{StaticResource TypeTitle}" FontWeight="SemiBold" Padding="0,4" BorderThickness="0" Background="Transparent" AutomationProperties.Name="Profile name" ToolTip="Rename profile"/>
                         <Button x:Name="ShortcutButton" Content="Assign shortcut" Click="Shortcut_Click" HorizontalAlignment="Left" Padding="8,4" FontSize="12" Margin="0,5,0,0" ToolTip="Switch to this profile from anywhere, including the tray"/>
                         <Popup x:Name="ShortcutPopup" PlacementTarget="{Binding ElementName=ShortcutButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" Closed="ShortcutPopup_Closed">
                             <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1" CornerRadius="12" Padding="18" Width="320">
                                 <StackPanel>
-                                    <TextBlock Text="Profile shortcut" FontSize="17" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Profile shortcut" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold"/>
                                     <TextBlock Text="Click below and press a key combination, such as Ctrl + Alt + 1." Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,8,0,12"/>
                                     <TextBox x:Name="ShortcutCapture" IsReadOnly="True" PreviewKeyDown="ShortcutCapture_KeyDown" AutomationProperties.Name="Record profile shortcut" Height="40"/>
                                     <TextBlock x:Name="ShortcutMessage" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,8,0,12"/>
@@ -222,7 +222,7 @@
                         </Popup>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="MoreProfileButton" Content="More" Click="MoreProfile_Click" Height="36" Padding="12,7" Margin="0,0,8,0" AutomationProperties.Name="More profile actions">
+                        <Button x:Name="MoreProfileButton" Content="&#xE712;" FontFamily="{StaticResource IconFont}" Width="36" ToolTip="More profile actions" Click="MoreProfile_Click" Height="36" Padding="12,7" Margin="0,0,8,0" AutomationProperties.Name="More profile actions">
                             <Button.ContextMenu><ContextMenu><MenuItem Header="Duplicate profile" Click="Duplicate_Click"/><MenuItem Header="Delete profile" Click="Delete_Click"/></ContextMenu></Button.ContextMenu>
                         </Button>
                         <Button x:Name="SaveProfileButton" Content="Save" Click="Save_Click" Height="36" Margin="0,0,8,0" Padding="16,7" ToolTip="Save profile changes"/>
@@ -235,11 +235,11 @@
             <TextBlock x:Name="ProfileMessage" Grid.Row="1" Margin="24,0,24,12" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" AutomationProperties.LiveSetting="Polite"/>
             <ScrollViewer x:Name="ProfileDetailsScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="24,0,24,24" MaxWidth="980">
-                <Border x:Name="DropZone" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
-                        BorderThickness="1" CornerRadius="16" AllowDrop="True"
+                <Border x:Name="DropZone" Background="{DynamicResource BgBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="0" CornerRadius="8" AllowDrop="True"
                         Drop="DropZone_Drop" DragOver="DropZone_DragOver" DragLeave="DropZone_DragLeave">
                     <Grid x:Name="PreviewFrame" Height="210">
-                        <Border CornerRadius="15" Background="{DynamicResource SurfaceRaisedBrush}"/>
+                        <Border CornerRadius="8" Background="{DynamicResource BgBrush}"/>
                         <Border CornerRadius="15" Opacity="0.18" IsHitTestVisible="False">
                             <Border.Background><ImageBrush ImageSource="{Binding ScreenSource, ElementName=PreviewMon}" Stretch="UniformToFill"/></Border.Background>
                         </Border>
@@ -253,37 +253,37 @@
                             <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
                                 <Style.Triggers><DataTrigger Binding="{Binding ScreenSource, ElementName=PreviewMon}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
                             </Style></StackPanel.Style>
-                            <TextBlock x:Name="PreviewEmptyTitle" Text="Choose a wallpaper" FontSize="24" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap"/>
-                            <TextBlock x:Name="PreviewEmptyHint" Text="Drop an image or video here to get started." Foreground="{DynamicResource TextSecondaryBrush}" TextAlignment="Center" Margin="0,10,0,20" TextWrapping="Wrap"/>
-                            <Button Content="Choose a wallpaper  →" Click="PickImage_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Padding="18,11"/>
+                            <TextBlock x:Name="PreviewEmptyTitle" Text="Choose a wallpaper" FontSize="{StaticResource TypeTitle}" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="PreviewEmptyHint" Text="Drop an image or video" Foreground="{DynamicResource TextSecondaryBrush}" TextAlignment="Center" Margin="0,10,0,20" TextWrapping="Wrap"/>
+                            <Button Content="Choose a wallpaper  →" Click="PickImage_Click" HorizontalAlignment="Center" Padding="16,8"/>
                         </StackPanel>
-                        <Border CornerRadius="10" Background="#D910171B" Padding="8" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="12">
+                        <Border Style="{StaticResource PreviewOverlay}" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="16">
                             <StackPanel Orientation="Horizontal">
-                                <Button x:Name="PreviousPreviewButton" Content="&#xE76B;" FontFamily="{StaticResource IconFont}" Click="BrowsePreview_Click" Tag="-1" Width="32" Height="30" Padding="0" Foreground="White" BorderThickness="0" ToolTip="Previous wallpaper" AutomationProperties.Name="Previous wallpaper" IsEnabled="False"/>
-                                <TextBlock x:Name="PreviewPositionText" Text="Desktop preview" Foreground="White" FontSize="11" VerticalAlignment="Center" Margin="10,0"/>
-                                <Button x:Name="NextPreviewButton" Content="&#xE76C;" FontFamily="{StaticResource IconFont}" Click="BrowsePreview_Click" Tag="1" Width="32" Height="30" Padding="0" Foreground="White" BorderThickness="0" ToolTip="Next wallpaper" AutomationProperties.Name="Next wallpaper" IsEnabled="False"/>
+                                <Button x:Name="PreviousPreviewButton" Content="&#xE76B;" FontFamily="{StaticResource IconFont}" Click="BrowsePreview_Click" Tag="-1" Width="36" Height="36" Padding="0" Foreground="White" BorderThickness="0" ToolTip="Previous wallpaper" AutomationProperties.Name="Previous wallpaper" IsEnabled="False"/>
+                                <TextBlock x:Name="PreviewPositionText" Text="Desktop preview" Foreground="White" FontSize="{StaticResource TypeCaption}" VerticalAlignment="Center" Margin="10,0"/>
+                                <Button x:Name="NextPreviewButton" Content="&#xE76C;" FontFamily="{StaticResource IconFont}" Click="BrowsePreview_Click" Tag="1" Width="36" Height="36" Padding="0" Foreground="White" BorderThickness="0" ToolTip="Next wallpaper" AutomationProperties.Name="Next wallpaper" IsEnabled="False"/>
                                 <Border Width="1" Background="#506C8076" Margin="8,4"/>
-                                <Button x:Name="ExpandPreviewButton" Content="&#xE740;" FontFamily="{StaticResource IconFont}" Click="ExpandPreview_Click" Width="32" Height="30" Padding="0" Foreground="White" BorderThickness="0" ToolTip="Expand preview" AutomationProperties.Name="Expand wallpaper preview">
+                                <Button x:Name="ExpandPreviewButton" Content="&#xE740;" FontFamily="{StaticResource IconFont}" Click="ExpandPreview_Click" Width="36" Height="36" Padding="0" Foreground="White" BorderThickness="0" ToolTip="Expand preview" AutomationProperties.Name="Expand wallpaper preview">
                                     <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><DataTrigger Binding="{Binding ScreenSource, ElementName=PreviewMon}" Value="{x:Null}"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></Button.Style>
                                 </Button>
                             </StackPanel>
                         </Border>
                         <Border x:Name="DropOverlay" CornerRadius="8" Background="{DynamicResource BgBrush}" Opacity="0.97" Visibility="Collapsed">
                             <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" CornerRadius="6" Margin="16" Background="{DynamicResource AccentSubtleBrush}">
-                                <TextBlock Text="Drop an image, video, or folder" FontWeight="SemiBold" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <TextBlock Text="Drop an image, video, or folder" FontWeight="SemiBold" FontSize="{StaticResource TypeBody}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                         </Border>
                     </Grid>
                 </Border>
-                <TabControl x:Name="ProfileTabs" Style="{StaticResource StudioTabs}" Margin="0,24,0,0">
+                <TabControl x:Name="ProfileTabs" Style="{StaticResource StudioTabs}" Margin="0,16,0,0">
                 <TabItem Header="Wallpaper"><StackPanel>
-                <TextBlock Text="Wallpaper source" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="Source" Style="{StaticResource FieldLabel}"/>
                 <WrapPanel Margin="0,4,0,12">
-                    <Button x:Name="AddFromLibraryButton" Content="Add from library" Click="OpenLibrary_Click" Margin="0,0,8,8"/>
-                    <Button Content="Compose widgets" Click="ComposeWallpaper_Click" Margin="0,0,8,8" ToolTip="Arrange widgets for the wallpaper in this preview"/>
-                    <Button Content="Choose folder" Click="Browse_Click" Margin="0,0,8,8"/>
-                    <Button Content="Choose image" Click="PickImage_Click" Margin="0,0,8,8"/>
-                    <Button Content="Choose video" Click="PickVideo_Click" Margin="0,0,0,8"/>
+                    <Button x:Name="AddFromLibraryButton" Content="Library" Click="OpenLibrary_Click" Margin="0,0,8,8" ToolTip="Add from library" AutomationProperties.Name="Add from library"/>
+                    <Button Content="Widgets" Click="ComposeWallpaper_Click" Margin="0,0,8,8" ToolTip="Arrange widgets for the wallpaper in this preview" AutomationProperties.Name="Compose widgets"/>
+                    <Button Content="Folder" Click="Browse_Click" Margin="0,0,8,8" ToolTip="Choose folder" AutomationProperties.Name="Choose folder"/>
+                    <Button Content="Image" Click="PickImage_Click" Margin="0,0,8,8" ToolTip="Choose image" AutomationProperties.Name="Choose image"/>
+                    <Button Content="Video" Click="PickVideo_Click" Margin="0,0,0,8" ToolTip="Choose video" AutomationProperties.Name="Choose video"/>
                 </WrapPanel>
                 <DockPanel Visibility="Collapsed">
                     <local:SourceThumbnail FilePath="{Binding Text, ElementName=FolderBox}" Margin="0,0,12,0"/>
@@ -307,12 +307,11 @@
                         </DataTemplate></ItemsControl.ItemTemplate>
                     </local:WallpaperThumbnailList>
                 </ScrollViewer>
-                <DockPanel><TextBlock Text="Image fit" VerticalAlignment="Center" Margin="0,0,18,0"/><ComboBox x:Name="FitCombo" Width="180" HorizontalAlignment="Left" ItemsSource="{x:Static local:EnumLists.FitModes}" AutomationProperties.Name="Image fit"/></DockPanel>
+                <DockPanel><TextBlock Text="Fit" VerticalAlignment="Center" Margin="0,0,18,0"/><ComboBox x:Name="FitCombo" Width="180" HorizontalAlignment="Left" ItemsSource="{x:Static local:EnumLists.FitModes}" AutomationProperties.Name="Image fit"/></DockPanel>
                 </StackPanel></TabItem>
                 <TabItem Header="Playback">
                         <StackPanel Margin="0,14,0,8">
-                            <TextBlock Text="Playback" FontSize="21" FontWeight="SemiBold"/>
-                            <TextBlock Text="Control how this scene moves and sounds." Style="{StaticResource HintText}" Margin="0,6,0,18"/>
+                            <TextBlock Text="Playback" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold"/>
                             <Border Style="{StaticResource SettingsCard}"><Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -323,14 +322,13 @@
                                 </StackPanel>
                                 <TextBox Grid.Column="1" x:Name="IntervalBox" Width="70" Height="36" ToolTip="0 turns slideshow off" AutomationProperties.Name="Slideshow interval in minutes"/>
                             </Grid></Border>
-                            <Border Style="{StaticResource SettingsCard}"><DockPanel><CheckBox DockPanel.Dock="Right" x:Name="RandomBox" Style="{StaticResource SwitchStyle}" VerticalAlignment="Center" AutomationProperties.Name="Shuffle wallpapers"/><StackPanel Margin="0,0,14,0"><TextBlock Text="Shuffle the collection" FontWeight="SemiBold"/><TextBlock Text="Keep the next wallpaper a surprise." Style="{StaticResource HintText}" Margin="0,5,0,0" TextWrapping="Wrap"/></StackPanel></DockPanel></Border>
-                            <Border Style="{StaticResource SettingsCard}"><DockPanel><CheckBox DockPanel.Dock="Right" x:Name="VideoMuteBox" Style="{StaticResource SwitchStyle}" VerticalAlignment="Center" AutomationProperties.Name="Mute video"/><StackPanel Margin="0,0,14,0"><TextBlock Text="Quiet playback" FontWeight="SemiBold"/><TextBlock Text="Play video wallpapers without their audio." Style="{StaticResource HintText}" Margin="0,5,0,0" TextWrapping="Wrap"/></StackPanel></DockPanel></Border>
-                            <Border Style="{StaticResource SettingsCard}"><DockPanel><CheckBox DockPanel.Dock="Right" x:Name="IconSafeBox" Style="{StaticResource SwitchStyle}" VerticalAlignment="Center" AutomationProperties.Name="Keep icons visible" ToolTip="Plays video at a reduced frame rate, keeping icons and taskbar visible."/><StackPanel Margin="0,0,14,0"><TextBlock Text="Keep your desktop in view" FontWeight="SemiBold"/><TextBlock Text="Preserve icons and the taskbar over live wallpapers." Style="{StaticResource HintText}" Margin="0,5,0,0" TextWrapping="Wrap"/></StackPanel></DockPanel></Border>
+                            <Border Style="{StaticResource SettingsCard}"><DockPanel><CheckBox DockPanel.Dock="Right" x:Name="RandomBox" Style="{StaticResource SwitchStyle}" VerticalAlignment="Center" AutomationProperties.Name="Shuffle wallpapers" ToolTip="Randomize wallpaper order"/><StackPanel Margin="0,0,14,0"><TextBlock Text="Shuffle" FontWeight="SemiBold"/></StackPanel></DockPanel></Border>
+                            <Border Style="{StaticResource SettingsCard}"><DockPanel><CheckBox DockPanel.Dock="Right" x:Name="VideoMuteBox" Style="{StaticResource SwitchStyle}" VerticalAlignment="Center" AutomationProperties.Name="Mute video" ToolTip="Play video wallpapers without audio"/><StackPanel Margin="0,0,14,0"><TextBlock Text="Mute video" FontWeight="SemiBold"/></StackPanel></DockPanel></Border>
+                            <Border Style="{StaticResource SettingsCard}"><DockPanel><CheckBox DockPanel.Dock="Right" x:Name="IconSafeBox" Style="{StaticResource SwitchStyle}" VerticalAlignment="Center" AutomationProperties.Name="Keep icons visible" ToolTip="Plays video at a reduced frame rate, keeping icons and taskbar visible."/><StackPanel Margin="0,0,14,0"><TextBlock Text="Keep icons visible" FontWeight="SemiBold"/></StackPanel></DockPanel></Border>
                         </StackPanel>
                 </TabItem>
                 <TabItem Header="Automation"><StackPanel>
-                            <TextBlock Text="Automation" FontSize="21" FontWeight="SemiBold"/>
-                            <TextBlock Text="Apply this profile on a schedule or when an event occurs." Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,18"/>
+                            <TextBlock Text="Automation" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold"/>
                             <Border Style="{StaticResource SettingsCard}"><StackPanel>
                             <TextBlock Text="Schedules" Style="{StaticResource FieldLabel}"/>
                             <TextBlock x:Name="ScheduleSummary" TextWrapping="Wrap"/>
@@ -341,9 +339,8 @@
                             <Button x:Name="EditRulesButton" Content="Edit schedules &amp; triggers" Tag="Rules" Click="EditRules_Click" HorizontalAlignment="Left" Margin="0,16,0,0"/>
                 </StackPanel></TabItem>
                 <TabItem Header="Mood"><StackPanel>
-                    <TextBlock Text="Appearance &amp; audio" FontSize="21" FontWeight="SemiBold"/>
-                    <TextBlock Text="Pair a color with an ambient soundtrack." Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,18"/>
-                    <Button Content="Edit mood" Style="{StaticResource PrimaryButton}" Tag="Mood" Click="EditRules_Click" HorizontalAlignment="Left" Padding="16,10"/>
+                    <TextBlock Text="Appearance &amp; audio" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold"/>
+                    <Button Content="Edit mood" Tag="Mood" Click="EditRules_Click" HorizontalAlignment="Left" Padding="16,10"/>
                 <TextBlock x:Name="SceneSummary" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                 </StackPanel></TabItem>
                 </TabControl>
@@ -360,8 +357,7 @@
                 <Grid Margin="0,0,0,22">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,12,0">
-                        <TextBlock Text="Overview" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                        <TextBlock Text="Your desktop, automation, and recent changes." Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,7,0,0" TextWrapping="Wrap"/>
+                        <TextBlock Text="Overview" FontSize="{StaticResource TypeTitle}" FontWeight="SemiBold" TextWrapping="Wrap"/>
                     </StackPanel>
                     <Button Grid.Column="1" Click="OpenLibrary_Click" VerticalAlignment="Center" Padding="14,10" ToolTip="Explore your wallpaper library">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B9;" FontFamily="{StaticResource IconFont}" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock Text="Explore library"/></StackPanel>
@@ -402,7 +398,7 @@
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <StackPanel Margin="0,0,12,0">
-                                        <TextBlock x:Name="ActiveProfileText" Foreground="White" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="ActiveProfileText" Foreground="White" FontSize="{StaticResource TypeTitle}" FontWeight="SemiBold" TextWrapping="Wrap"/>
                                         <TextBlock x:Name="ActivationReasonText" Foreground="#C9D5CD" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Margin="0,6,0,0"/>
                                     </StackPanel>
                                     <Button x:Name="EditActiveProfileButton" Grid.Column="1" Content="Edit profile  →" Click="EditActiveProfile_Click"
@@ -422,14 +418,14 @@
                     <Border Style="{StaticResource CardBorder}">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE787;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/><TextBlock Text="Up next" Style="{StaticResource HintText}"/></StackPanel>
-                            <TextBlock x:Name="NextScheduleText" FontSize="18" FontWeight="SemiBold" Margin="0,9,0,7" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="NextScheduleText" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold" Margin="0,9,0,7" TextWrapping="Wrap"/>
                             <TextBlock x:Name="NextScheduleHint" Style="{StaticResource HintText}" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="2" Style="{StaticResource CardBorder}">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE945;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/><TextBlock Text="Automation" Style="{StaticResource HintText}"/></StackPanel>
-                            <TextBlock x:Name="AutomationModeText" FontSize="18" FontWeight="SemiBold" Margin="0,9,0,7"/>
+                            <TextBlock x:Name="AutomationModeText" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold" Margin="0,9,0,7"/>
                             <TextBlock x:Name="AutomationHintText" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
                             <Button x:Name="PauseAutomationButton" Content="Pause automation" Click="PauseAutomation_Click" HorizontalAlignment="Left" Padding="10,5"/>
                         </StackPanel>
@@ -437,7 +433,7 @@
                 </Grid>
                 <Grid Margin="0,24,0,12">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <StackPanel><TextBlock Text="Profiles" FontSize="21" FontWeight="SemiBold"/><TextBlock Text="Inspect a profile or apply it to your desktop." Style="{StaticResource HintText}" Margin="0,5,0,0"/></StackPanel>
+                    <StackPanel><TextBlock Text="Profiles" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold"/><TextBlock Text="Inspect a profile or apply it to your desktop." Style="{StaticResource HintText}" Margin="0,5,0,0"/></StackPanel>
                     <Button Grid.Column="1" Content="+ New profile" Click="NewProfile_Click" VerticalAlignment="Center" BorderThickness="0" Foreground="{DynamicResource AccentTextBrush}"/>
                 </Grid>
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Padding="0,0,0,8"
@@ -445,11 +441,11 @@
                     <StackPanel x:Name="SceneGallery" Orientation="Horizontal"/>
                 </ScrollViewer>
                 <Border x:Name="SceneGalleryEmpty" CornerRadius="14" BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1" Padding="22" Visibility="Collapsed">
-                    <StackPanel><TextBlock Text="Create your first profile" FontSize="19" FontWeight="SemiBold"/><TextBlock Text="Create a profile with a wallpaper, then switch to it in one click." Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,16"/><Button Content="Create a profile  →" Click="NewProfile_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/></StackPanel>
+                    <StackPanel><TextBlock Text="Create your first profile" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold"/><TextBlock Text="Create a profile with a wallpaper, then switch to it in one click." Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,16"/><Button Content="Create a profile  →" Click="NewProfile_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/></StackPanel>
                 </Border>
                 <Border Style="{StaticResource CardBorder}">
                     <StackPanel>
-                        <TextBlock Text="Temporary override" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock Text="Temporary override" FontSize="{StaticResource TypeBody}" FontWeight="SemiBold"/>
                         <Grid Margin="0,14,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="120"/><ColumnDefinition Width="12"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
@@ -466,7 +462,7 @@
                         <Button x:Name="ResumeAutomaticButton" Content="Resume automation" Click="ResumeAutomatic_Click" HorizontalAlignment="Left" Margin="0,12,0,0" Padding="10,5"/>
                     </StackPanel>
                 </Border>
-                <TextBlock Text="Recent activity" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,12"/>
+                <TextBlock Text="Recent activity" FontSize="{StaticResource TypeBody}" FontWeight="SemiBold" Margin="0,22,0,12"/>
                 <TextBlock x:Name="NoActivityText" Text="No activity yet"
                            Style="{StaticResource HintText}" TextWrapping="Wrap"/>
                 <ItemsControl x:Name="RecentActivityList">

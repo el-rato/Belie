@@ -14,6 +14,18 @@ internal static class DropHelper
     public const string VideoFileFilter =
         "Videos|*.mp4;*.m4v;*.mov;*.wmv;*.avi;*.mpg;*.mpeg;*.m2v;*.mkv;*.webm;*.3gp|All files|*.*";
 
+    public static string? PickMediaFile(string currentPath, bool video)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = video ? "Choose a live wallpaper video" : "Choose a wallpaper image",
+            Filter = video ? VideoFileFilter : ImageFileFilter,
+            InitialDirectory = File.Exists(currentPath) ? Path.GetDirectoryName(currentPath)
+                : Directory.Exists(currentPath) ? currentPath : null
+        };
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
     /// <summary>Returns the first accepted path in the data object, or null.</summary>
     public static string? ExtractPath(System.Windows.IDataObject data)
     {

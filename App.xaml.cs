@@ -113,7 +113,7 @@ internal partial class App : System.Windows.Application
             }
 
             var settingsStore = new SettingsStore(AppPaths.SettingsFile);
-            ConfigureRendering(liveWallpaper: false);
+            ConfigureRendering(liveWallpaper: false, interactiveShell: true);
             _exitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Exit");
             _canvasActivateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Canvas.Open");
             var settings = settingsStore.Load();
@@ -219,11 +219,10 @@ internal partial class App : System.Windows.Application
         _main.Activate();
     }
 
-    internal static void ConfigureRendering(bool liveWallpaper)
+    internal static void ConfigureRendering(bool liveWallpaper, bool interactiveShell = false)
     {
-        // Static UI and widgets do not need a GPU device and its driver allocations.
-        // Live wallpaper playback retains the hardware rendering path.
-        System.Windows.Media.RenderOptions.ProcessRenderMode = liveWallpaper
+        // Keep the background widget process lean without forcing the interactive shell to render on the CPU.
+        System.Windows.Media.RenderOptions.ProcessRenderMode = liveWallpaper || interactiveShell
             ? System.Windows.Interop.RenderMode.Default
             : System.Windows.Interop.RenderMode.SoftwareOnly;
     }

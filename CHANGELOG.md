@@ -1,5 +1,34 @@
 # Belie patch notes
 
+## [3.4.2] - 2026-10-20 - A lighter Workspace
+
+### Appearance and usability
+
+- Larger wallpaper and desktop previews, compact profile/widget rows, and quieter panels with fewer borders and shadows.
+- Secondary studio actions grouped in the More menu; widget visibility uses eye buttons, with existing controls and shortcuts retained.
+- Responsive sidebar and stacked studio layout for narrow windows, visible keyboard focus, and reduced-motion support.
+- Eight new themes: Obsidian, Nord, Dracula, Rose, Ocean, Mocha, Tokyo, and Sunset (13 themes total).
+- Library tags now open from a compact Tags button instead of reducing the preview area.
+- Tray menu follows the app's theme, font, hover colors, and accent checkmarks. Open Belie, profile switching, Pause automation, and Exit remain available.
+
+### Rendering and reliability
+
+- The main window uses WPF's hardware-capable rendering path; background widgets retain their existing rendering configuration.
+- Widget editing reuses preview visuals instead of rebuilding each widget on every adjustment. Saved layouts change only through the existing save actions.
+- Removed pane slide/fade and moving hover effects for steadier navigation.
+- Consolidated atomic JSON writes, preserved profiles after temporary read failures, and reduced repeated resolver work.
+- Split large UI, model, and engine files into focused partials; added a codebase guide and nine stress scenarios.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widget layouts, and shortcuts are retained. Alternatively, install **Belie-win-Setup.exe** or extract the entire **Belie-win-Portable.zip**. Exit an older running instance before launching a portable build.
+
+### Validation
+
+Release compilation and the UI integration flow pass, including tray palette/target checks across all 13 themes. Regression and stress coverage includes persistence, profile selection, widget editing, layouts, and update controls. This restricted host cannot read the Windows desktop media session; that existing integration check still requires an interactive Windows session.
+
 ## [3.4.1] - Patch notes inside Belie
 
 ### What changed
@@ -44,7 +73,7 @@ From **Profiles**, select a profile and preview the wallpaper you want to work w
 
 ### Profile defaults and wallpaper-specific layouts
 
-1. Choose **Profile default · all wallpapers** in the wallpaper selector to edit the profile’s default composition.
+1. Choose **Profile default** beside **Editing:** to edit the profile’s shared layout. Wallpapers with their own layouts are unaffected.
 2. To make a particular wallpaper look different, select it and choose **Customize wallpaper**. Belie starts with an independent copy of the profile’s default widgets.
 3. Add widgets, change their styles, or move unlocked widgets on the wallpaper canvas. Press **Create** for a new widget or **Save** for each edited widget.
 4. Repeat for other wallpapers in the profile. Choose **Use profile default** to remove a wallpaper’s custom composition and return to the shared default.
@@ -55,7 +84,7 @@ Wallpapers without a custom layout use the profile default. Widgets assigned to 
 
 Keep your usual slideshow interval and **Shuffle the collection** setting under the profile’s **Playback** tab. Each time a wallpaper is applied successfully, Belie switches to that wallpaper’s saved composition. There is no need to reassign widgets after each shuffle.
 
-Enable **Follow desktop** in the studio to track the active wallpaper while no widget is being edited. While a widget is open in the editor, the canvas stays on that composition so a slideshow change does not interrupt your work.
+Enable **Follow active wallpaper** in the studio to keep the preview on your desktop’s current wallpaper while no widget is being edited. This only controls the studio preview; it does not change your slideshow settings. While a widget is open in the editor, the canvas stays on that composition so a slideshow change does not interrupt your work.
 
 ### Clock and visualizer skins
 
@@ -67,7 +96,7 @@ Use the Style controls to adjust the design, shape, fonts, colors, and motion. *
 
 ### Reuse a look
 
-- **Save layout** stores the selected canvas’s saved arrangement as a named preset. Find it under **Saved layouts** or the catalogue’s **Saved layouts** tab. Applying one replaces that canvas’s local widgets with an independent copy.
+- **Save as preset** stores the selected canvas’s saved arrangement as a named preset. Save each widget’s edits first. Find presets under **Layout presets** or the catalogue’s **Saved layouts** tab. Applying one replaces that canvas’s local widgets with an independent copy.
 - **Style → Save skin** stores a customized appearance under **Styles catalogue → My styles**. Saving a skin does not apply an unsaved widget draft; save the widget separately.
 - **Export skin** writes a skin file you can share. **Import skin…** in the catalogue adds a skin file to **My styles**.
 

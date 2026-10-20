@@ -6,13 +6,20 @@ or **video/GIF** wallpapers, then switch **manually** (tray menu), on a **schedu
 or **automatically** when something happens (battery, idle, or a program launches).
 
 It lives quietly in the **system tray** (bottom-right corner of the taskbar). You never need to
-know C# or .NET to use it. Choose from four dark themes and the light Daylight theme.
+know C# or .NET to use it. Choose from 13 themes, including the light Daylight theme.
 
 ## Download
 
 [Download the latest Windows installer](https://github.com/el-rato/Belie/releases/latest/download/Belie-win-Setup.exe).
 For a portable app, download and extract the complete `Belie-win-Portable.zip` from the
 [latest release](https://github.com/el-rato/Belie/releases/latest).
+
+### New in 3.4.2
+
+A lighter Workspace with larger previews, compact profile/widget rows, responsive navigation,
+eight additional themes, collapsible library tags, and a tray menu that follows your theme.
+Widget editing reuses its preview visuals for steadier interaction. Existing profiles,
+schedules, layouts, and shortcuts are retained. See [CHANGELOG.md](CHANGELOG.md).
 
 ### New in 3.4.1
 
@@ -63,6 +70,8 @@ Choose **Widgets → + Clock → Create** to add the new clock.
 
 ## How to build (developer only)
 
+For a walkthrough of the source, feature-to-file map, and stress-test commands, read [the codebase guide](docs/CODEBASE_GUIDE.md).
+
 You need the **.NET 8 SDK**. Open a terminal **in this folder** and run:
 
 ```
@@ -82,7 +91,7 @@ dotnet test WallpaperProfiles.Tests\WallpaperProfiles.Tests.csproj
 ```
 dotnet tool install -g vpk --version 1.2.161
 dotnet publish WallpaperProfiles.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o release-output/app
-vpk pack --packId Belie --packVersion 3.4.1 --packDir release-output/app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon appicon.ico --outputDir release-output/packages
+vpk pack --packId Belie --packVersion 3.4.2 --packDir release-output/app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon appicon.ico --outputDir release-output/packages
 ```
 
 Result: a Windows installer, portable ZIP, full update package, and release feed in

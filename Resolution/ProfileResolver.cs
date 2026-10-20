@@ -63,11 +63,18 @@ internal sealed class ProfileResolver
             Logger.Info("Manual override ended; handing control back to automatic rules.");
         }
 
-        var active = activeEvents
-            .Where(e => profiles.Any(p => p.Id == e.ProfileId))
-            .OrderByDescending(e => e.Priority)
-            .ThenByDescending(e => e.SinceUtc)
-            .FirstOrDefault();
+        ActiveEventSnapshot? active = null;
+        if (activeEvents.Count > 0)
+        {
+            var profileIds = profiles.Select(profile => profile.Id).ToHashSet();
+            foreach (var candidate in activeEvents)
+            {
+                if (!profileIds.Contains(candidate.ProfileId)) continue;
+                if (active == null || candidate.Priority > active.Priority
+                    || (candidate.Priority == active.Priority && candidate.SinceUtc > active.SinceUtc))
+                    active = candidate;
+            }
+        }
         if (active != null)
         {
             return new ProfileDecision(active.ProfileId, ResolutionSource.Event);
@@ -125,23 +132,23 @@ internal sealed class ProfileResolver
                     var start = day.ToDateTime(rule.StartTime);
                     var end = day.ToDateTime(rule.EndTime);
                     // Day changes also affect the existing day-based overnight rules.
-                    foreach (var transition in new[] { day.ToDateTime(TimeOnly.MinValue), start, end })
-                    {
-                        if (transition <= afterLocal)
-                        {
-                            continue;
-                        }
-                        var before = transition.AddTicks(-1);
-                        if (rule.Matches(before.DayOfWeek, TimeOnly.FromDateTime(before))
-                            == rule.Matches(transition.DayOfWeek, TimeOnly.FromDateTime(transition))) continue;
-                        if (best == null || transition < best)
-                        {
-                            best = transition;
-                        }
-                    }
+                    Consider(day.ToDateTime(TimeOnly.MinValue), rule);
+                    Consider(start, rule);
+                    Consider(end, rule);
                 }
             }
+            // Later days cannot provide an earlier boundary.
+            if (best.HasValue) return best;
         }
-        return best;
+        return null;
+
+        void Consider(DateTime transition, ScheduleRule rule)
+        {
+            if (transition <= afterLocal || (best.HasValue && transition >= best.Value)) return;
+            var before = transition.AddTicks(-1);
+            if (rule.Matches(before.DayOfWeek, TimeOnly.FromDateTime(before))
+                != rule.Matches(transition.DayOfWeek, TimeOnly.FromDateTime(transition)))
+                best = transition;
+        }
     }
 }

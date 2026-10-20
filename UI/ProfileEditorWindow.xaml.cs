@@ -310,48 +310,13 @@ internal partial class ProfileEditorWindow : Window
         }
     }
 
-    private void PickImage_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new OpenFileDialog
-        {
-            Title = "Choose a wallpaper image",
-            Filter = DropHelper.ImageFileFilter,
-        };
-        var current = FolderBox.Text.Trim();
-        if (File.Exists(current))
-        {
-            dialog.InitialDirectory = Path.GetDirectoryName(current);
-        }
-        else if (Directory.Exists(current))
-        {
-            dialog.InitialDirectory = current;
-        }
-        if (dialog.ShowDialog() == true)
-        {
-            FolderBox.Text = dialog.FileName;
-        }
-    }
+    private void PickImage_Click(object sender, RoutedEventArgs e) => PickMediaFile(video: false);
+    private void PickVideo_Click(object sender, RoutedEventArgs e) => PickMediaFile(video: true);
 
-    private void PickVideo_Click(object sender, RoutedEventArgs e)
+    private void PickMediaFile(bool video)
     {
-        var dialog = new OpenFileDialog
-        {
-            Title = "Choose a live wallpaper video",
-            Filter = DropHelper.VideoFileFilter,
-        };
-        var current = FolderBox.Text.Trim();
-        if (File.Exists(current))
-        {
-            dialog.InitialDirectory = Path.GetDirectoryName(current);
-        }
-        else if (Directory.Exists(current))
-        {
-            dialog.InitialDirectory = current;
-        }
-        if (dialog.ShowDialog() == true)
-        {
-            FolderBox.Text = dialog.FileName;
-        }
+        var path = DropHelper.PickMediaFile(FolderBox.Text.Trim(), video);
+        if (path != null) FolderBox.Text = path;
     }
 
     private void FolderBox_DragOver(object sender, System.Windows.DragEventArgs e)

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using WallpaperProfiles.Engine;
 using WallpaperProfiles.Models;
 
@@ -16,7 +15,7 @@ internal sealed class LibraryStore
     {
         if (!File.Exists(_path)) return new();
         // A failed read is surfaced to the caller. Never replace unreadable metadata with defaults.
-        var assets = JsonSerializer.Deserialize<List<WallpaperAsset>>(File.ReadAllText(_path), JsonOptions.Shared)
+        var assets = AtomicJsonFile.Read<List<WallpaperAsset>>(_path)
             ?? throw new InvalidDataException("The wallpaper library is empty or invalid.");
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var result = new List<WallpaperAsset>();
@@ -54,18 +53,5 @@ internal sealed class LibraryStore
         return added;
     }
 
-    public void Save(IEnumerable<WallpaperAsset> assets)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(_path))!);
-        var temp = _path + ".tmp";
-        try
-        {
-            File.WriteAllText(temp, JsonSerializer.Serialize(assets, JsonOptions.Shared));
-            File.Move(temp, _path, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temp)) File.Delete(temp);
-        }
-    }
+    public void Save(IEnumerable<WallpaperAsset> assets) => AtomicJsonFile.Write(_path, assets);
 }

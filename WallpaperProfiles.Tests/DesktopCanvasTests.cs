@@ -1,3 +1,4 @@
+using WallpaperProfiles.Models;
 using System.IO;
 using WallpaperProfiles.Engine;
 using WallpaperProfiles.Persistence;

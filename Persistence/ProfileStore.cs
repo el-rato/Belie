@@ -19,8 +19,7 @@ internal sealed class ProfileStore
             {
                 try
                 {
-                    using var stream = File.OpenRead(file);
-                    var profile = JsonSerializer.Deserialize<WallpaperProfile>(stream, JsonOptions.Shared);
+                    var profile = AtomicJsonFile.Read<WallpaperProfile>(file);
                     if (profile == null || profile.Id == Guid.Empty)
                     {
                         continue;
@@ -28,10 +27,15 @@ internal sealed class ProfileStore
                     Normalize(profile);
                     result.Add(profile);
                 }
-                catch (Exception ex)
+                catch (JsonException ex)
                 {
                     Logger.Error($"Could not read profile '{file}', skipping.", ex);
                     TryQuarantine(file);
+                }
+                catch (Exception ex)
+                {
+                    // A busy file or unavailable drive does not mean the profile is corrupt.
+                    Logger.Error($"Could not read profile '{file}', leaving it in place.", ex);
                 }
             }
         }
@@ -44,32 +48,8 @@ internal sealed class ProfileStore
 
     public void Save(WallpaperProfile profile)
     {
-        Directory.CreateDirectory(_dir);
         var path = Path.Combine(_dir, profile.Id + ".json");
-        var temp = path + ".tmp";
-        try
-        {
-            var json = JsonSerializer.Serialize(profile, JsonOptions.Shared);
-            File.WriteAllText(temp, json);
-            // Atomic replace: readers never observe a half-written file, and a crash
-            // mid-write leaves the previous profile intact instead of corrupting it.
-            File.Move(temp, path, overwrite: true);
-        }
-        catch
-        {
-            try
-            {
-                if (File.Exists(temp))
-                {
-                    File.Delete(temp);
-                }
-            }
-            catch
-            {
-                // best effort cleanup
-            }
-            throw;
-        }
+        AtomicJsonFile.Write(path, profile);
         Logger.Info($"Saved profile '{profile.Name}' -> {path}");
     }
 

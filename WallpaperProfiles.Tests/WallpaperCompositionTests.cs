@@ -1,3 +1,4 @@
+using WallpaperProfiles.Models;
 using System.IO;
 using WallpaperProfiles.Persistence;
 using Xunit;
@@ -56,8 +57,8 @@ public sealed class WallpaperCompositionTests
             document.CustomizeWallpaper(profile, "forest.jpg");
             var custom = document.VisibleWidgets().Single();
             Assert.NotEqual(original.Id, custom.Id); Assert.Equal(original.X, custom.X); Assert.Equal(original.Title, custom.Title);
-            document.LayoutPresets.Add(new() { Name = "Work", Widgets = new() { WallpaperProfiles.UI.WidgetStyles.Copy(custom) } });
-            document.StylePresets.Add(new() { Name = "My clock", Style = WallpaperProfiles.UI.WidgetStyles.Copy(custom) });
+            document.LayoutPresets.Add(new() { Name = "Work", Widgets = new() { custom.Copy() } });
+            document.StylePresets.Add(new() { Name = "My clock", Style = custom.Copy() });
             store.Save(document); store.UpdateLayout(custom.Id, 520, 260, 640, 350);
             var loaded = store.Load(); var active = Assert.Single(loaded.VisibleWidgets());
             Assert.Equal(520, active.X); Assert.Equal(ClockSkin.Analog, active.ClockSkin);

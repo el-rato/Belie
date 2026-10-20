@@ -34,8 +34,16 @@ internal static class UiAppearance
         new UiTheme("Sage", "#111613", "#191F1B", "#232B25", "#303B32", "#364239", "#718E83", "#F3F5EC", "#C0CFC7", "#9AACAA", "#DDF79D", "#303D26"),
         new UiTheme("Midnight", "#111318", "#191D25", "#232A35", "#303A48", "#384354", "#62779A", "#EDF3FF", "#BACAE2", "#9BACBF", "#ABCFFF", "#263447"),
         new UiTheme("Amethyst", "#161318", "#1F1B22", "#2A2430", "#39313F", "#44394C", "#80678F", "#F5EDFF", "#D2C1DF", "#B49BC6", "#D5B6F4", "#3B2D47"),
-        new UiTheme("Ember", "#141313", "#1D1B1A", "#272322", "#36302B", "#3D3631", "#8C6C55", "#F6F1EB", "#D5C7BA", "#B5A393", "#EFC29B", "#382C24"),
-        new UiTheme("Daylight", "#F4F3ED", "#FEFDF8", "#EAECE4", "#E1E6DC", "#CCD4C9", "#8C9E8E", "#202C25", "#4C6053", "#52675A", "#A9C9B4", "#DCE9DF")
+        new UiTheme("Ember", "#121212", "#191919", "#232222", "#302C29", "#3B3531", "#85766B", "#F5F1ED", "#C8BFB8", "#ABA19A", "#EFC1A0", "#382C24"),
+        new UiTheme("Daylight", "#F4F3ED", "#FEFDF8", "#EAECE4", "#E1E6DC", "#CCD4C9", "#8C9E8E", "#202C25", "#4C6053", "#52675A", "#A9C9B4", "#DCE9DF"),
+        new UiTheme("Obsidian", "#101010", "#191919", "#242424", "#303030", "#383838", "#808080", "#F3F3F3", "#C8C8C8", "#ABABAB", "#DEDEDE", "#303030"),
+        new UiTheme("Nord", "#171D27", "#202835", "#2A3443", "#344152", "#3E4B5E", "#7A92AC", "#ECEFF4", "#C6D2E0", "#AEBED0", "#88C0D0", "#293E48"),
+        new UiTheme("Dracula", "#181720", "#211F2C", "#2C293A", "#373345", "#443D55", "#9380AB", "#F8F8F2", "#D4CDE3", "#B7ABC9", "#BD93F9", "#3A2B4F"),
+        new UiTheme("Rose", "#191315", "#231B1F", "#30252B", "#3D3037", "#4C3A43", "#A17E8F", "#FFF0F4", "#DEC6D1", "#BFA4B1", "#F2ADCA", "#472C39"),
+        new UiTheme("Ocean", "#0E181B", "#152226", "#1F2E33", "#293C42", "#334A50", "#71979F", "#EDF8F7", "#BDD7D8", "#9BBABD", "#79D5C8", "#213E3B"),
+        new UiTheme("Mocha", "#191410", "#241E18", "#302820", "#3E3329", "#4D4033", "#A18A70", "#F8F0E4", "#DDCBB6", "#BDA88F", "#DEB77C", "#453521"),
+        new UiTheme("Tokyo", "#141522", "#1C1E30", "#272A40", "#333751", "#414660", "#858EB8", "#EEF0FF", "#C9CDEE", "#ADB3D8", "#AFA0FF", "#342D50"),
+        new UiTheme("Sunset", "#1B1314", "#271C1D", "#342729", "#423335", "#524044", "#AB848A", "#FFF1E9", "#E4C6BE", "#C6A59E", "#FFA58C", "#4C302A")
     };
     public static UiTheme Current { get; private set; } = Themes[0];
     public static event Action? Changed;

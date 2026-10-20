@@ -1,3 +1,4 @@
+using WallpaperProfiles.Models;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -66,11 +67,6 @@ internal static class WidgetStyles
         target.ClockShowVisualizer = style.ClockShowVisualizer; target.MusicAccentColor = style.MusicAccentColor;
     }
 
-    internal static DesktopWidget Copy(DesktopWidget source)
-    {
-        var copy = source.Duplicate(); copy.Title = source.Title; copy.X = source.X; copy.Y = source.Y;
-        return copy;
-    }
 }
 
 internal sealed class WidgetStyleCatalogWindow : Window
@@ -151,7 +147,7 @@ internal sealed class WidgetStyleCatalogWindow : Window
         foreach (var entry in entries.Where(p => (p.Name + " " + p.Description).Contains(query, StringComparison.OrdinalIgnoreCase)))
         {
             count++;
-            AddCard(entry.Name, entry.Description, entry.Widget, () => { SelectedStyle = WidgetStyles.Copy(entry.Widget); DialogResult = true; });
+            AddCard(entry.Name, entry.Description, entry.Widget, () => { SelectedStyle = entry.Widget.Copy(); DialogResult = true; });
         }
         _status.Text = count == 0 ? "No styles here yet. Save a customized clock or visualizer from its Style tab."
             : _targetKind.HasValue ? "Choose a skin to preview it in the editor. Save when it feels right." : "Choose a skin to add it to your canvas. Customize before saving.";
