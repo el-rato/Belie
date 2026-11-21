@@ -1,5 +1,6 @@
 using WallpaperProfiles.Models;
 using System.IO;
+using System.Text.Json;
 using WallpaperProfiles.Persistence;
 using Xunit;
 
@@ -8,80 +9,111 @@ namespace WallpaperProfiles.Tests;
 public sealed class WallpaperCompositionTests
 {
     [Fact]
-    public void RepeatedWallpaperSwitches_RestoreTheirCompositionAndKeepGlobalWidgets()
+    public void WidgetShowsOnEveryWallpaper_AtItsOwnSpotWhereMoved()
     {
         var profile = Guid.NewGuid(); var other = Guid.NewGuid();
         var global = new DesktopWidget { Title = "Always here" };
-        var defaultClock = new DesktopWidget { ProfileId = profile, Kind = DesktopWidgetKind.Clock, ClockSkin = ClockSkin.Minimal };
+        var clock = new DesktopWidget { ProfileId = profile, Kind = DesktopWidgetKind.Clock, X = 100, Y = 100 };
         var unrelated = new DesktopWidget { ProfileId = other };
-        var document = new DesktopCanvasDocument { ActiveProfileId = profile, Widgets = new() { global, defaultClock, unrelated } };
-        document.CustomizeWallpaper(profile, @"C:\Wallpapers\city.jpg");
-        var city = Assert.Single(document.Widgets, w => w.WallpaperPath.Length > 0);
-        city.ClockSkin = ClockSkin.Stacked; city.X = 600;
-        foreach (var path in new[] { @"C:\Wallpapers\city.jpg", @"C:\Wallpapers\forest.jpg", @"c:/wallpapers/CITY.jpg", @"C:\Wallpapers\new.jpg", @"C:\Wallpapers\city.jpg" })
+        var document = new DesktopCanvasDocument { ActiveProfileId = profile, Widgets = new() { global, clock, unrelated } };
+        clock.Place(@"C:\Wallpapers\city.jpg", 900, 40, 400, 260);
+        foreach (var path in new[] { @"C:\Wallpapers\city.jpg", @"C:\Wallpapers\forest.jpg", @"c:/wallpapers/CITY.jpg", @"C:\Wallpapers\new.jpg", "" })
         {
             document.ActiveWallpaperPath = path;
             var widgets = document.VisibleWidgets().ToArray();
-            Assert.Contains(global, widgets); Assert.DoesNotContain(unrelated, widgets); Assert.Equal(2, widgets.Length);
-            var clock = widgets.Single(w => w.Kind == DesktopWidgetKind.Clock);
-            Assert.Equal(path.Contains("city", StringComparison.OrdinalIgnoreCase) ? ClockSkin.Stacked : ClockSkin.Minimal, clock.ClockSkin);
+            // Never removed from any wallpaper of the profile.
+            Assert.Equal(new[] { global.Id, clock.Id }, widgets.Select(w => w.Id));
+            var shown = widgets.Single(w => w.Id == clock.Id);
+            var onCity = path.Contains("city", StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(onCity ? 900 : 100, shown.X); Assert.Equal(onCity ? 400 : 300, shown.Width);
         }
-        Assert.Equal(160, defaultClock.X);
+        // The stored widget keeps its default spot.
+        Assert.Equal(100, clock.X);
         document.ActiveProfileId = other;
         Assert.Equal(new[] { global.Id, unrelated.Id }, document.VisibleWidgets().Select(w => w.Id));
     }
 
     [Fact]
-    public void EmptyCustomLayout_HidesProfileWidgetsUntilReset_WithoutHidingGlobalWidgets()
+    public void ResetPlacement_ReturnsToDefaultSpot_OnlyForThatWallpaper()
     {
-        var profile = Guid.NewGuid(); var global = new DesktopWidget();
-        var document = new DesktopCanvasDocument { ActiveProfileId = profile, ActiveWallpaperPath = "forest.jpg",
-            Widgets = new() { global, new() { ProfileId = profile } } };
-        document.CustomizeWallpaper(profile, "forest.jpg");
-        document.Widgets.RemoveAll(w => w.WallpaperPath == "forest.jpg");
-        Assert.Equal(global.Id, Assert.Single(document.VisibleWidgets()).Id);
-        document.ResetWallpaper(profile, "forest.jpg");
-        Assert.Equal(2, document.VisibleWidgets().Count());
+        var widget = new DesktopWidget { X = 10, Y = 20 };
+        widget.Place("a.jpg", 500, 500, 300, 230); widget.Place("b.jpg", 700, 100, 300, 230);
+        Assert.True(widget.ResetPlacement("A.JPG"));
+        Assert.Equal(10, widget.PlacedOn("a.jpg").X);
+        Assert.Equal(700, widget.PlacedOn("b.jpg").X);
+        Assert.False(widget.ResetPlacement("a.jpg"));
+        widget.Place("", 42, 43, 300, 230);
+        Assert.Equal(42, widget.X); Assert.Single(widget.Placements);
     }
 
     [Fact]
-    public void CustomLayoutsAndSkins_RoundTripAndLayoutEditsStayIndependent()
+    public void DesktopDrag_SavesSpotForTheWallpaperOnScreen_AndRoundTrips()
     {
         var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
         try
         {
             var profile = Guid.NewGuid(); var store = new DesktopCanvasStore(path);
-            var original = new DesktopWidget { ProfileId = profile, Kind = DesktopWidgetKind.Clock, Content = "Keep content", ClockSkin = ClockSkin.Analog,
-                SpectrumSkin = SpectrumSkin.Ring, SpectrumDensity = 72, SpectrumThickness = 3, SpectrumSensitivity = 1.8, SpectrumSmoothing = .8 };
-            var document = new DesktopCanvasDocument { Enabled = true, ActiveProfileId = profile, ActiveWallpaperPath = "forest.jpg", Widgets = new() { original } };
-            document.CustomizeWallpaper(profile, "forest.jpg");
-            var custom = document.VisibleWidgets().Single();
-            Assert.NotEqual(original.Id, custom.Id); Assert.Equal(original.X, custom.X); Assert.Equal(original.Title, custom.Title);
-            document.LayoutPresets.Add(new() { Name = "Work", Widgets = new() { custom.Copy() } });
-            document.StylePresets.Add(new() { Name = "My clock", Style = custom.Copy() });
-            store.Save(document); store.UpdateLayout(custom.Id, 520, 260, 640, 350);
-            var loaded = store.Load(); var active = Assert.Single(loaded.VisibleWidgets());
-            Assert.Equal(520, active.X); Assert.Equal(ClockSkin.Analog, active.ClockSkin);
-            Assert.Equal(SpectrumSkin.Ring, active.SpectrumSkin); Assert.Equal(72, active.SpectrumDensity);
-            Assert.Equal(1.8, active.SpectrumSensitivity); Assert.Equal(.8, active.SpectrumSmoothing);
-            Assert.Equal("Keep content", active.Content);
-            Assert.Equal(160, loaded.Widgets.Single(w => w.Id == original.Id).X);
-            Assert.Equal(160, Assert.Single(Assert.Single(loaded.LayoutPresets).Widgets).X);
-            Assert.Equal(ClockSkin.Analog, Assert.Single(loaded.StylePresets).Style.ClockSkin);
+            var clock = new DesktopWidget { ProfileId = profile, Kind = DesktopWidgetKind.Clock, ClockSkin = ClockSkin.Analog, SpectrumDensity = 72 };
+            var document = new DesktopCanvasDocument { Enabled = true, ActiveProfileId = profile, ActiveWallpaperPath = "forest.jpg", Widgets = new() { clock } };
+            document.StylePresets.Add(new() { Name = "My clock", Style = clock.Copy() });
+            store.Save(document);
+            Assert.True(store.UpdateLayout(clock.Id, 520, 260, 640, 350));
+            var loaded = store.Load();
+            var onForest = Assert.Single(loaded.VisibleWidgets());
+            Assert.Equal(520, onForest.X); Assert.Equal(640, onForest.Width); Assert.Equal(ClockSkin.Analog, onForest.ClockSkin);
+            Assert.Equal(160, loaded.Widgets.Single().X);
+            store.Update(saved => saved.ActiveWallpaperPath = "city.jpg");
+            Assert.Equal(160, Assert.Single(store.Load().VisibleWidgets()).X);
+            // A copy (preset, duplicate) keeps its own independent spots.
+            var copy = store.Load().Widgets.Single().Duplicate();
+            Assert.Equal(544, copy.PlacedOn("forest.jpg").X);
+            Assert.Equal(520, store.Load().Widgets.Single().PlacedOn("forest.jpg").X);
+            Assert.Equal(ClockSkin.Analog, Assert.Single(store.Load().StylePresets).Style.ClockSkin);
         }
         finally { File.Delete(path); }
     }
 
     [Fact]
-    public void SameWallpaperInDifferentProfiles_KeepsIndependentLooks()
+    public void OldWallpaperLayouts_MigrateIntoSpotsOnTheOriginalWidget()
     {
-        var first = Guid.NewGuid(); var second = Guid.NewGuid();
-        var document = new DesktopCanvasDocument { Widgets = new() { new() { ProfileId = first, Title = "First" }, new() { ProfileId = second, Title = "Second" } } };
-        document.CustomizeWallpaper(first, "shared.png"); document.CustomizeWallpaper(second, "shared.png");
-        document.Composition(first, "shared.png", false).Single().X = 720;
-        Assert.Equal(160, document.Composition(second, "shared.png", false).Single().X);
-        document.ResetWallpaper(first, "shared.png");
-        Assert.False(document.HasLayout(first, "shared.png")); Assert.True(document.HasLayout(second, "shared.png"));
-        Assert.Equal("Second", document.Composition(second, "shared.png", false).Single().Title);
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+        try
+        {
+            var profile = Guid.NewGuid();
+            var original = new DesktopWidget { ProfileId = profile, Title = "Clock", Kind = DesktopWidgetKind.Clock, X = 100, Y = 100 };
+            var untouched = new DesktopWidget { ProfileId = profile, Title = "Note", X = 50, Y = 50 };
+            // Belie 3.4.2 data: city.jpg had its own copies, one moved, plus a widget made only there.
+            var movedCopy = new DesktopWidget { ProfileId = profile, Title = "Clock", Kind = DesktopWidgetKind.Clock, X = 800, Y = 40, WallpaperPath = "city.jpg" };
+            var sameCopy = new DesktopWidget { ProfileId = profile, Title = "Note", X = 50, Y = 50, WallpaperPath = "city.jpg" };
+            var onlyThere = new DesktopWidget { ProfileId = profile, Title = "Only city", X = 10, Y = 10, WallpaperPath = "city.jpg" };
+            var legacy = new
+            {
+                Enabled = true, ActiveProfileId = profile, ActiveWallpaperPath = "forest.jpg",
+                Widgets = new[] { original, untouched, movedCopy, sameCopy, onlyThere },
+                WallpaperLayouts = new[] { new { ProfileId = profile, WallpaperPath = "city.jpg" } },
+            };
+            File.WriteAllText(path, JsonSerializer.Serialize(legacy));
+            var loaded = new DesktopCanvasStore(path).Load();
+            Assert.Empty(loaded.WallpaperLayouts);
+            Assert.Equal(new[] { "Clock", "Note", "Only city" }, loaded.Widgets.Select(w => w.Title).Order());
+            Assert.All(loaded.Widgets, w => Assert.Equal("", w.WallpaperPath));
+            var clock = loaded.Widgets.Single(w => w.Title == "Clock");
+            Assert.Equal(original.Id, clock.Id);
+            Assert.Equal(100, clock.X); Assert.Equal(800, clock.PlacedOn("city.jpg").X);
+            Assert.Empty(loaded.Widgets.Single(w => w.Title == "Note").Placements);
+            loaded.ActiveWallpaperPath = "forest.jpg";
+            Assert.Equal(3, loaded.VisibleWidgets().Count());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void SameWallpaperInDifferentProfiles_KeepsIndependentSpots()
+    {
+        var first = new DesktopWidget { ProfileId = Guid.NewGuid() };
+        var second = new DesktopWidget { ProfileId = Guid.NewGuid() };
+        first.Place("shared.png", 720, 0, 300, 230);
+        Assert.Equal(720, first.PlacedOn("shared.png").X);
+        Assert.Equal(160, second.PlacedOn("shared.png").X);
     }
 }

@@ -255,10 +255,7 @@ internal sealed partial class DesktopCanvasView : UserControl
         if (!TryLeaveDraft()) return;
         var widgets = DesktopCanvasFeatures.ReadDrop(data);
         foreach (var widget in widgets)
-        {
             widget.ProfileId = string.IsNullOrEmpty(CanvasPath) ? (_scopeFilter.SelectedItem as ProfileChoice)?.Id : CanvasProfile;
-            widget.WallpaperPath = EditableCanvasPath();
-        }
         var area = System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;
         DesktopCanvasFeatures.SaveDrop(_store, widgets, area.Right - 340, area.Top + 70);
         _selected = widgets[0]; RefreshList(); _startHost(); _message.Text = $"Created {widgets.Count} widget(s).";
@@ -289,8 +286,8 @@ internal sealed partial class DesktopCanvasView : UserControl
         var document = _store.Load();
         var filter = _scopeFilter.SelectedItem as ProfileChoice;
         var widgets = (string.IsNullOrEmpty(CanvasPath)
-            ? document.Widgets.Where(w => (filter == null || filter.All || w.ProfileId == filter.Id) && string.IsNullOrEmpty(w.WallpaperPath))
-            : document.Composition(CanvasProfile, CanvasPath)).ToList();
+            ? document.Widgets.Where(w => filter == null || filter.All || w.ProfileId == filter.Id)
+            : document.Composition(CanvasProfile)).ToList();
         var loading = _loading; _loading = true;
         _list.ItemsSource = widgets;
         _list.SelectedItem = widgets.FirstOrDefault(w => w.Id == selected);
@@ -340,8 +337,13 @@ internal sealed partial class DesktopCanvasView : UserControl
     private void RefreshOverview(DesktopCanvasDocument document, DesktopWidget? draft = null)
     {
         var active = CanvasProfile;
-        var widgets = document.Composition(active, CanvasPath).Where(widget => widget.Enabled).ToList();
-        if (draft != null) { widgets.RemoveAll(widget => widget.Id == draft.Id); if (draft.Enabled) widgets.Add(draft); }
+        // Every widget of the profile, each at its spot on the wallpaper being arranged.
+        var widgets = document.Composition(active).Where(widget => widget.Enabled).Select(widget => widget.PlacedOn(CanvasPath)).ToList();
+        if (draft != null)
+        {
+            widgets.RemoveAll(widget => widget.Id == draft.Id);
+            if (draft.Enabled && (draft.ProfileId == null || draft.ProfileId == active)) widgets.Add(draft);
+        }
         _overviewCaption.Text = (active.HasValue ? ProfileLabel(active) : "Global")
             + (string.IsNullOrEmpty(CanvasPath) ? " · Default" : " · " + Path.GetFileName(CanvasPath))
             + (document.Enabled ? "" : " · Hidden");
@@ -406,9 +408,9 @@ internal sealed partial class DesktopCanvasView : UserControl
         var document = _store.Load();
         var area = System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;
         var offset = document.Widgets.Count % 8 * 28;
+        var profileId = string.IsNullOrEmpty(CanvasPath) ? (_scopeFilter.SelectedItem as ProfileChoice)?.Id : CanvasProfile;
         Select(new DesktopWidget { Kind = kind, Title = kind == DesktopWidgetKind.NowPlaying ? "Now playing" : kind == DesktopWidgetKind.Note ? "A little reminder" : "New " + kind.ToString().ToLowerInvariant(),
-            ProfileId = string.IsNullOrEmpty(CanvasPath) ? (_scopeFilter.SelectedItem as ProfileChoice)?.Id : CanvasProfile,
-            WallpaperPath = EditableCanvasPath(),
+            ProfileId = profileId,
             Content = kind == DesktopWidgetKind.Note ? "Make room for what matters." : "", FontSize = kind == DesktopWidgetKind.Clock ? 76 : kind == DesktopWidgetKind.NowPlaying ? 24 : kind == DesktopWidgetKind.Countdown ? 30 : 16,
             FontFamily = kind == DesktopWidgetKind.Clock ? ClockWidgetView.ScriptFont : "Segoe UI",
             Alignment = kind == DesktopWidgetKind.Clock ? WidgetTextAlignment.Center : WidgetTextAlignment.Left,
@@ -427,7 +429,9 @@ internal sealed partial class DesktopCanvasView : UserControl
         if (!changedWidget && IsDraftDirty) return;
         _loading = true;
         _selected = widget; _isNew = isNew;
-        LoadSkin(widget);
+        // Position and size fields show the spot on the wallpaper being arranged.
+        var spot = widget.PlacedOn(CanvasPath);
+        LoadSkin(spot);
         if (widget.ProfileId.HasValue && !_profile.Items.Cast<ProfileChoice>().Any(choice => choice.Id == widget.ProfileId))
             _profile.ItemsSource = _profile.Items.Cast<ProfileChoice>().Append(new ProfileChoice(widget.ProfileId, "Missing profile")).ToList();
         _profile.SelectedItem = _profile.Items.Cast<ProfileChoice>().First(choice => choice.Id == widget.ProfileId);
@@ -447,8 +451,8 @@ internal sealed partial class DesktopCanvasView : UserControl
         _musicAccent.Text = widget.MusicAccentColor;
         _date.SelectedDate = widget.Target.LocalDateTime.Date;
         _time.Text = widget.Target.LocalDateTime.ToString("HH:mm", CultureInfo.InvariantCulture);
-        _width.Value = widget.Width; _height.Value = widget.Height;
-        _loadedWidth = widget.Width; _loadedHeight = widget.Height;
+        _width.Value = spot.Width; _height.Value = spot.Height;
+        _loadedWidth = spot.Width; _loadedHeight = spot.Height;
         _font.Text = widget.FontFamily; _fontSize.Value = widget.FontSize;
         _alignment.SelectedItem = widget.Alignment; _imageFit.SelectedItem = widget.ImageFit;
         _textColor.Text = widget.TextColor; _backgroundColor.Text = widget.BackgroundColor;
@@ -471,6 +475,7 @@ internal sealed partial class DesktopCanvasView : UserControl
         _imageFit.Visibility = widget.Kind == DesktopWidgetKind.Image ? Visibility.Visible : Visibility.Collapsed;
         _loading = false;
         _savedDraft = DraftSnapshot();
+        RefreshPositionStatus();
         RefreshPreview();
     }
     private void Save()
@@ -508,20 +513,26 @@ internal sealed partial class DesktopCanvasView : UserControl
             }
             saved.Title = title; saved.Content = content; saved.Target = target;
             saved.ProfileId = (_profile.SelectedItem as ProfileChoice)?.Id;
-            if (!saved.ProfileId.HasValue) saved.WallpaperPath = "";
             document.ActiveProfileId = _activeProfile();
             document.ActiveWallpaperPath = _activeWallpaper();
             saved.LinkCustomDescription = _linkDescription.Text.Trim(); saved.LeetCodeUsername = _leetCodeUser.Text.Trim();
-            if (_width.Value != _loadedWidth) saved.Width = _width.Value;
-            if (_height.Value != _loadedHeight) saved.Height = _height.Value;
             saved.Enabled = _enabled.IsChecked == true; saved.Locked = _locked.IsChecked == true;
             ReadAppearance(saved);
-            ReadPosition(saved, changedOnly: true);
+            // Position and size belong to the wallpaper being arranged (or the default spot). Only a real
+            // move creates a wallpaper spot, so editing text while viewing a wallpaper doesn't.
+            var before = saved.PlacedOn(CanvasPath);
+            var spot = saved.PlacedOn(CanvasPath);
+            if (_width.Value != _loadedWidth) spot.Width = _width.Value;
+            if (_height.Value != _loadedHeight) spot.Height = _height.Value;
+            ReadPosition(spot, changedOnly: true);
+            if (spot.X != before.X || spot.Y != before.Y || spot.Width != before.Width || spot.Height != before.Height)
+                saved.Place(_isNew ? "" : CanvasPath, spot.X, spot.Y, spot.Width, spot.Height);
             if (saved.Enabled) document.Enabled = true;
         });
         _isNew = false;
         _savedDraft = DraftSnapshot();
         RefreshList();
+        RefreshPositionStatus();
         _startHost();
         _message.Text = _enabled.IsChecked == true ? "Saved." : "Saved as hidden.";
     }

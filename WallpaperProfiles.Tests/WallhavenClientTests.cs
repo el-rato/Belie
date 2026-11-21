@@ -51,6 +51,50 @@ public sealed class WallhavenClientTests
     }
 
     [Fact]
+    public async Task Search_ContentFilter_SendsPurity_AndNsfwNeedsKeyInHeader()
+    {
+        using var handler = new MarketplaceHandler(MarketplaceHandler.CreateImage());
+        using var http = new HttpClient(handler);
+        var client = new WallhavenClient(http, throttle: false);
+        // Safe results never include sketchy or NSFW items, even if the site returns them.
+        var safe = await client.SearchAsync("mixed", "toplist", "", 1, default);
+        Assert.Equal(new[] { "aaa111" }, safe.Wallpapers.Select(w => w.Id));
+        var sketchy = await client.SearchAsync("mixed", "toplist", "", 1, default, purity: "110");
+        Assert.Equal(new[] { "aaa111", "bbb222" }, sketchy.Wallpapers.Select(w => w.Id));
+        Assert.Contains("purity=110", handler.Requests.Last());
+        Assert.Empty(handler.ApiKeys);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => client.SearchAsync("mixed", "toplist", "", 1, default, purity: "001"));
+        await Assert.ThrowsAsync<ArgumentException>(() => client.SearchAsync("mixed", "toplist", "", 1, default, purity: "000"));
+        client.ApiKey = "abcdefABCDEF0123456789abcdefABCD";
+        var nsfw = await client.SearchAsync("mixed", "toplist", "", 1, default, purity: "001");
+        var only = Assert.Single(nsfw.Wallpapers);
+        Assert.Equal("nsfw", only.Purity); Assert.EndsWith("NSFW", only.Caption);
+        Assert.Equal(client.ApiKey, handler.ApiKeys.Last());
+        Assert.DoesNotContain(client.ApiKey, handler.Requests.Last());
+        Assert.Equal("ccc333", (await client.GetWallpaperAsync("ccc333", default, "001")).Id);
+        await Assert.ThrowsAsync<InvalidDataException>(() => client.GetWallpaperAsync("ccc333", default));
+    }
+
+    [Fact]
+    public void WallhavenKey_IsEncryptedAtRest_AndCanBeRemoved()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "belie-key-" + Guid.NewGuid().ToString("N") + ".bin");
+        try
+        {
+            var store = new WallhavenKeyStore(path);
+            Assert.Equal("", store.Load());
+            Assert.Throws<ArgumentException>(() => store.Save("not a key"));
+            store.Save("abcdefABCDEF0123456789abcdefABCD");
+            Assert.DoesNotContain("abcdefABCDEF", System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(path)));
+            Assert.Equal("abcdefABCDEF0123456789abcdefABCD", new WallhavenKeyStore(path).Load());
+            store.Clear();
+            Assert.Equal("", store.Load());
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
     public async Task Download_CommitsDecodedOriginal_AndReusesExistingFile()
     {
         var folder = Path.Combine(Path.GetTempPath(), "belie-market-" + Guid.NewGuid().ToString("N"));
@@ -124,6 +168,7 @@ internal sealed class MarketplaceHandler : HttpMessageHandler
     private readonly byte[] _image;
     private readonly string _contentType;
     public ConcurrentQueue<string> Requests { get; } = new();
+    public ConcurrentQueue<string> ApiKeys { get; } = new();
     public CancellationTokenSource? CancelTransfer { get; init; }
     public MarketplaceHandler(byte[] image, string contentType = "image/png") { _image = image; _contentType = contentType; }
 
@@ -131,6 +176,15 @@ internal sealed class MarketplaceHandler : HttpMessageHandler
     {
         var uri = request.RequestUri!;
         Requests.Enqueue(uri.AbsoluteUri);
+        if (request.Headers.TryGetValues("X-API-Key", out var keys)) ApiKeys.Enqueue(keys.Single());
+        if (uri.Query.Contains("q=mixed"))
+        {
+            var mixed = new { data = new[] { Wallpaper("aaa111"), Wallpaper("bbb222", purity: "sketchy"), Wallpaper("ccc333", purity: "nsfw") },
+                meta = new { current_page = 1, last_page = 1, total = 3 } };
+            return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(mixed)) };
+        }
+        if (uri.AbsolutePath.EndsWith("/w/ccc333"))
+            return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new { data = Wallpaper("ccc333", purity: "nsfw") })) };
         if (uri.Query.Contains("q=slow")) await Task.Delay(Timeout.Infinite, cancellationToken);
         if (uri.Query.Contains("q=rate")) return new(HttpStatusCode.TooManyRequests);
         if (uri.AbsolutePath.Contains("/api/"))
@@ -149,9 +203,9 @@ internal sealed class MarketplaceHandler : HttpMessageHandler
         return new(HttpStatusCode.OK) { Content = content };
     }
 
-    private object Wallpaper(string id, string resolution = "2560x1440") => new
+    private object Wallpaper(string id, string resolution = "2560x1440", string purity = "sfw") => new
     {
-        id, purity = "sfw", resolution, category = "general", file_size = _image.Length,
+        id, purity, resolution, category = "general", file_size = _image.Length,
         file_type = "image/png", path = $"https://w.wallhaven.cc/full/aa/wallhaven-{id}.png",
         thumbs = new { large = $"https://th.wallhaven.cc/lg/aa/{id}.jpg" },
         tags = new[] { new { id = 42, name = "nature" } }, uploader = new { username = "Forest artist" }

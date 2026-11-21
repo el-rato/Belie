@@ -54,13 +54,16 @@ internal partial class LibraryWindow : Window
     }
 
     private sealed record CollectionChoice(string Label, string? Name);
+    private readonly WallhavenKeyStore _wallhavenKeys;
 
     public LibraryWindow(LibraryStore store, IEnumerable<string> initialSources,
-        WallhavenClient? marketplaceClient = null, string? marketplaceDownloadFolder = null)
+        WallhavenClient? marketplaceClient = null, string? marketplaceDownloadFolder = null, WallhavenKeyStore? wallhavenKeys = null)
     {
         _store = store;
         _assets = store.Load();
         _marketClient = marketplaceClient ?? new WallhavenClient();
+        _wallhavenKeys = wallhavenKeys ?? new WallhavenKeyStore();
+        if (_marketClient.ApiKey.Length == 0) _marketClient.ApiKey = _wallhavenKeys.Load();
         _marketDownloadFolder = marketplaceDownloadFolder ?? Path.Combine(AppPaths.BaseDir, "wallpapers", "wallhaven");
         InitializeComponent();
         InitializeMarketplace();

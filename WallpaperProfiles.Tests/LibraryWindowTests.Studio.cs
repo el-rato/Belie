@@ -26,7 +26,7 @@ public sealed partial class LibraryWindowTests
         var clock = new DesktopWidget { ProfileId = profile.Id, Kind = DesktopWidgetKind.Clock, FontSize = 76, Width = 520, Height = 310,
             Alignment = WidgetTextAlignment.Center, FontFamily = ClockWidgetView.ScriptFont, ShowHeader = false, ShowBackground = false, ShowBorder = false };
         var document = new DesktopCanvasDocument { Enabled = true, ActiveProfileId = profile.Id, ActiveWallpaperPath = imagePath, Widgets = new() { clock } };
-        document.CustomizeWallpaper(profile.Id, second); store.Save(document);
+        store.Save(document);
         var studio = new DesktopCanvasView(store, () => { }, () => new[] { profile }, () => profile.Id) { ChooseDraftAction = () => DraftChoice.Discard };
         var window = new Window { Width = 1000, Height = 790, Content = studio, ShowInTaskbar = false, Opacity = 0 };
         window.Show(); studio.OpenWallpaper(profile.Id, second);
@@ -38,9 +38,11 @@ public sealed partial class LibraryWindowTests
         ((ComboBox)studio.FindName("VisualizerSkinPicker")).SelectedItem = SpectrumSkin.Ring;
         ((TextBox)studio.FindName("WidgetPositionX")).Text = "520";
         ((Button)studio.FindName("SaveWidgetButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        var custom = store.Load().Composition(profile.Id, second, false).Single();
-        Assert.Equal(ClockSkin.Stacked, custom.ClockSkin); Assert.Equal(520, custom.X); Assert.Equal(SpectrumSkin.Ring, custom.SpectrumSkin);
-        Assert.Equal(ClockSkin.Script, store.Load().Composition(profile.Id, imagePath, false).Single().ClockSkin);
+        // Moving it while arranging city.png gives it a spot there; its default spot and the widget itself are shared.
+        var custom = store.Load().Widgets.Single();
+        Assert.Equal(clock.Id, custom.Id);
+        Assert.Equal(ClockSkin.Stacked, custom.ClockSkin); Assert.Equal(SpectrumSkin.Ring, custom.SpectrumSkin);
+        Assert.Equal(520, custom.PlacedOn(second).X); Assert.Equal(160, custom.X); Assert.Equal(160, custom.PlacedOn(imagePath).X);
         var overview = (System.Windows.Controls.Canvas)typeof(DesktopCanvasView).GetField("_desktopOverview", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(studio)!;
         var retainedItem = overview.Children.OfType<Border>().Single(item => item.Tag is DesktopWidget widget && widget.Id == custom.Id);
         var retainedContent = ((Viewbox)retainedItem.Child).Child;
@@ -64,9 +66,8 @@ public sealed partial class LibraryWindowTests
         RenderWorkspace(window, "wallpaper-studio", 1000, 790);
         RenderWorkspace(window, "wallpaper-studio-compact", 650, 600);
         picker.SelectedIndex = 1; Assert.Equal(clock.Id, Assert.IsType<DesktopWidget>(list.Items[0]).Id);
-        ((Button)studio.FindName("CustomizeWallpaperLayoutButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert.True(store.Load().HasLayout(profile.Id, imagePath));
         list.SelectedIndex = 0;
+        Assert.Equal("160", ((TextBox)studio.FindName("WidgetPositionX")).Text);
         ((TextBox)studio.FindName("WidgetTitle")).Text = "Pending";
         studio.ChooseDraftAction = () => DraftChoice.Cancel;
         picker.SelectedIndex = 2; Assert.Equal(1, picker.SelectedIndex); Assert.True(studio.IsDraftDirty);
@@ -94,6 +95,7 @@ public sealed partial class LibraryWindowTests
             }
         }
         ((Button)studio.FindName("CloseWidgetEditorButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        CheckWallpaperSpots(studio, store, profile, second);
         var savedLayout = File.ReadAllText(store.FilePath);
         window.Width = 650; window.Height = 650; window.UpdateLayout();
         RenderWorkspace(window, "studio-gallery-compact", 650, 650);
@@ -127,6 +129,47 @@ public sealed partial class LibraryWindowTests
             view.Measure(new Size(520, 400)); view.Arrange(new Rect(0, 0, 520, 400));
             new RenderTargetBitmap(520, 400, 96, 96, PixelFormats.Pbgra32).Render(view);
         }
+    }
+
+    /// <summary>One widget, every wallpaper: a spot moved on one wallpaper can be reset, and new widgets aren't tied to one.</summary>
+    private static void CheckWallpaperSpots(DesktopCanvasView studio, DesktopCanvasStore store, WallpaperProfile profile, string wallpaper)
+    {
+        var picker = (ComboBox)studio.FindName("WallpaperCanvasPicker");
+        var list = (ListBox)studio.FindName("WidgetList");
+        var positionX = (TextBox)studio.FindName("WidgetPositionX");
+        var status = (TextBlock)studio.FindName("WidgetPositionStatus");
+        var reset = (Button)studio.FindName("ResetWidgetPositionButton");
+        picker.SelectedIndex = picker.Items.Count - 1;
+        list.SelectedIndex = 0;
+        Assert.Equal("520", positionX.Text);
+        Assert.Contains("its own spot", status.Text); Assert.Equal(Visibility.Visible, reset.Visibility);
+        reset.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Null(store.Load().Widgets.Single().PlacementFor(wallpaper));
+        Assert.Equal("160", positionX.Text); Assert.Equal(Visibility.Collapsed, reset.Visibility);
+
+        // Editing text while arranging a wallpaper doesn't create a spot there.
+        ((TextBox)studio.FindName("WidgetTitle")).Text = "Renamed";
+        ((Button)studio.FindName("SaveWidgetButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Empty(store.Load().Widgets.Single().Placements);
+        positionX.Text = "520";
+        ((Button)studio.FindName("SaveWidgetButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(520, store.Load().Widgets.Single().PlacedOn(wallpaper).X);
+
+        // A widget added while arranging a wallpaper still shows on every wallpaper.
+        ((Button)studio.FindName("AddNoteButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        ((TextBox)studio.FindName("WidgetTitle")).Text = "Everywhere";
+        ((Button)studio.FindName("SaveWidgetButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var note = store.Load().Widgets.Single(w => w.Title == "Everywhere");
+        Assert.Empty(note.Placements); Assert.Equal(profile.Id, note.ProfileId);
+        Assert.Contains(note.Id, list.Items.Cast<DesktopWidget>().Select(w => w.Id));
+        picker.SelectedIndex = 0;
+        Assert.Contains(note.Id, list.Items.Cast<DesktopWidget>().Select(w => w.Id));
+        list.SelectedItem = list.Items.Cast<DesktopWidget>().Single(w => w.Id == note.Id);
+        studio.ConfirmDeleteAction = () => true;
+        ((Button)studio.FindName("DeleteWidgetButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.DoesNotContain(store.Load().Widgets, w => w.Title == "Everywhere");
+        store.UpdateWidget(store.Load().Widgets.Single().Id, w => w.Title = "");
+        picker.SelectedIndex = picker.Items.Count - 1;
     }
 
     private static void CheckWidgetDrafts(MainWindow main)

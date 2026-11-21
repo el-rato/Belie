@@ -7,10 +7,10 @@ namespace WallpaperProfiles.Infrastructure;
 
 internal sealed record WallhavenTag(int Id, string Name);
 internal sealed record WallhavenWallpaper(string Id, string Resolution, string Category, long FileSize,
-    Uri ImageUrl, Uri ThumbnailUrl, IReadOnlyList<WallhavenTag> Tags, string Uploader)
+    Uri ImageUrl, Uri ThumbnailUrl, IReadOnlyList<WallhavenTag> Tags, string Uploader, string Purity = "sfw")
 {
     public string Name => "Wallhaven · " + Id;
-    public string Caption => $"{Resolution} · {Category}";
+    public string Caption => $"{Resolution} · {Category}" + (Purity == "sfw" ? "" : " · " + Purity.ToUpperInvariant());
     public Uri PageUrl => new($"https://wallhaven.cc/w/{Id}");
 }
 internal sealed record WallhavenPage(IReadOnlyList<WallhavenWallpaper> Wallpapers, int CurrentPage, int LastPage, int Total);
@@ -23,6 +23,16 @@ internal sealed class WallhavenClient
     private readonly HttpClient _http;
     private readonly bool _throttle;
     private const long MaxDownloadBytes = 100 * 1024 * 1024;
+
+    /// <summary>Wallhaven purity filters: three flags for SFW, sketchy and NSFW, e.g. "100" or "111".</summary>
+    public const string SafeOnly = "100";
+
+    /// <summary>The person's own Wallhaven API key. Wallhaven only returns NSFW results with one.</summary>
+    public string ApiKey { get; set; } = "";
+
+    public static bool IsValidPurity(string? purity) => purity is { Length: 3 } && purity.All(c => c is '0' or '1') && purity != "000";
+    public static bool IncludesNsfw(string purity) => IsValidPurity(purity) && purity[2] == '1';
+    public static bool IsValidApiKey(string? key) => key != null && Regex.IsMatch(key, "\\A[A-Za-z0-9]{16,64}\\z");
 
     public WallhavenClient(HttpClient? http = null, bool throttle = true)
     {
@@ -38,14 +48,17 @@ internal sealed class WallhavenClient
     }
 
     public async Task<WallhavenPage> SearchAsync(string query, string sorting, string minimumResolution,
-        int page, CancellationToken token, bool landscapeOnly = false)
+        int page, CancellationToken token, bool landscapeOnly = false, string purity = SafeOnly)
     {
+        if (!IsValidPurity(purity)) throw new ArgumentException("Unsupported content filter.", nameof(purity));
+        if (IncludesNsfw(purity) && !IsValidApiKey(ApiKey))
+            throw new InvalidOperationException("NSFW wallpapers need your Wallhaven API key. Add it with Wallhaven API key.");
         if (page < 1) throw new ArgumentOutOfRangeException(nameof(page));
         if (sorting is not ("relevance" or "date_added" or "favorites" or "toplist"))
             throw new ArgumentException("Unsupported sort order.", nameof(sorting));
         if (minimumResolution is not ("" or "1920x1080" or "2560x1440" or "3840x2160"))
             throw new ArgumentException("Unsupported resolution.", nameof(minimumResolution));
-        var url = "https://wallhaven.cc/api/v1/search?purity=100&categories=111&order=desc"
+        var url = $"https://wallhaven.cc/api/v1/search?purity={purity}&categories=111&order=desc"
             + $"&q={Uri.EscapeDataString(query.Trim())}&sorting={sorting}&page={page}&topRange=1M"
             + (minimumResolution.Length > 0 ? "&atleast=" + minimumResolution : "")
             + (landscapeOnly ? "&ratios=landscape" : "");
@@ -53,7 +66,7 @@ internal sealed class WallhavenClient
         var root = json.RootElement;
         var meta = root.GetProperty("meta");
         var wallpapers = root.GetProperty("data").EnumerateArray()
-            .Where(IsSupported).Select(ParseWallpaper)
+            .Where(item => IsSupported(item, purity)).Select(ParseWallpaper)
             .Where(wallpaper => !landscapeOnly || IsLandscape(wallpaper.Resolution)).ToArray();
         return new(wallpapers, meta.GetProperty("current_page").GetInt32(),
             meta.GetProperty("last_page").GetInt32(), meta.GetProperty("total").GetInt32());
@@ -66,12 +79,12 @@ internal sealed class WallhavenClient
             && int.TryParse(dimensions[1], out var height) && height > 0 && width > height;
     }
 
-    public async Task<WallhavenWallpaper> GetWallpaperAsync(string id, CancellationToken token)
+    public async Task<WallhavenWallpaper> GetWallpaperAsync(string id, CancellationToken token, string purity = SafeOnly)
     {
         ValidateId(id);
         using var json = await GetJsonAsync("https://wallhaven.cc/api/v1/w/" + id, token);
         var data = json.RootElement.GetProperty("data");
-        if (!IsSupported(data)) throw new InvalidDataException("This wallpaper is not available in the marketplace.");
+        if (!IsValidPurity(purity) || !IsSupported(data, purity)) throw new InvalidDataException("This wallpaper is not available in the marketplace.");
         var result = ParseWallpaper(data);
         if (result.Id != id) throw new InvalidDataException("Wallhaven returned a different wallpaper.");
         return result;
@@ -88,7 +101,10 @@ internal sealed class WallhavenClient
                 if (delay > TimeSpan.Zero) await Task.Delay(delay, token);
                 _nextApiRequest = DateTimeOffset.UtcNow.AddSeconds(2);
             }
-            using var response = await _http.GetAsync(url, token);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            // Sent as a header, never in the address, so the key stays out of logs and history.
+            if (IsValidApiKey(ApiKey)) request.Headers.Add("X-API-Key", ApiKey);
+            using var response = await _http.SendAsync(request, token);
             if (_throttle && response.StatusCode == HttpStatusCode.TooManyRequests)
                 _nextApiRequest = DateTimeOffset.UtcNow.AddMinutes(1);
             CheckResponse(response);
@@ -195,8 +211,13 @@ internal sealed class WallhavenClient
         progress?.Report(100);
     }
 
-    private static bool IsSupported(JsonElement item) => item.GetProperty("purity").GetString() == "sfw"
-        && item.GetProperty("file_type").GetString() is "image/jpeg" or "image/png";
+    private static bool IsSupported(JsonElement item, string purity)
+    {
+        var index = item.GetProperty("purity").GetString() switch { "sfw" => 0, "sketchy" => 1, "nsfw" => 2, _ => -1 };
+        return index >= 0 && purity[index] == '1' && IsSupportedFile(item);
+    }
+
+    private static bool IsSupportedFile(JsonElement item) => item.GetProperty("file_type").GetString() is "image/jpeg" or "image/png";
 
     private static WallhavenWallpaper ParseWallpaper(JsonElement item)
     {
@@ -211,7 +232,7 @@ internal sealed class WallhavenClient
             : Array.Empty<WallhavenTag>();
         var uploader = item.TryGetProperty("uploader", out var user) ? user.GetProperty("username").GetString() ?? "" : "";
         return new(id, item.GetProperty("resolution").GetString()!, item.GetProperty("category").GetString()!,
-            item.GetProperty("file_size").GetInt64(), image, thumbnail, tags, uploader);
+            item.GetProperty("file_size").GetInt64(), image, thumbnail, tags, uploader, item.GetProperty("purity").GetString()!);
     }
 
     private static void ValidateId(string id)
@@ -229,6 +250,8 @@ internal sealed class WallhavenClient
     {
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
             throw new HttpRequestException("Wallhaven is receiving too many requests. Wait a minute, then retry.");
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            throw new HttpRequestException("Wallhaven did not accept your API key. Check it in Wallhaven API key.");
         if (response.StatusCode == HttpStatusCode.Forbidden)
             throw new HttpRequestException("Wallhaven is currently blocking the connection. Please try again later.");
         response.EnsureSuccessStatusCode();

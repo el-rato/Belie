@@ -1,5 +1,25 @@
 # Belie patch notes
 
+## [3.4.3] - 2026-11-22 - Widgets on every wallpaper
+
+### Widgets
+
+- One widget, every wallpaper: a widget now shows on every wallpaper in its profile and remembers its own spot on each wallpaper where you move it. Drag a widget on the desktop and that spot is kept for the wallpaper on screen; when the slideshow moves on, the widget moves to its spot for the next wallpaper.
+- In the widget studio, **Arrange on** picks the profile's default spots or one wallpaper to arrange. The Layout tab shows whether a widget has its own spot there, and **Use default position** puts it back.
+- Replaces per-wallpaper layouts (**Customize wallpaper** / **Use profile default**). Existing wallpaper layouts are converted automatically: each widget keeps the spot it had on that wallpaper and shows on the profile's other wallpapers again.
+- Fixed a crash when pointing at the Layout information button in the widget studio.
+
+### Discover
+
+- New content rating filter: Safe only, Safe + sketchy, Sketchy only, NSFW only, Sketchy + NSFW, or Everything. Safe only remains the default.
+- NSFW results use your own Wallhaven API key (**Wallhaven API key** button). Belie stores it encrypted for your Windows account and sends it only to wallhaven.cc. Downloaded sketchy or NSFW wallpapers are tagged in your library.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained.
+
 ## [3.4.2] - 2026-10-20 - A lighter Workspace
 
 ### Appearance and usability

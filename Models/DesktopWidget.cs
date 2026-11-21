@@ -7,6 +7,17 @@ internal enum NowPlayingLayout { Horizontal, Stacked, Minimal }
 internal enum WidgetTextAlignment { Left, Center, Right }
 internal enum WidgetImageFit { Fit, Fill, Stretch }
 
+/// <summary>Where a widget sits while one particular wallpaper is on the desktop.</summary>
+internal sealed class WidgetPlacement
+{
+    public string WallpaperPath { get; set; } = "";
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Width { get; set; }
+    public double Height { get; set; }
+    public WidgetPlacement Clone() => (WidgetPlacement)MemberwiseClone();
+}
+
 internal sealed class DesktopWidget
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -22,7 +33,35 @@ internal sealed class DesktopWidget
     public double Height { get; set; } = 230;
     public bool Enabled { get; set; } = true;
     public Guid? ProfileId { get; set; }
+    /// <summary>Legacy (Belie 3.4.2): set only on old per-wallpaper copies until they're migrated.</summary>
     public string WallpaperPath { get; set; } = "";
+    /// <summary>Spots for wallpapers where the widget was moved. Other wallpapers use X, Y, Width and Height.</summary>
+    public List<WidgetPlacement> Placements { get; set; } = new();
+
+    public WidgetPlacement? PlacementFor(string? wallpaperPath) => string.IsNullOrEmpty(wallpaperPath) ? null
+        : Placements.FirstOrDefault(p => DesktopCanvasDocument.SameWallpaper(p.WallpaperPath, wallpaperPath));
+
+    /// <summary>A view of this widget (same Id) positioned for <paramref name="wallpaperPath"/>.</summary>
+    public DesktopWidget PlacedOn(string? wallpaperPath)
+    {
+        var placed = (DesktopWidget)MemberwiseClone();
+        if (PlacementFor(wallpaperPath) is { } spot) { placed.X = spot.X; placed.Y = spot.Y; placed.Width = spot.Width; placed.Height = spot.Height; }
+        return placed;
+    }
+
+    /// <summary>Moves the widget on one wallpaper, or its default spot when <paramref name="wallpaperPath"/> is empty.</summary>
+    public void Place(string? wallpaperPath, double x, double y, double width, double height)
+    {
+        if (string.IsNullOrEmpty(wallpaperPath)) { X = x; Y = y; Width = width; Height = height; return; }
+        var spot = PlacementFor(wallpaperPath);
+        if (spot == null) Placements.Add(spot = new WidgetPlacement { WallpaperPath = wallpaperPath });
+        spot.X = x; spot.Y = y; spot.Width = width; spot.Height = height;
+    }
+
+    /// <summary>Puts the widget back on its default spot for one wallpaper.</summary>
+    public bool ResetPlacement(string? wallpaperPath) =>
+        Placements.RemoveAll(p => DesktopCanvasDocument.SameWallpaper(p.WallpaperPath, wallpaperPath)) > 0;
+
     public bool IsVisibleOn(Guid? activeProfileId) => Enabled && (!ProfileId.HasValue || ProfileId == activeProfileId);
     public bool Locked { get; set; }
     public string FontFamily { get; set; } = "Segoe UI";
@@ -76,6 +115,7 @@ internal sealed class DesktopWidget
     {
         var copy = (DesktopWidget)MemberwiseClone();
         copy.PotdCompletions = new(PotdCompletions);
+        copy.Placements = Placements.Select(p => p.Clone()).ToList();
         copy.Id = Guid.NewGuid();
         return copy;
     }
@@ -85,6 +125,7 @@ internal sealed class DesktopWidget
         var copy = Copy();
         if (!string.IsNullOrWhiteSpace(copy.Title)) copy.Title += " copy";
         copy.X += 24; copy.Y += 24;
+        foreach (var spot in copy.Placements) { spot.X += 24; spot.Y += 24; }
         return copy;
     }
     [System.Text.Json.Serialization.JsonIgnore]

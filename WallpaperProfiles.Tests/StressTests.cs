@@ -158,33 +158,36 @@ public sealed class StressTests : IDisposable
             {
                 ProfileId = id, Title = $"{id}:{index}", Content = "Preserve me"
             }));
-            for (var index = 0; index < 3; index++) document.CustomizeWallpaper(id, $"{index}.jpg");
+            // Every widget gets its own spot on three wallpapers.
+            foreach (var widget in document.Widgets.Where(w => w.ProfileId == id))
+                for (var index = 0; index < 3; index++) widget.Place($"{index}.jpg", 1000 + index, 200, 300, 230);
         }
         var clock = Stopwatch.StartNew();
         store.Save(document);
         var loaded = store.Load();
-        Assert.Equal(3201, loaded.Widgets.Count);
+        Assert.Equal(801, loaded.Widgets.Count);
         Assert.Equal(loaded.Widgets.Count, loaded.Widgets.Select(widget => widget.Id).Distinct().Count());
         foreach (var id in profiles)
         {
-            for (var index = 0; index < 3; index++)
+            loaded.ActiveProfileId = id;
+            foreach (var index in new[] { 0, 1, 2, 9 })
             {
-                loaded.ActiveProfileId = id;
                 loaded.ActiveWallpaperPath = $"{index}.jpg";
                 var visible = loaded.VisibleWidgets().ToArray();
                 Assert.Equal(17, visible.Length);
                 Assert.All(visible.Where(widget => widget.ProfileId != null), widget =>
                 {
                     Assert.Equal(id, widget.ProfileId);
-                    Assert.Equal($"{index}.jpg", widget.WallpaperPath);
+                    Assert.Equal(index < 3 ? 1000 + index : 160, widget.X);
                     Assert.Equal("Preserve me", widget.Content);
                 });
             }
-            loaded.ResetWallpaper(id, "0.jpg");
-            Assert.Equal(16, loaded.Composition(id, "0.jpg", false).Count());
+            foreach (var widget in loaded.Widgets.Where(w => w.ProfileId == id)) widget.ResetPlacement("0.jpg");
+            loaded.ActiveWallpaperPath = "0.jpg";
+            Assert.All(loaded.VisibleWidgets(), widget => Assert.Equal(160, widget.X));
         }
-        Assert.Equal(3201, document.Widgets.Count);
-        Report(clock, "3,201 widgets, 150 wallpaper layouts, and 50 independent resets");
+        Assert.Equal(801, document.Widgets.Count);
+        Report(clock, "801 widgets with 2,400 wallpaper spots and 50 independent resets");
     }
 
     [Fact]

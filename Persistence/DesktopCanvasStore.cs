@@ -42,8 +42,9 @@ internal sealed class DesktopCanvasStore
             if (widget == null || !seen.Add(widget.Id)) throw new InvalidDataException("The canvas contains an invalid widget.");
             NormalizeWidget(widget);
         }
-        foreach (var layout in document.WallpaperLayouts)
-            if (layout == null || string.IsNullOrWhiteSpace(layout.WallpaperPath)) throw new InvalidDataException("The canvas contains an invalid wallpaper layout.");
+        document.WallpaperLayouts.RemoveAll(layout => layout == null);
+        // Old per-wallpaper copies become per-wallpaper spots on the original widget; saved on the next write.
+        document.MigrateWallpaperLayouts();
         foreach (var preset in document.LayoutPresets)
         {
             if (preset == null) throw new InvalidDataException("The canvas contains an invalid layout preset.");
@@ -75,6 +76,13 @@ internal sealed class DesktopCanvasStore
         widget.Height = Clamp(widget.Height, 80, 1200, 230);
         widget.X = Clamp(widget.X, -100000, 100000, 160);
         widget.Y = Clamp(widget.Y, -100000, 100000, 100);
+        widget.Placements ??= new();
+        widget.Placements.RemoveAll(spot => spot == null || string.IsNullOrWhiteSpace(spot.WallpaperPath));
+        foreach (var spot in widget.Placements)
+        {
+            spot.Width = Clamp(spot.Width, 120, 1600, widget.Width); spot.Height = Clamp(spot.Height, 80, 1200, widget.Height);
+            spot.X = Clamp(spot.X, -100000, 100000, widget.X); spot.Y = Clamp(spot.Y, -100000, 100000, widget.Y);
+        }
         widget.FontFamily = string.IsNullOrWhiteSpace(widget.FontFamily) ? "Segoe UI" : widget.FontFamily;
         widget.FontSize = Clamp(widget.FontSize, 10, 96, 16);
         widget.Opacity = Clamp(widget.Opacity, .2, 1, 1);
@@ -146,7 +154,8 @@ internal sealed class DesktopCanvasStore
         {
             var widget = document.Widgets.FirstOrDefault(w => w.Id == id);
             if (widget == null) return;
-            widget.X = x; widget.Y = y; widget.Width = width; widget.Height = height;
+            // Moving a widget on the desktop remembers that spot for the wallpaper showing right now.
+            widget.Place(document.ActiveWallpaperPath, x, y, width, height);
             found = true;
         });
         return found;

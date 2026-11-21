@@ -37,6 +37,8 @@ internal partial class LibraryWindow
     private string _marketSorting = "toplist";
     private string _marketMinimumResolution = "";
     private bool _marketLandscapeOnly;
+    private string _marketPurity = WallhavenClient.SafeOnly;
+    private string _marketAppliedPurity = WallhavenClient.SafeOnly;
     private WallhavenWallpaper? _marketSelected;
     private WallpaperAsset? _marketDownloadedAsset;
     private Window? _marketPreviewWindow;
@@ -121,6 +123,87 @@ internal partial class LibraryWindow
             await SearchMarketplaceAsync();
     }
 
+    private async void MarketPurity_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (MarketPurity?.SelectedItem is not ComboBoxItem { Tag: string purity } || purity == _marketPurity) return;
+        if (WallhavenClient.IncludesNsfw(purity) && !WallhavenClient.IsValidApiKey(_marketClient.ApiKey) && !AskWallhavenKey())
+        {
+            // No key, no NSFW: go back to the filter that was in use.
+            MarketPurity.SelectedItem = MarketPurity.Items.OfType<ComboBoxItem>().First(item => (string)item.Tag == _marketPurity);
+            return;
+        }
+        _marketPurity = purity;
+        if (_marketInitialized && MarketPane.Visibility == Visibility.Visible)
+            await SearchMarketplaceAsync();
+    }
+
+    private void MarketApiKey_Click(object sender, RoutedEventArgs e)
+    {
+        AskWallhavenKey();
+        // The key was removed while NSFW results were on: fall back to safe results.
+        if (!WallhavenClient.IsValidApiKey(_marketClient.ApiKey) && WallhavenClient.IncludesNsfw(_marketPurity))
+            MarketPurity.SelectedIndex = 0;
+    }
+
+    /// <summary>Test hook that replaces the key dialog.</summary>
+    internal Func<bool>? AskWallhavenKeyAction { get; set; }
+
+    /// <summary>Asks for the person's own Wallhaven API key. Returns true when a key is saved.</summary>
+    private bool AskWallhavenKey()
+    {
+        if (AskWallhavenKeyAction != null) return AskWallhavenKeyAction();
+        var hasKey = WallhavenClient.IsValidApiKey(_marketClient.ApiKey);
+        // The library is usually shown inside the main window, so own the dialog from whichever window hosts it.
+        var dialog = new Window { Title = "Wallhaven API key", Owner = DialogOwner, Width = 460, SizeToContent = SizeToContent.Height,
+            ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false };
+        var panel = new StackPanel { Margin = new Thickness(24) };
+        panel.Children.Add(new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10),
+            Text = "Wallhaven only shows NSFW wallpapers to signed-in adults. Paste the API key from your Wallhaven account to include them in Discover. "
+                + "Belie keeps the key encrypted for your Windows account and sends it only to wallhaven.cc." });
+        var link = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run("Find your key: wallhaven.cc → Settings → Account"))
+            { NavigateUri = new Uri("https://wallhaven.cc/settings/account") };
+        link.RequestNavigate += (_, args) =>
+        {
+            try { Process.Start(new ProcessStartInfo(args.Uri.AbsoluteUri) { UseShellExecute = true }); }
+            catch (Exception ex) { Logger.Warn("Could not open the Wallhaven settings page: " + ex.Message); }
+        };
+        panel.Children.Add(new TextBlock(link) { Margin = new Thickness(0, 0, 0, 14) });
+        var input = new PasswordBox { Margin = new Thickness(0, 0, 0, 6) };
+        System.Windows.Automation.AutomationProperties.SetName(input, "Wallhaven API key");
+        panel.Children.Add(input);
+        var error = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12),
+            Text = hasKey ? "A key is saved. Paste a new one to replace it." : "" };
+        error.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        panel.Children.Add(error);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+        var remove = new Button { Content = "Remove key", Margin = new Thickness(0, 0, 8, 0), Visibility = hasKey ? Visibility.Visible : Visibility.Collapsed };
+        var save = new Button { Content = "Save", IsDefault = true, IsEnabled = false };
+        save.SetResourceReference(StyleProperty, "PrimaryButton");
+        var cancel = new Button { Content = "Cancel", IsCancel = true, Margin = new Thickness(8, 0, 0, 0) };
+        input.PasswordChanged += (_, _) => save.IsEnabled = input.Password.Trim().Length > 0;
+        save.Click += (_, _) =>
+        {
+            var key = input.Password.Trim();
+            if (!WallhavenClient.IsValidApiKey(key)) { error.Text = "That doesn't look like a Wallhaven API key. Copy it again from your account settings."; return; }
+            try { _wallhavenKeys.Save(key); }
+            catch (Exception ex) { error.Text = "Could not save the key: " + ex.Message; return; }
+            _marketClient.ApiKey = key;
+            dialog.DialogResult = true;
+        };
+        remove.Click += (_, _) =>
+        {
+            try { _wallhavenKeys.Clear(); }
+            catch (Exception ex) { error.Text = "Could not remove the key: " + ex.Message; return; }
+            _marketClient.ApiKey = "";
+            dialog.DialogResult = false;
+        };
+        buttons.Children.Add(remove); buttons.Children.Add(save); buttons.Children.Add(cancel);
+        panel.Children.Add(buttons);
+        UiAppearance.SetDialogContent(dialog, panel, "Wallhaven API key");
+        dialog.Loaded += (_, _) => input.Focus();
+        return dialog.ShowDialog() == true;
+    }
+
     private async void MarketSort_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _marketDownloading || sender is not Button { Tag: string sorting } selected || sorting == _marketSorting) return;
@@ -144,6 +227,7 @@ internal partial class LibraryWindow
         _marketQuery = MarketSearchBox.Text.Trim();
         _marketMinimumResolution = (MarketResolution.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
         _marketLandscapeOnly = MarketLandscapeOnly.IsChecked == true;
+        _marketAppliedPurity = _marketPurity;
         _marketPage = _marketLastPage = 0;
         _marketInitialized = false;
         _marketEntries.Clear();
@@ -169,7 +253,7 @@ internal partial class LibraryWindow
         var token = request.Token;
         try
         {
-            var page = await _marketClient.SearchAsync(_marketQuery, _marketSorting, _marketMinimumResolution, _marketPage + 1, token, _marketLandscapeOnly);
+            var page = await _marketClient.SearchAsync(_marketQuery, _marketSorting, _marketMinimumResolution, _marketPage + 1, token, _marketLandscapeOnly, _marketAppliedPurity);
             if (token.IsCancellationRequested || _closed || request != _marketSearchCancellation) return;
             var knownIds = _marketEntries.Select(x => x.Wallpaper.Id).ToHashSet();
             var entries = page.Wallpapers.Where(x => knownIds.Add(x.Id)).Select(x => new MarketEntry(x)).ToArray();
@@ -258,7 +342,7 @@ internal partial class LibraryWindow
         try
         {
             if (!_marketMetadata.TryGetValue(entry.Wallpaper.Id, out var details))
-                details = await _marketClient.GetWallpaperAsync(entry.Wallpaper.Id, token);
+                details = await _marketClient.GetWallpaperAsync(entry.Wallpaper.Id, token, _marketAppliedPurity);
             if (token.IsCancellationRequested || _closed) return;
             _marketMetadata[details.Id] = details;
             _marketSelected = details;
@@ -492,7 +576,8 @@ internal partial class LibraryWindow
             if (asset == null)
             {
                 asset = new WallpaperAsset { FilePath = path, Name = wallpaper.Name, Collection = "Wallhaven",
-                    Tags = wallpaper.Tags.Select(t => t.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList() };
+                    Tags = wallpaper.Tags.Select(t => t.Name).Append(wallpaper.Purity == "sfw" ? "" : wallpaper.Purity)
+                        .Where(t => t.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList() };
                 var updated = _assets.Append(asset).ToList();
                 // Finish committing a completed download even if the view is closed during the save.
                 await Task.Run(() => _store.Save(updated));

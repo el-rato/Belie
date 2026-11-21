@@ -24,7 +24,8 @@ internal sealed partial class DesktopCanvasView
     private readonly CheckBox _followDesktop = new() { Content = "Follow wallpaper", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 6),
         ToolTip = "Keep the preview on the wallpaper currently on your desktop. Pauses while you edit a widget; does not change your slideshow settings." };
     private readonly TextBlock _layoutStatus = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
-    private Button _customizeLayout = null!, _resetLayout = null!;
+    private Button _resetPosition = null!;
+    private readonly TextBlock _positionStatus = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) };
     private readonly Grid _galleryFrame = new();
     private readonly StackPanel _skinControls = new();
     private readonly ComboBox _clockSkin = new() { ItemsSource = Enum.GetValues<ClockSkin>() };
@@ -56,20 +57,21 @@ internal sealed partial class DesktopCanvasView
     {
         var panel = new StackPanel();
         var choices = new WrapPanel();
-        var label = new TextBlock { Text = "Layout", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 6), FontSize = 12 };
+        var label = new TextBlock { Text = "Arrange on", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 6), FontSize = 12 };
         label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); choices.Children.Add(label);
-        _wallpaperPicker.ToolTip = "Choose the profile’s shared layout, or a wallpaper to give it its own arrangement.";
+        _wallpaperPicker.ToolTip = "Default spots apply to every wallpaper. Pick a wallpaper to move widgets just for it; they still show on every wallpaper.";
         choices.Children.Add(_wallpaperPicker); choices.Children.Add(_followDesktop);
-        _customizeLayout = ActionButton("Customize wallpaper", "CustomizeWallpaperLayoutButton", CustomizeLayout);
-        _resetLayout = ActionButton("Use profile default", "ResetWallpaperLayoutButton", ResetLayout);
-        foreach (var button in new[] { _customizeLayout, _resetLayout,
+        _resetPosition = ActionButton("Use default position", "ResetWidgetPositionButton", ResetPosition);
+        _resetPosition.ToolTip = "Forget this widget's spot on this wallpaper and use its default spot.";
+        foreach (var button in new[] {
             ActionButton("Save as preset", "SaveWidgetLayoutButton", SaveLayoutPreset),
             ActionButton("Layout presets", "BrowseWidgetLayoutsButton", () => OpenCatalogue(false, true)) })
         { button.Padding = new Thickness(8, 6, 8, 6); button.FontSize = 12; button.Margin = new Thickness(0, 0, 8, 6); _workspaceActions.Children.Add(button); }
         var info = new Button { Content = "\uE946", Width = 36, Height = 36, Padding = new Thickness(0), BorderThickness = new Thickness(0), FontFamily = (System.Windows.Media.FontFamily)FindResource("IconFont"), Margin = new Thickness(0, 0, 0, 6) };
         var help = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 320 };
         help.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(TextBlock.Text)) { Source = _layoutStatus });
-        var tip = new System.Windows.Controls.ToolTip { Content = help, PlacementTarget = info, StaysOpen = false }; info.ToolTip = tip;
+        // A ToolTip assigned to ToolTip may not use StaysOpen=false (WPF throws on hover); it closes on mouse leave instead.
+        var tip = new System.Windows.Controls.ToolTip { Content = help, PlacementTarget = info }; info.ToolTip = tip;
         System.Windows.Automation.AutomationProperties.SetName(info, "Layout information");
         info.SetBinding(System.Windows.Automation.AutomationProperties.HelpTextProperty, new System.Windows.Data.Binding(nameof(TextBlock.Text)) { Source = _layoutStatus });
         info.Click += (_, _) => tip.IsOpen = true;
@@ -145,7 +147,31 @@ internal sealed partial class DesktopCanvasView
             var labelIndex = parent.Children.IndexOf(_clockSkin) - 1;
             if (labelIndex >= 0) parent.Children[labelIndex].Visibility = _clockSkin.Visibility;
         }
-        _profile.IsEnabled = string.IsNullOrEmpty(widget.WallpaperPath);
+    }
+
+    /// <summary>Explains where the open widget sits on the wallpaper being arranged, and offers to undo a custom spot.</summary>
+    private void RefreshPositionStatus()
+    {
+        var file = Path.GetFileName(CanvasPath);
+        var saved = _selected == null || _isNew ? null : _store.Load().Widgets.FirstOrDefault(w => w.Id == _selected.Id);
+        var custom = saved?.PlacementFor(CanvasPath) != null;
+        _positionStatus.Text = string.IsNullOrEmpty(CanvasPath)
+            ? "Default spot, used on every wallpaper where you haven’t moved this widget. Pick a wallpaper above to give it a different spot there."
+            : custom ? "This widget has its own spot on " + file + "."
+            : "On " + file + " this widget uses its default spot. Move it here to give it a spot just for this wallpaper.";
+        _resetPosition.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ResetPosition()
+    {
+        if (_selected == null || string.IsNullOrEmpty(CanvasPath)) return;
+        var id = _selected.Id;
+        _store.UpdateWidget(id, widget => widget.ResetPlacement(CanvasPath));
+        if (_store.Load().Widgets.FirstOrDefault(w => w.Id == id) is not { } saved) return;
+        // Reload the editor so it shows the default spot; other unsaved edits are dropped like Close would.
+        _selected = null; Select(saved, false);
+        _overviewKey = ""; RefreshList(); _startHost();
+        _message.Text = "Back on its default spot for this wallpaper.";
     }
 
     private void ReadSkin(DesktopWidget widget)
@@ -214,30 +240,10 @@ internal sealed partial class DesktopCanvasView
 
     private void RefreshLayoutActions(DesktopCanvasDocument document)
     {
-        var custom = document.HasLayout(CanvasProfile, CanvasPath);
-        _customizeLayout.Visibility = !string.IsNullOrEmpty(CanvasPath) && !custom ? Visibility.Visible : Visibility.Collapsed;
-        _resetLayout.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
-        _layoutStatus.Text = string.IsNullOrEmpty(CanvasPath) ? "Editing the shared layout for this profile. Wallpapers with their own layout are unaffected."
-            : custom ? "Editing this wallpaper’s own layout. It appears automatically when this wallpaper plays."
-            : "This wallpaper shares the profile default. Choose Customize wallpaper before making changes just for this wallpaper.";
-    }
-
-    private string EditableCanvasPath() => _store.Load().HasLayout(CanvasProfile, CanvasPath) ? CanvasPath : "";
-
-    private void CustomizeLayout()
-    {
-        if (!TryLeaveDraft() || CanvasProfile is not { } profile || string.IsNullOrEmpty(CanvasPath)) return;
-        CloseEditor(); _store.Update(document => document.CustomizeWallpaper(profile, CanvasPath));
-        _overviewKey = ""; RefreshList(); _startHost();
-    }
-
-    private void ResetLayout()
-    {
-        if (!TryLeaveDraft() || CanvasProfile is not { } profile || string.IsNullOrEmpty(CanvasPath)) return;
-        var owner = Window.GetWindow(this);
-        if (System.Windows.MessageBox.Show(owner!, "Replace this wallpaper’s custom composition with the profile default?", "Use profile default", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
-        CloseEditor(); _store.Update(document => document.ResetWallpaper(profile, CanvasPath));
-        _overviewKey = ""; RefreshList(); _startHost();
+        _layoutStatus.Text = string.IsNullOrEmpty(CanvasPath)
+            ? "Arranging default spots. Widgets sit here on every wallpaper where you haven’t moved them."
+            : "Arranging " + Path.GetFileName(CanvasPath) + ". Moving a widget here changes its spot on this wallpaper only; it still shows on every wallpaper.";
+        RefreshPositionStatus();
     }
 
     private System.Windows.Media.Brush? CanvasWallpaperBrush()
@@ -284,6 +290,7 @@ internal sealed partial class DesktopCanvasView
         var widget = (_selected ?? new DesktopWidget()).Copy();
         widget.Id = _selected?.Id ?? Guid.NewGuid(); widget.Title = _title.Text; widget.Content = _content.Text;
         widget.Width = _width.Value; widget.Height = _height.Value; ReadAppearance(widget); ReadPosition(widget);
+        widget.ProfileId = (_profile.SelectedItem as ProfileChoice)?.Id;
         return widget;
     }
 
@@ -300,12 +307,11 @@ internal sealed partial class DesktopCanvasView
             CloseEditor();
             _store.Update(document =>
             {
-                if (!string.IsNullOrEmpty(CanvasPath) && CanvasProfile is { } profile) document.CustomizeWallpaper(profile, CanvasPath);
-                var path = document.HasLayout(CanvasProfile, CanvasPath) ? CanvasPath : "";
-                document.Widgets.RemoveAll(w => w.ProfileId == CanvasProfile && DesktopCanvasDocument.SameWallpaper(w.WallpaperPath, path));
+                // A preset replaces the profile's widgets; they show on every wallpaper at the preset's spots.
+                document.Widgets.RemoveAll(w => w.ProfileId == CanvasProfile);
                 foreach (var widget in layout.Widgets)
                 {
-                    var copy = widget.Copy(); copy.ProfileId = CanvasProfile; copy.WallpaperPath = path; document.Widgets.Add(copy);
+                    var copy = widget.Copy(); copy.ProfileId = CanvasProfile; copy.Placements = new(); document.Widgets.Add(copy);
                 }
                 document.Enabled = true;
             });
@@ -330,7 +336,7 @@ internal sealed partial class DesktopCanvasView
             if (!TryLeaveDraft()) return;
             var area = System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;
             style.ProfileId = string.IsNullOrEmpty(CanvasPath) ? (_scopeFilter.SelectedItem as ProfileChoice)?.Id : CanvasProfile;
-            style.WallpaperPath = EditableCanvasPath(); style.X = area.Left + (area.Width - style.Width) / 2; style.Y = area.Top + area.Height * .2;
+            style.X = area.Left + (area.Width - style.Width) / 2; style.Y = area.Top + area.Height * .2;
             _selected = null; Select(style, true); SetEditorTab(1);
         }
     }
@@ -355,7 +361,9 @@ internal sealed partial class DesktopCanvasView
         var name = AskName("Save layout preset"); if (name == null) return;
         _store.Update(document =>
         {
-            var widgets = document.Composition(CanvasProfile, CanvasPath, !CanvasProfile.HasValue).Select(widget => widget.Copy()).ToList();
+            // Save the arrangement being looked at: each widget at its spot on this wallpaper.
+            var widgets = document.Composition(CanvasProfile, !CanvasProfile.HasValue)
+                .Select(widget => { var copy = widget.PlacedOn(CanvasPath).Copy(); copy.Placements = new(); return copy; }).ToList();
             document.LayoutPresets.RemoveAll(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             document.LayoutPresets.Add(new() { Name = name, Widgets = widgets });
         });

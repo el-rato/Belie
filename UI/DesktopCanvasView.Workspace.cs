@@ -192,7 +192,11 @@ internal sealed partial class DesktopCanvasView
         ColorField("Text", _textColor, _stylePage); ColorField("Background", _backgroundColor, _stylePage); ColorField("Border", _borderColor, _stylePage);
         Field(_stylePage, "Border width", _borderWidth); Field(_stylePage, "Opacity", _opacity); Field(_stylePage, "Corners", _radius);
         foreach (var option in new[] { _showHeader, _showBorder, _showBackground }) { option.Margin = new Thickness(0, 8, 0, 0); _stylePage.Children.Add(option); }
+        _positionStatus.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); _layoutPage.Children.Add(_positionStatus);
+        RegisterName("WidgetPositionStatus", _positionStatus);
         Field(_layoutPage, "Position X", _positionX); Field(_layoutPage, "Position Y", _positionY);
+        _resetPosition.Margin = new Thickness(0, 10, 0, 0); _resetPosition.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+        _layoutPage.Children.Add(_resetPosition);
         Field(_layoutPage, "Width", _width); Field(_layoutPage, "Height", _height); Field(_layoutPage, "Image fit", _imageFit);
         _layoutPage.Children.Add(_enabled); _layoutPage.Children.Add(_locked);
         _editorScroll.Content = _fields; Grid.SetRow(_editorScroll, 3); editor.Children.Add(_editorScroll); RegisterName("WidgetEditorScroll", _editorScroll);
@@ -323,9 +327,12 @@ internal sealed partial class DesktopCanvasView
         details.Children.Add(new TextBlock { Text = widget.DisplayTitle, TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = FontWeights.SemiBold, ToolTip = widget.DisplayTitle });
         var badge = new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 0), HorizontalAlignment = System.Windows.HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
         badge.SetResourceReference(Border.BackgroundProperty, "SurfaceRaisedBrush");
-        var caption = new TextBlock { Text = widget.Kind == DesktopWidgetKind.NowPlaying ? "Now playing" : widget.Kind.ToString(), FontSize = 12 };
+        var spots = widget.Placements.Count;
+        var caption = new TextBlock { Text = (widget.Kind == DesktopWidgetKind.NowPlaying ? "Now playing" : widget.Kind.ToString())
+            + (spots > 0 ? $" · moved on {spots} wallpaper{(spots == 1 ? "" : "s")}" : ""), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis };
         caption.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); badge.Child = caption; details.Children.Add(badge);
-        details.ToolTip = ProfileLabel(widget.ProfileId) + (widget.Enabled ? "" : " · Hidden"); Grid.SetColumn(details, 1); panel.Children.Add(details);
+        details.ToolTip = ProfileLabel(widget.ProfileId) + (spots > 0 ? " · own spot on " + string.Join(", ", widget.Placements.Select(p => Path.GetFileName(p.WallpaperPath))) : "")
+            + (widget.Enabled ? "" : " · Hidden"); Grid.SetColumn(details, 1); panel.Children.Add(details);
         var toggle = new Button { Name = "CardVisibilityButton", Content = widget.Enabled ? "\uE890" : "\uED1A", FontFamily = (System.Windows.Media.FontFamily)FindResource("IconFont"),
             Width = 36, Height = 36, Padding = new Thickness(0), BorderThickness = new Thickness(0), VerticalAlignment = VerticalAlignment.Center,
             ToolTip = widget.Enabled ? "Hide widget" : "Show widget" };
