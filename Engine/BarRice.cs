@@ -11,7 +11,9 @@ internal sealed class BarRice
     public string Name { get; set; } = "";
     public string About { get; set; } = "";
     public TopBarSettings Look { get; set; } = new();
-    public string Css { get; set; } = "";
+    private string _css = "";
+    /// <summary>With the same line endings wherever the look was written or built.</summary>
+    public string Css { get => _css; set => _css = value?.ReplaceLineEndings("\n")!; }
 
     /// <summary>Takes the look, and leaves alone how workspaces, tiles and the bar itself behave.</summary>
     public TopBarSettings ApplyTo(TopBarSettings current)
