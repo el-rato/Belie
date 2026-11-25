@@ -128,7 +128,8 @@ internal sealed class TopBarSettings
     public string WeatherPlace { get; set; } = "";
     public bool WeatherFahrenheit { get; set; }
 
-    public bool WorkspacesEnabled { get; set; } = true;
+    /// <summary>Workspaces and tiling are chosen on their own and run with or without the bar.</summary>
+    [JsonPropertyName("Workspaces")] public bool WorkspacesEnabled { get; set; }
     public int WorkspaceCount { get; set; } = 5;
     public WorkspaceLabelStyle WorkspaceLabels { get; set; }
     public List<string> WorkspaceNames { get; set; } = new();
@@ -157,6 +158,8 @@ internal sealed class TopBarSettings
     public double AnimationSpeed { get; set; } = 1;
     public WorkspaceMotion Motion { get; set; }
 
+    /// <summary>Until 4.0.1 workspaces ran only with the bar and were saved as on even while it was off.</summary>
+    [JsonPropertyName("WorkspacesEnabled"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? WorkspacesWithBar { get; set; }
     // Replaced by the lists above; still read from older settings.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? ShowTitle { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? ShowClock { get; set; }
@@ -166,11 +169,14 @@ internal sealed class TopBarSettings
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? ShowVolume { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? ShowBattery { get; set; }
 
+    /// <summary>Whether there is anything for the bar's process to do.</summary>
+    internal bool Runs => Enabled || WorkspacesEnabled;
     internal IEnumerable<BarModule> Modules => (Left ?? new()).Concat(Center ?? new()).Concat(Right ?? new());
     internal bool Shows(BarModuleKind kind) => Modules.Any(module => module.Kind == kind);
 
     public TopBarSettings Normalize()
     {
+        if (WorkspacesWithBar is { } before) { WorkspacesEnabled |= Enabled && before; WorkspacesWithBar = null; }
         Height = Clamp(Height, 24, 64, 36);
         BarMargin = Clamp(BarMargin, 0, 32, 0);
         CornerRadius = Clamp(CornerRadius, 0, 32, 12);
@@ -239,7 +245,7 @@ internal sealed class TopBarSettings
     /// <summary>The workspace a shortcut such as Alt+2 opens, or null when it is not a workspace shortcut.</summary>
     internal int? WorkspaceFor(System.Windows.Input.KeyGesture gesture)
     {
-        if (!Enabled || !WorkspacesEnabled || Shortcuts == WorkspaceShortcutModifier.None) return null;
+        if (!WorkspacesEnabled || Shortcuts == WorkspaceShortcutModifier.None) return null;
         var modifiers = Shortcuts == WorkspaceShortcutModifier.Alt ? System.Windows.Input.ModifierKeys.Alt
             : System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Alt;
         var index = gesture.Key - System.Windows.Input.Key.D0;

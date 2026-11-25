@@ -32,7 +32,7 @@ internal abstract class BarSettingsPage : SettingsPage<TopBarSettings>
     protected override void Store(TopBarSettings settings)
     {
         _store.Save(settings);
-        if (settings.Enabled) _start(_store.FilePath);
+        if (settings.Runs) _start(_store.FilePath);
     }
 
     protected static List<string> Apps(string text) => text.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
@@ -76,9 +76,10 @@ internal sealed partial class TopBarPage : BarSettingsPage
 
     protected override void Build(TopBarSettings settings)
     {
-        BuildLooks();
+        BuildLooks(settings);
         Tab("Modules");
-        Switch("Show the top bar", "TopBarEnabled", settings.Enabled, (to, value) => to.Enabled = value);
+        if (!settings.WorkspacesEnabled && settings.Shows(BarModuleKind.Workspaces))
+            Hint("Workspaces are off, so their module stays hidden. They can be turned on under Workspaces.");
         Switch("Primary monitor only", "TopBarPrimaryOnly", settings.PrimaryMonitorOnly, (to, value) => to.PrimaryMonitorOnly = value);
         Heading("On the bar");
         Hint("The arrows move a module along the bar, and on into the next part. Click its name to change how it looks and what it does.");
@@ -309,15 +310,8 @@ internal sealed class WorkspacesPage : BarSettingsPage
     {
         var profiles = _profiles();
         Tab("Workspaces");
-        if (!settings.Enabled)
-        {
-            Hint("Workspaces and tiling run with the top bar, which is off.");
-            var on = Press("Turn on the top bar", "WorkspacesTurnOn", () => { });
-            on.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
-            on.Click += (_, _) => { var current = Load(); current.Enabled = true; Store(current); Reload(); };
-            Add(on);
-        }
         Switch("Use workspaces", "TopBarWorkspaces", settings.WorkspacesEnabled, (to, value) => to.WorkspacesEnabled = value);
+        Hint("Optional, and separate from the top bar. Without the bar, workspaces are opened with the shortcuts below. Tiling has its own switch under Tiling.");
         var count = Pick("Number of workspaces", "TopBarWorkspaceCount",
             Enumerable.Range(1, TopBarSettings.MaxWorkspaces).Select(number => new Choice<int>(number, number.ToString(CultureInfo.CurrentCulture))),
             settings.WorkspaceCount, (to, value) => to.WorkspaceCount = value);
@@ -334,7 +328,7 @@ internal sealed class WorkspacesPage : BarSettingsPage
         }, settings.Shortcuts, (to, value) => to.Shortcuts = value);
         Hint("Add Shift to send the current window to that workspace.");
         var shared = profiles.Where(profile => ProfileShortcutManager.TryParse(profile.KeyboardShortcut ?? "", out var gesture, out _)
-            && new TopBarSettings { Enabled = true, WorkspaceCount = TopBarSettings.MaxWorkspaces, Shortcuts = WorkspaceShortcutModifier.Alt }.WorkspaceFor(gesture!) != null)
+            && new TopBarSettings { WorkspacesEnabled = true, WorkspaceCount = TopBarSettings.MaxWorkspaces, Shortcuts = WorkspaceShortcutModifier.Alt }.WorkspaceFor(gesture!) != null)
             .Select(profile => $"{profile.KeyboardShortcut} ({profile.Name})").ToArray();
         if (shared.Length > 0) Hint($"Also profile shortcuts: {string.Join(", ", shared)}. These open the workspace, then apply its profile below, or the shortcut's own if none is chosen.");
         Text("Apps that stay on every workspace", "TopBarPinnedApps", string.Join(", ", settings.PinnedApps), (to, value) => to.PinnedApps = Apps(value), "Spotify, Discord");

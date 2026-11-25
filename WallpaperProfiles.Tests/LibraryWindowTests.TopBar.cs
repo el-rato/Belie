@@ -20,7 +20,7 @@ public sealed partial class LibraryWindowTests
         CheckTopBarSettings(dir);
         // Never shown, so the test run does not reserve space on the real desktop.
         var bar = new TopBarWindow("test");
-        var settings = new TopBarSettings { WorkspaceCount = 3, ShowIcons = false };
+        var settings = new TopBarSettings { WorkspacesEnabled = true, WorkspaceCount = 3, ShowIcons = false };
         bar.Apply(settings);
         bar.UpdateWorkspaces(new[] { new WorkspaceState(1, true, 1), new WorkspaceState(2, false, 2), new WorkspaceState(3, false, 0) });
         bar.UpdateTitle("Notes"); bar.UpdateMedia(null);
@@ -47,7 +47,7 @@ public sealed partial class LibraryWindowTests
         settings.WorkspaceCount = 2; settings.WorkspaceLabels = WorkspaceLabelStyle.Dots; bar.Apply(settings);
         Assert.Equal(2, Within<Button>(content).Count());
         // Every module, in every style, with every kind of label.
-        var every = new TopBarSettings { WorkspaceCount = 4, WorkspaceNames = new() { "Web", "Code" }, Left = new(), Center = new(), Right = new() };
+        var every = new TopBarSettings { WorkspacesEnabled = true, WorkspaceCount = 4, WorkspaceNames = new() { "Web", "Code" }, Left = new(), Center = new(), Right = new() };
         foreach (var kind in Enum.GetValues<BarModuleKind>())
             (kind <= BarModuleKind.Title ? every.Left : kind <= BarModuleKind.Date ? every.Center : every.Right).Add(new BarModule(kind) { Text = "Files", Command = "explorer.exe" });
         foreach (var style in Enum.GetValues<TopBarStyle>())
@@ -98,6 +98,14 @@ public sealed partial class LibraryWindowTests
         Find<CheckBox>(bar, "TopBarEnabled").IsChecked = true;
         Assert.True(bar.SaveNow());
         Assert.Equal(1, started);
+        // Each is optional: the bar does not bring workspaces along, and workspaces do not need the bar.
+        Assert.False(store.Load().WorkspacesEnabled);
+        Find<CheckBox>(bar, "TopBarEnabled").IsChecked = false; Assert.True(bar.SaveNow());
+        Assert.Equal(1, started); Assert.False(store.Load().Runs);
+        Find<CheckBox>(spaces, "TopBarWorkspaces").IsChecked = true; Assert.True(spaces.SaveNow());
+        Assert.Equal(2, started); Assert.False(store.Load().Enabled); Assert.True(store.Load().WorkspacesEnabled);
+        Find<CheckBox>(bar, "TopBarEnabled").IsChecked = true; Assert.True(bar.SaveNow());
+        Assert.True(store.Load().WorkspacesEnabled);
 
         Find<ComboBox>(spaces, "TopBarWorkspaceCount").SelectedIndex = 3;
         Find<ComboBox>(spaces, "TopBarShortcuts").SelectedIndex = 2;

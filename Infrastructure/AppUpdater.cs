@@ -27,15 +27,39 @@ internal sealed class VelopackUpdateClient : IAppUpdateClient
 internal sealed class AppUpdater
 {
     internal const string Repository = "el-rato/Belie";
+    internal static readonly TimeSpan CheckInterval = TimeSpan.FromHours(6);
+    /// <summary>The network is often not up yet when Belie starts with Windows.</summary>
+    internal static readonly TimeSpan RetryInterval = TimeSpan.FromMinutes(5);
+    private readonly string? _installedExe;
     private IAppUpdateClient? _client;
     public static Version CurrentVersion => typeof(AppUpdater).Assembly.GetName().Version!;
     public UpdateInfo? Available { get; private set; }
     public bool Busy { get; private set; }
+    public bool LastCheckFailed { get; private set; }
+    public TimeSpan NextCheck => LastCheckFailed ? RetryInterval : CheckInterval;
     public string Status { get; private set; } = $"Installed version {CurrentVersion.ToString(3)}";
     public event Action? Changed;
     public event Action? UpdateFound;
 
-    public AppUpdater(IAppUpdateClient? client = null) => _client = client;
+    public AppUpdater(IAppUpdateClient? client = null, string? installedExe = null)
+    {
+        _client = client;
+        _installedExe = installedExe;
+    }
+
+    /// <summary>Where Belie-win-Setup.exe puts Belie.</summary>
+    internal static string DefaultInstalledExe => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Belie", "current", "Belie.exe");
+
+    /// <summary>True for an installed or complete portable copy, which can update itself; false for a build folder.</summary>
+    public bool IsInstalled
+    {
+        get
+        {
+            try { return Client.IsInstalled; }
+            catch (Exception ex) { Logger.Error("Reading the installation failed.", ex); return false; }
+        }
+    }
 
     private IAppUpdateClient Client => _client ??= new VelopackUpdateClient();
 
@@ -43,7 +67,10 @@ internal sealed class AppUpdater
     {
         if (Client.IsInstalled) return true;
         Available = null;
-        SetStatus("Install Belie using Belie-win-Setup.exe, or extract the complete portable ZIP, to enable in-app updates.");
+        // Only one Belie runs at a time, so the shortcut of the installed copy opens this one instead.
+        SetStatus(_installedExe != null && File.Exists(_installedExe)
+            ? $"This copy can’t update itself because it isn’t the installed one. It runs from {Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory)}. Exit Belie from the tray, then open Belie from the Start menu to get updates."
+            : "Install Belie using Belie-win-Setup.exe, or extract the complete portable ZIP, to enable in-app updates.");
         return false;
     }
 
@@ -56,6 +83,7 @@ internal sealed class AppUpdater
         {
             if (!CanUpdate()) return;
             var release = await Client.CheckAsync();
+            LastCheckFailed = false;
             var notify = release != null && release.TargetFullRelease.Version != Available?.TargetFullRelease.Version;
             Available = release;
             SetStatus(release == null ? "You’re up to date." : $"Version {release.TargetFullRelease.Version} is available.");
@@ -63,6 +91,7 @@ internal sealed class AppUpdater
         }
         catch (Exception ex)
         {
+            LastCheckFailed = true;
             Logger.Error("Checking for updates failed.", ex);
             SetStatus("Couldn’t check for updates. Check your connection and try again.");
         }

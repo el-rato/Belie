@@ -102,9 +102,10 @@ internal sealed partial class TopBarPage
         _cssProblems.Visibility = problems.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private void BuildLooks()
+    private void BuildLooks(TopBarSettings settings)
     {
         Tab("Looks");
+        Switch("Show the top bar", "TopBarEnabled", settings.Enabled, (to, value) => to.Enabled = value);
         Hint("A look changes everything the bar shows and how it is drawn. Your workspaces, profiles and tiling stay as they are, and the look you had is kept below.");
         _cards.Clear(); _drawn = 0;
         foreach (var rice in BarRice.BuiltIn) Add(LookCard(rice, null));
@@ -201,7 +202,7 @@ internal sealed partial class TopBarPage
             Store(next);
             ReadCss();
             Reload();
-            Status = rice.Name + " is on the bar." + (current.Enabled ? "" : " Turn the bar on in Modules to see it.");
+            Status = rice.Name + " is on the bar." + (current.Enabled ? "" : " Turn the bar on above to see it.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Status = "This look could not be used: " + ex.Message; }
     }

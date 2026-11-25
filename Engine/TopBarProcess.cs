@@ -30,7 +30,7 @@ internal static class TopBarProcess
         return true;
     }
 
-    public static bool IsWanted(string file) => new TopBarStore(file).Load().Enabled;
+    public static bool IsWanted(string file) => new TopBarStore(file).Load().Runs;
 
     public static void Start(string file)
     {

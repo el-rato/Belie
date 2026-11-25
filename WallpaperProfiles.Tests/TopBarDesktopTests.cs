@@ -86,7 +86,7 @@ public sealed class TopBarDesktopTests
             try
             {
                 var file = Path.Combine(directory, "topbar.json");
-                new TopBarStore(file).Save(new TopBarSettings { Enabled = true, Shortcuts = WorkspaceShortcutModifier.None, TilingEnabled = false, AnimationsEnabled = false });
+                new TopBarStore(file).Save(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, Shortcuts = WorkspaceShortcutModifier.None, TilingEnabled = false, AnimationsEnabled = false });
                 bool Mine(DesktopWindow window) => window.Identity.ProcessId == helper.Id;
                 var system = new NativeWindowSystem(only: Mine);
                 Assert.True(Until(() => system.VisibleWindows().Count >= 3), "The helper windows did not open.");
@@ -112,6 +112,20 @@ public sealed class TopBarDesktopTests
                     Assert.Equal(2, manager.States(screen.DeviceName)[0].WindowCount);
                     Assert.True(manager.Switch(screen.DeviceName, 1));
                     Assert.True(Until(() => handles.All(system.IsVisible)), "Windows did not return.");
+                    // Without the bar its space is given back and the workspaces go on.
+                    var store = new TopBarStore(file);
+                    void Change(Action<TopBarSettings> change) { var settings = store.Load(); change(settings); store.Save(settings); }
+                    Change(settings => settings.Enabled = false);
+                    Assert.True(Until(() => host.Windows.Count == 0 && Work() == before), "Turning the bar off left it, or its space, behind.");
+                    Assert.Same(manager, host.Workspaces);
+                    Assert.True(manager.Switch(screen.DeviceName, 2));
+                    Assert.True(Until(() => handles.All(handle => !system.IsVisible(handle))), "Workspaces stopped with the bar.");
+                    // And without workspaces their windows come back and the bar goes on.
+                    Change(settings => { settings.Enabled = true; settings.WorkspacesEnabled = false; });
+                    Assert.True(Until(() => host.Workspaces == null && host.Windows.Count > 0 && handles.All(system.IsVisible)), "Turning workspaces off left windows hidden.");
+                    Change(settings => settings.WorkspacesEnabled = true);
+                    Assert.True(Until(() => host.Workspaces?.States(screen.DeviceName)[0].WindowCount == 2), "Workspaces did not start again.");
+                    manager = host.Workspaces!;
                     Assert.True(manager.Switch(screen.DeviceName, 3));
                     Assert.True(Until(() => handles.All(handle => !system.IsVisible(handle))));
                 }
@@ -150,7 +164,7 @@ public sealed class TopBarDesktopTests
             {
                 var file = Path.Combine(directory, "topbar.json");
                 var store = new TopBarStore(file);
-                store.Save(new TopBarSettings { Enabled = true, Shortcuts = WorkspaceShortcutModifier.None, TilingEnabled = false });
+                store.Save(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, Shortcuts = WorkspaceShortcutModifier.None, TilingEnabled = false });
                 bool Mine(DesktopWindow window) => window.Identity.ProcessId == helper.Id;
                 var system = new NativeWindowSystem(only: Mine);
                 Assert.True(Until(() => system.VisibleWindows().Count >= 3), "The helper windows did not open.");
@@ -164,7 +178,7 @@ public sealed class TopBarDesktopTests
                     Pump(TimeSpan.FromSeconds(3));
                     Assert.False(host.Tiling?.IsTiled(apps[0]) == true);
                     before = apps.Select(handle => tiles.Describe(handle).Frame).ToArray();
-                    store.Save(new TopBarSettings { Enabled = true, Shortcuts = WorkspaceShortcutModifier.None, TileGap = 10, TileMargin = 10 });
+                    store.Save(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, Shortcuts = WorkspaceShortcutModifier.None, TileGap = 10, TileMargin = 10 });
                     using (var changed = EventWaitHandle.OpenExisting(TopBarProcess.MutexName(file) + ".Changed")) changed.Set();
                     Assert.True(Until(() => host.Tiling != null && apps.All(host.Tiling.IsTiled)), "Not tiled.");
                     Frames("open", 3);
@@ -255,7 +269,7 @@ public sealed class TopBarDesktopTests
             try
             {
                 var file = Path.Combine(directory, "topbar.json");
-                new TopBarStore(file).Save(new TopBarSettings { Enabled = true, Shortcuts = WorkspaceShortcutModifier.None });
+                new TopBarStore(file).Save(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, Shortcuts = WorkspaceShortcutModifier.None });
                 var system = new NativeWindowSystem(only: Mine);
                 var tiles = new NativeTileSystem();
                 var monitor = System.Windows.Forms.Screen.PrimaryScreen!.DeviceName;

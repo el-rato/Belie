@@ -31,7 +31,7 @@ public sealed partial class LibraryWindowTests
     private static void CheckBarStyles()
     {
         var bar = new TopBarWindow("test") { IsPreview = true };
-        var settings = new TopBarSettings { WorkspaceCount = 3, WorkspaceLabels = WorkspaceLabelStyle.Pills, CenterStyle = { ["shape"] = "notch" }, Left = new(), Center = new(), Right = new() };
+        var settings = new TopBarSettings { WorkspacesEnabled = true, WorkspaceCount = 3, WorkspaceLabels = WorkspaceLabelStyle.Pills, CenterStyle = { ["shape"] = "notch" }, Left = new(), Center = new(), Right = new() };
         settings.Left.Add(new BarModule(BarModuleKind.Workspaces));
         settings.Center.Add(new BarModule(BarModuleKind.Clock));
         var own = new BarModule(BarModuleKind.Text) { Text = "mail", Name = "mail", Icon = "M", Format = "{icon} <{value}>", OnClick = "mail.exe --new", Style = { ["color"] = "#112233", ["padding"] = "0 9px" } };
@@ -72,7 +72,7 @@ public sealed partial class LibraryWindowTests
 
     private static void CheckIsland()
     {
-        var settings = new TopBarSettings { AnimationsEnabled = false, IslandOnWorkspace = true, VisualizerSkin = SpectrumSkin.Mirrored }.Normalize();
+        var settings = new TopBarSettings { WorkspacesEnabled = true, AnimationsEnabled = false, IslandOnWorkspace = true, VisualizerSkin = SpectrumSkin.Mirrored }.Normalize();
         var island = new BarIsland();
         island.Apply(settings, new BarLook { Background = Brushes.Black }, Brushes.Black, Brushes.White, Brushes.Orange, 30, preview: true);
         island.UpdateClock("21:41");
@@ -98,7 +98,7 @@ public sealed partial class LibraryWindowTests
 
         // It reaches past the bar, which still reserves only its own height.
         var bar = new TopBarWindow("test") { IsPreview = true };
-        var rice = BarRice.BuiltIn.Single(item => item.Name == "Island").ApplyTo(new TopBarSettings { AnimationsEnabled = false, WorkspaceCount = 5 });
+        var rice = BarRice.BuiltIn.Single(item => item.Name == "Island").ApplyTo(new TopBarSettings { WorkspacesEnabled = true, AnimationsEnabled = false, WorkspaceCount = 5 });
         bar.Apply(rice, new WallpaperColors(Color.FromRgb(20, 24, 22), Color.FromRgb(240, 250, 244), Color.FromRgb(112, 190, 126)));
         bar.UpdateWorkspaces(Enumerable.Range(1, 5).Select(index => new WorkspaceState(index, index == 2, index % 2)).ToArray());
         bar.UpdateSystem(new SystemSnapshot(12, 48, 40, false, 88, false)); bar.UpdateMedia(song); bar.UpdateClock(new DateTime(2026, 11, 25, 21, 41, 0));

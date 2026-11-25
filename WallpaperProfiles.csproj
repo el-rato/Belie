@@ -14,9 +14,9 @@
     <ApplicationIcon>appicon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Keep this release version aligned with CHANGELOG.md; changes on main publish an update. -->
-    <Version>4.0.1</Version>
-    <FileVersion>4.0.1.0</FileVersion>
-    <AssemblyVersion>4.0.1.0</AssemblyVersion>
+    <Version>4.0.2</Version>
+    <FileVersion>4.0.2.0</FileVersion>
+    <AssemblyVersion>4.0.2.0</AssemblyVersion>
     <Product>Belie</Product>
     <Description>Wallpaper profiles with a top bar, tiling workspaces, desktop widgets, live wallpapers, scenes, schedules, and event triggers.</Description>
     <Copyright>Copyright © 2026</Copyright>

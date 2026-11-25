@@ -334,8 +334,8 @@ public sealed class TilingTests
     private static void Check(string keys, WorkspaceShortcutModifier modifier, int? expected)
     {
         var gesture = (KeyGesture)new KeyGestureConverter().ConvertFromInvariantString(keys)!;
-        Assert.Equal(expected, new TopBarSettings { Enabled = true, Shortcuts = modifier }.WorkspaceFor(gesture));
-        Assert.Null(new TopBarSettings { Enabled = false, Shortcuts = modifier }.WorkspaceFor(gesture));
+        Assert.Equal(expected, new TopBarSettings { WorkspacesEnabled = true, Shortcuts = modifier }.WorkspaceFor(gesture));
+        Assert.Null(new TopBarSettings { Enabled = true, Shortcuts = modifier }.WorkspaceFor(gesture));
     }
 
     [Fact]
@@ -346,7 +346,7 @@ public sealed class TilingTests
         {
             var file = Path.Combine(directory, "topbar.json");
             Guid own = Guid.NewGuid(), linked = Guid.NewGuid();
-            new TopBarStore(file).Save(new TopBarSettings { Enabled = true, WorkspaceProfiles = new() { [2] = linked } });
+            new TopBarStore(file).Save(new TopBarSettings { WorkspacesEnabled = true, WorkspaceProfiles = new() { [2] = linked } });
             Assert.Null(TopBarProcess.ForwardShortcut(file, "Alt+2", own)); // No bar is running.
             using var command = new EventWaitHandle(false, EventResetMode.AutoReset, TopBarProcess.MutexName(file) + ".Command");
             Assert.Equal(linked, TopBarProcess.ForwardShortcut(file, "Alt+2", own));

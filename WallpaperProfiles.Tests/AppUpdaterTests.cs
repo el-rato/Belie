@@ -54,6 +54,35 @@ public sealed class AppUpdaterTests
     }
 
     [Fact]
+    public async Task UnpackagedBuild_PointsToTheInstalledCopyWhenThereIsOne()
+    {
+        var installed = typeof(AppUpdaterTests).Assembly.Location;
+        var updater = new AppUpdater(new StubClient { IsInstalled = false }, installed);
+        await updater.CheckAsync();
+        Assert.Contains("Start menu", updater.Status);
+        Assert.DoesNotContain("Setup.exe", updater.Status);
+        Assert.Equal(AppUpdater.CheckInterval, updater.NextCheck);
+
+        updater = new AppUpdater(new StubClient { IsInstalled = false }, installed + ".missing");
+        await updater.CheckAsync();
+        Assert.Contains("Setup.exe", updater.Status);
+    }
+
+    [Fact]
+    public async Task FailedCheck_RetriesSoon_ThenReturnsToTheUsualInterval()
+    {
+        var client = new StubClient { CheckError = new HttpRequestException("No such host is known.") };
+        var updater = new AppUpdater(client);
+        await updater.CheckAsync();
+        Assert.Equal(AppUpdater.RetryInterval, updater.NextCheck);
+        client.CheckError = null;
+        client.Release = Release();
+        await updater.CheckAsync();
+        Assert.Equal(AppUpdater.CheckInterval, updater.NextCheck);
+        Assert.NotNull(updater.Available);
+    }
+
+    [Fact]
     public void DevelopmentBuild_IsNotTreatedAsAVelopackInstallation()
     {
         VelopackApp.Build().SetArgs(Array.Empty<string>()).SetAutoApplyOnStartup(false).Run();

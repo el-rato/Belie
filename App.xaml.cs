@@ -39,7 +39,7 @@ internal partial class App : System.Windows.Application
     private bool _updating;
     private System.Windows.Threading.DispatcherTimer? _updateTimer;
     private readonly CancellationTokenSource _updateCancellation = new();
-    internal AppUpdater Updates { get; } = new();
+    internal AppUpdater Updates { get; } = new(installedExe: AppUpdater.DefaultInstalledExe);
     internal static bool IsExiting { get; private set; }
 
     [STAThread]
@@ -223,10 +223,12 @@ internal partial class App : System.Windows.Application
             { OpenMainWindow(); _main?.OpenTopBarSettings(); }
             Logger.Info(startMinimized ? "Started minimized to tray." : "Started with main window visible.");
             Updates.UpdateFound += () => _tray?.ShowUpdateAvailable();
-            _updateTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(6) };
-            _updateTimer.Tick += async (_, _) => await Updates.CheckAsync();
+            // A build folder may have claimed the startup entry; only the installed copy can update, so it takes it back.
+            if (Updates.IsInstalled && Autostart.AutostartManager.IsEnabled()) Autostart.AutostartManager.SetEnabled(true);
+            _updateTimer = new System.Windows.Threading.DispatcherTimer { Interval = AppUpdater.CheckInterval };
+            _updateTimer.Tick += (_, _) => CheckForUpdates();
             _updateTimer.Start();
-            _ = Updates.CheckAsync();
+            CheckForUpdates();
         }
         catch (Exception ex)
         {
@@ -366,6 +368,12 @@ internal partial class App : System.Windows.Application
         {
         }
         Shutdown();
+    }
+
+    private async void CheckForUpdates()
+    {
+        await Updates.CheckAsync();
+        if (_updateTimer != null) _updateTimer.Interval = Updates.NextCheck;
     }
 
     internal Task InstallUpdateAsync() => Updates.InstallAsync(

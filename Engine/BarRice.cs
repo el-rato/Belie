@@ -23,6 +23,7 @@ internal sealed class BarRice
         next.Enabled = current.Enabled; next.PrimaryMonitorOnly = current.PrimaryMonitorOnly; next.Edge = current.Edge;
         next.Use24Hour = current.Use24Hour; next.WeatherPlace = current.WeatherPlace; next.WeatherFahrenheit = current.WeatherFahrenheit;
         next.MediaClick = current.MediaClick; next.PlayerLayout = current.PlayerLayout;
+        next.WorkspacesWithBar = null; // From a look made before 4.0.2.
         next.WorkspacesEnabled = current.WorkspacesEnabled; next.WorkspaceCount = current.WorkspaceCount; next.WorkspaceNames = current.WorkspaceNames;
         next.HideEmptyWorkspaces = current.HideEmptyWorkspaces; next.Shortcuts = current.Shortcuts; next.PinnedApps = current.PinnedApps; next.WorkspaceProfiles = current.WorkspaceProfiles;
         next.TilingEnabled = current.TilingEnabled; next.TileGap = current.TileGap; next.TileMargin = current.TileMargin; next.SmartGaps = current.SmartGaps;

@@ -140,7 +140,7 @@ Already using Belie? Open **Settings → App updates → Check for updates**, th
 
 1. **Profiles:** add a folder of pictures and press **Apply to desktop**.
 2. **Top bar:** turn on **Show the top bar**, then pick a look.
-3. **Workspaces:** workspaces and tiling come on with the bar. Turn either off here, or change their keys.
+3. **Workspaces:** optional, with or without the bar. Turn on **Use workspaces** here. Tiling and the keys have their own settings.
 4. **Widgets:** press **Add widget**, then **Browse the gallery**.
 
 Closing the window leaves Belie in the tray. Right-click its icon and choose **Exit** to quit.

@@ -86,8 +86,14 @@ internal partial class MainWindow
         {
             return;
         }
-        AutostartManager.SetEnabled(AutostartToggle.IsChecked == true);
-        AutostartToggle.IsChecked = AutostartManager.IsEnabled();
+        // Showing the saved state raises this too. Writing it then would point startup at whichever copy
+        // was opened last, such as a build folder that cannot update itself.
+        var autostart = AutostartToggle.IsChecked == true;
+        if (autostart != AutostartManager.IsEnabled())
+        {
+            AutostartManager.SetEnabled(autostart);
+            AutostartToggle.IsChecked = AutostartManager.IsEnabled();
+        }
         _settings.StartMinimizedToTray = MinimizedToggle.IsChecked == true;
         try
         {

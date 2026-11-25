@@ -326,6 +326,31 @@ public sealed class WorkspaceTests : IDisposable
     }
 
     [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)] // Saved as on, but never ran, because the bar was off.
+    [InlineData(false, false, false)]
+    public void SettingsFromBefore402KeepWhatWasRunning(bool bar, bool workspaces, bool expected)
+    {
+        Directory.CreateDirectory(_directory);
+        var store = new TopBarStore(Path.Combine(_directory, "topbar.json"));
+        File.WriteAllText(store.FilePath, System.Text.Json.JsonSerializer.Serialize(new { Enabled = bar, WorkspacesEnabled = workspaces }));
+        for (var i = 0; i < 2; i++)
+        {
+            var loaded = store.Load();
+            Assert.Equal(bar, loaded.Enabled); Assert.Equal(expected, loaded.WorkspacesEnabled);
+            store.Save(loaded); // Converted once; the second round reads the new form.
+        }
+        // A look made before then does not turn them on.
+        var look = new BarRice { Look = new TopBarSettings { WorkspacesWithBar = true } };
+        Assert.False(look.ApplyTo(new TopBarSettings { Enabled = true }).WorkspacesEnabled);
+        store.Save(new TopBarSettings { WorkspacesEnabled = true });
+        Assert.True(store.Load().WorkspacesEnabled); Assert.True(TopBarProcess.IsWanted(store.FilePath));
+        store.Save(new TopBarSettings());
+        Assert.False(TopBarProcess.IsWanted(store.FilePath));
+    }
+
+    [Theory]
     [InlineData(50, 100, 50)]
     [InlineData(0, 100, 100)]
     [InlineData(100, 100, 0)]

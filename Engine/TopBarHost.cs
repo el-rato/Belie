@@ -15,7 +15,7 @@ namespace WallpaperProfiles.Engine;
 internal sealed record WorkspaceProfileRequest(Guid ProfileId, string Shortcut = "", bool OnlyWithShortcut = false);
 internal sealed record WorkspaceCommand(int Workspace);
 
-/// <summary>Owns the top bars and workspaces. Runs outside the tray app, alongside the desktop widgets.</summary>
+/// <summary>Owns the top bars and workspaces, either of which can be off. Runs outside the tray app, alongside the desktop widgets.</summary>
 internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
 {
     private readonly TopBarStore _store;
@@ -235,7 +235,7 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
         if (read == _read) return;
         _read = read;
         _settings = settings;
-        if (!_settings.Enabled) { _exit(); return; }
+        if (!_settings.Runs) { _exit(); return; }
         if (!_settings.WorkspacesEnabled || !_settings.TilingEnabled) { FinishScenes(); _tiling?.Release(); _tiling = null; }
         if (!_settings.WorkspacesEnabled) { _workspaces?.Dispose(); _workspaces = null; }
         else if (_workspaces == null)
@@ -277,7 +277,7 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
     private void SyncMonitors()
     {
         var screens = System.Windows.Forms.Screen.AllScreens.ToDictionary(screen => screen.DeviceName);
-        var wanted = _system.Monitors();
+        var wanted = _settings.Enabled ? _system.Monitors().ToArray() : Array.Empty<string>();
         foreach (var gone in _windows.Keys.Where(name => !wanted.Contains(name)).ToArray())
         {
             _windows.Remove(gone, out var window);
@@ -327,6 +327,8 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
         if (_disposed) return;
         _keys.Retry();
         Sync();
+        // Without bars there is nothing to read for them, and their scripts must not run.
+        if (!_settings.Enabled) { _scripts.Tick(Array.Empty<BarModule>()); return; }
         foreach (var window in _windows.Values) window.UpdateClock(DateTime.Now);
         _scripts.Tick(_settings.Modules);
         RefreshColors();

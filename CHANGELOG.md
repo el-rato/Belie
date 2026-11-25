@@ -1,5 +1,26 @@
 # Belie patch notes
 
+## [4.0.2] - 2026-11-26 - Choose the bar, workspaces or neither
+
+### Changed
+
+- The top bar and workspaces are separate choices. Use both, either one or neither: **Top bar > Show the top bar** and **Workspaces > Use workspaces**.
+- Workspaces run without the bar, opened with their shortcuts. Turning on the bar no longer turns on workspaces and tiling, and hiding the bar no longer stops them.
+- What you were using stays on. If your bar was off, workspaces stay off too.
+- **Show the top bar** is the first switch on the Top bar page.
+
+### Fixed
+
+- Opening Belie's window no longer changes which copy starts with Windows. A build or second copy could take over, and only an installed or complete portable copy can update itself. The installed copy takes its place back when it starts.
+- A copy that cannot update itself now says so, and where it runs from, when Belie is installed on the PC.
+- If an update check fails, as it can while Windows is still connecting, Belie tries again after five minutes instead of six hours.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained.
+
 ## [4.0.1] - 2026-11-26 - Steadier profile loading
 
 ### Fixed
