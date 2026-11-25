@@ -32,6 +32,7 @@ internal static partial class NativeMethods
     internal const uint SWP_SHOWWINDOW = 0x0040;
     internal const uint SMTO_ABORTIFHUNG = 0x0002;
     internal static readonly IntPtr HwndBottom = new IntPtr(1);
+    internal static readonly IntPtr HwndTopmost = new IntPtr(-1);
     internal const int SW_SHOW = 5;
     internal const int SM_XVIRTUALSCREEN = 76;
     internal const int SM_YVIRTUALSCREEN = 77;

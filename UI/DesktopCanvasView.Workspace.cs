@@ -73,17 +73,17 @@ internal sealed partial class DesktopCanvasView
         _workspaceActions.PreviewKeyDown += (_, e) => { if (e.Key != System.Windows.Input.Key.Escape) return; menu.IsOpen = false; more.Focus(); e.Handled = true; };
         System.Windows.Input.KeyboardNavigation.SetTabNavigation(_workspaceActions, System.Windows.Input.KeyboardNavigationMode.Cycle);
         _workspaceActions.AddHandler(Button.ClickEvent, new RoutedEventHandler((_, _) => menu.IsOpen = false));
-        _workspaceActions.Children.Add(ActionButton("Styles", "OpenStyleCatalogueButton", () => OpenCatalogue(false)));
+        _workspaceActions.Children.Add(ActionButton("Widget gallery", "OpenStyleCatalogueButton", () => OpenCatalogue(false)));
         _workspaceActions.Children.Add(new TextBlock { Text = "Quick add", FontSize = 12, Margin = new Thickness(8) });
         quickAdd.Margin = new Thickness(0, 0, 0, 8); _workspaceActions.Children.Add(quickAdd);
         headerActions.Children.Add(more); headerActions.Children.Add(add);
         Grid.SetColumn(headerActions, 1); header.Children.Add(headerActions); workspace.Children.Add(headerFrame);
         _addPopup.PlacementTarget = add; _addPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-        var picker = new StackPanel();
+        var picker = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2 };
         foreach (var kind in Enum.GetValues<DesktopWidgetKind>())
         {
             var captured = kind;
-            var label = kind == DesktopWidgetKind.NowPlaying ? "Now playing" : kind.ToString();
+            var label = KindName(kind);
             var choice = ActionButton(label, "Add" + kind + "Button", () => { _addPopup.IsOpen = false; Add(captured); });
             var choiceContent = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
             choiceContent.Children.Add(new TextBlock { Text = WidgetGlyph(kind), FontFamily = (System.Windows.Media.FontFamily)FindResource("IconFont"), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center });
@@ -91,7 +91,10 @@ internal sealed partial class DesktopCanvasView
             choice.Content = choiceContent; choice.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
             choice.Margin = new Thickness(0, 2, 0, 2); choice.BorderThickness = new Thickness(0); choice.MinWidth = 170; picker.Children.Add(choice);
         }
-        var pickerFrame = new Border { Child = picker, CornerRadius = new CornerRadius(12), Padding = new Thickness(8), BorderThickness = new Thickness(1) };
+        var browse = ActionButton("Browse the gallery", "BrowseGalleryButton", () => { _addPopup.IsOpen = false; OpenCatalogue(false); });
+        browse.SetResourceReference(StyleProperty, "PrimaryButton"); browse.Margin = new Thickness(0, 0, 0, 8);
+        var pickerStack = new StackPanel(); pickerStack.Children.Add(browse); pickerStack.Children.Add(picker);
+        var pickerFrame = new Border { Child = pickerStack, CornerRadius = new CornerRadius(12), Padding = new Thickness(8), BorderThickness = new Thickness(1) };
         pickerFrame.SetResourceReference(Border.BackgroundProperty, "SurfaceRaisedBrush"); pickerFrame.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
         _addPopup.Child = pickerFrame; workspace.Children.Add(_addPopup); RegisterName("WidgetTypePicker", _addPopup);
 
@@ -168,9 +171,18 @@ internal sealed partial class DesktopCanvasView
         _linkFields.Children.Add(ActionButton("Refresh details", "RefreshLinkButton", RefreshLink)); _contentPage.Children.Add(_linkFields);
         _musicFields.Children.Add(new TextBlock { Text = "Song details and controls use music players such as Spotify, Apple Music, and TIDAL. The audio spectrum reacts to all desktop audio. Drag the song text or spectrum to move the widget.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), FontSize = 12 });
         Field(_musicFields, "Player layout", _musicLayout);
-        foreach (var option in new[] { _albumArt, _playbackControls, _playbackProgress, _audioVisualizer }) { option.Margin = new Thickness(0, 10, 0, 0); _musicFields.Children.Add(option); }
-        ColorField("Playback accent", _musicAccent, _musicFields);
+        foreach (var option in new[] { _albumArt, _playbackControls, _playbackProgress, _audioVisualizer, _artColors, _artBackdrop }) { option.Margin = new Thickness(0, 10, 0, 0); _musicFields.Children.Add(option); }
         _contentPage.Children.Add(_musicFields);
+        Field(_systemFields, "Design", _systemSkin);
+        foreach (var (_, box) in _metrics) { box.Margin = new Thickness(0, 10, 0, 0); _systemFields.Children.Add(box); }
+        _contentPage.Children.Add(_systemFields);
+        Field(_weatherFields, "Design", _weatherSkin);
+        _fahrenheit.Margin = new Thickness(0, 10, 0, 0); _weatherFields.Children.Add(_fahrenheit);
+        _weatherFields.Children.Add(new TextBlock { Text = "Belie sends the place name to open-meteo.com to look up its weather. Leave it empty to send nothing.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), FontSize = 12 });
+        _contentPage.Children.Add(_weatherFields);
+        Field(_timerFields, "Focus minutes", _timerMinutes); Field(_timerFields, "Break minutes", _timerBreak);
+        _contentPage.Children.Add(_timerFields);
+        ColorField("Accent", _musicAccent, _accentFields); _contentPage.Children.Add(_accentFields);
         _clockFields.Children.Add(new TextBlock { Text = "Choose a clock design in Style. Pair it with any visualizer, or add a visualizer as a separate widget.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), FontSize = 12 });
         foreach (var (name, option) in new[] { ("Clock24Hour", _clock24Hour), ("ClockGreeting", _clockGreeting), ("ClockVisualizer", _clockVisualizer) })
         {
@@ -269,7 +281,9 @@ internal sealed partial class DesktopCanvasView
     {
         DesktopWidgetKind.Note => "\uE70B", DesktopWidgetKind.Countdown => "\uE916",
         DesktopWidgetKind.Image => "\uEB9F", DesktopWidgetKind.Link => "\uE71B",
-        DesktopWidgetKind.Clock => "\uE917", DesktopWidgetKind.Visualizer => "\uE9D9", _ => "\uE8D6"
+        DesktopWidgetKind.Clock => "\uE917", DesktopWidgetKind.Visualizer => "\uE9D9",
+        DesktopWidgetKind.System => "\uE950", DesktopWidgetKind.Weather => "\uE706", DesktopWidgetKind.Calendar => "\uE787",
+        DesktopWidgetKind.Checklist => "\uE9D5", DesktopWidgetKind.Timer => "\uE916", _ => "\uE8D6"
     };
 
     private static Style GalleryItemStyle()
@@ -328,7 +342,7 @@ internal sealed partial class DesktopCanvasView
         var badge = new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 0), HorizontalAlignment = System.Windows.HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
         badge.SetResourceReference(Border.BackgroundProperty, "SurfaceRaisedBrush");
         var spots = widget.Placements.Count;
-        var caption = new TextBlock { Text = (widget.Kind == DesktopWidgetKind.NowPlaying ? "Now playing" : widget.Kind.ToString())
+        var caption = new TextBlock { Text = KindName(widget.Kind)
             + (spots > 0 ? $" · moved on {spots} wallpaper{(spots == 1 ? "" : "s")}" : ""), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis };
         caption.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); badge.Child = caption; details.Children.Add(badge);
         details.ToolTip = ProfileLabel(widget.ProfileId) + (spots > 0 ? " · own spot on " + string.Join(", ", widget.Placements.Select(p => Path.GetFileName(p.WallpaperPath))) : "")

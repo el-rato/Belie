@@ -53,7 +53,7 @@
             <DockPanel>
                 <StackPanel x:Name="SidebarTop" DockPanel.Dock="Top" Margin="16,24,16,16">
                     <StackPanel x:Name="SidebarHeading" Margin="12,0,0,24">
-                        <TextBlock Text="Workspace" FontSize="{StaticResource TypeBody}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Text="Menu" FontSize="{StaticResource TypeBody}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </StackPanel>
                     <Button x:Name="DashboardNavButton" AutomationProperties.Name="Overview" Style="{StaticResource NavigationButton}" Click="ShowDashboard_Click">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80F;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Overview"/></StackPanel>
@@ -64,8 +64,20 @@
                     <Button x:Name="ProfilesNavButton" AutomationProperties.Name="Profiles" Style="{StaticResource NavigationButton}" Click="ShowProfiles_Click" Background="{DynamicResource AccentSubtleBrush}">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE771;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Profiles"/></StackPanel>
                     </Button>
-                    <Button x:Name="LibraryNavButton" AutomationProperties.Name="Library" Style="{StaticResource NavigationButton}" Click="OpenLibrary_Click" ToolTip="Wallpaper library" Margin="0,0,0,22">
+                    <Button x:Name="LibraryNavButton" AutomationProperties.Name="Library" Style="{StaticResource NavigationButton}" Click="OpenLibrary_Click" ToolTip="Wallpaper library">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B9;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Library"/></StackPanel>
+                    </Button>
+                    <Button x:Name="TopBarNavButton" AutomationProperties.Name="Top bar" Style="{StaticResource NavigationButton}" Click="ShowTopBar_Click">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE90E;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Top bar"/></StackPanel>
+                    </Button>
+                    <Button x:Name="WorkspacesNavButton" AutomationProperties.Name="Workspaces" Style="{StaticResource NavigationButton}" Click="ShowWorkspaces_Click">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7C4;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Workspaces"/></StackPanel>
+                    </Button>
+                    <Button x:Name="TransitionsNavButton" AutomationProperties.Name="Transitions" Style="{StaticResource NavigationButton}" Click="ShowTransitions_Click">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8AB;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Transitions"/></StackPanel>
+                    </Button>
+                    <Button x:Name="SwitcherNavButton" AutomationProperties.Name="Wallpaper switcher" Style="{StaticResource NavigationButton}" Click="ShowSwitcher_Click" Margin="0,0,0,22">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8EE;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Switcher"/></StackPanel>
                     </Button>
                     <Grid x:Name="ProfileSearchArea">
                         <TextBox x:Name="SearchBox" Height="36" Padding="10,7" TextChanged="SearchBox_TextChanged"
@@ -484,6 +496,10 @@
         </ScrollViewer>
 
         <ContentControl x:Name="CanvasPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+        <ContentControl x:Name="TopBarPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+        <ContentControl x:Name="WorkspacesPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+        <ContentControl x:Name="TransitionsPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+        <ContentControl x:Name="SwitcherPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
 
     </Grid>
 </Window>

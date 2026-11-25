@@ -131,7 +131,7 @@ internal partial class MainWindow
         var shortcut = _selected?.KeyboardShortcut;
         ShortcutButton.Content = string.IsNullOrWhiteSpace(shortcut) ? "Assign shortcut" : shortcut.Replace("+", " + ");
         ShortcutButton.ToolTip = _selected == null ? "Select a profile" : _profileShortcuts?.GetError(_selected.Id)
-            ?? "Switch to this profile from anywhere, including the tray";
+            ?? _profileShortcuts?.GetNote(_selected.Id) ?? "Switch to this profile from anywhere, including the tray";
     }
 
     private void Shortcut_Click(object sender, RoutedEventArgs e)
@@ -140,7 +140,7 @@ internal partial class MainWindow
         _shortcutProfileId = _selected.Id;
         _pendingShortcut = _selected.KeyboardShortcut;
         ShortcutCapture.Text = _pendingShortcut.Replace("+", " + ");
-        ShortcutMessage.Text = _profileShortcuts.GetError(_selected.Id) ?? "Works while Belie is in the tray.";
+        ShortcutMessage.Text = _profileShortcuts.GetError(_selected.Id) ?? _profileShortcuts.GetNote(_selected.Id) ?? "Works while Belie is in the tray.";
         _profileShortcuts.IsCapturing = true;
         ShortcutPopup.IsOpen = true;
         Dispatcher.BeginInvoke(() => { if (ShortcutPopup.IsOpen) ShortcutCapture.Focus(); }, DispatcherPriority.Input);

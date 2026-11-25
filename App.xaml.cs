@@ -20,11 +20,21 @@ internal partial class App : System.Windows.Application
     private TrayIconManager? _tray;
     private MainWindow? _main;
     private ProfileShortcutManager? _profileShortcuts;
+    private WallpaperKeys? _wallpaperKeys;
+    private WallpaperSwitcher? _switcher;
+    private EventWaitHandle[] _wallpaperEvents = Array.Empty<EventWaitHandle>();
+    private readonly System.Windows.Threading.DispatcherTimer _barTimer = new() { Interval = TimeSpan.FromSeconds(1.5) };
+    private TopBarSettings? _barSettings;
+    private (bool Running, DateTime Saved) _barState;
     private Func<MainWindow>? _createMain;
-    private DesktopCanvasHost? _widgetHost;
+    private DesktopHosts? _desktopHosts;
     private EventWaitHandle? _activateEvent;
     private EventWaitHandle? _canvasActivateEvent;
     private EventWaitHandle? _exitEvent;
+    private EventWaitHandle? _barSettingsEvent;
+    private EventWaitHandle? _barProfileEvent;
+    // Long enough that reopening Belie soon after closing it finds everything as it was.
+    private readonly System.Windows.Threading.DispatcherTimer _unloadTimer = new() { Interval = TimeSpan.FromMinutes(5) };
     private volatile bool _sessionEnding;
     private bool _updating;
     private System.Windows.Threading.DispatcherTimer? _updateTimer;
@@ -35,6 +45,8 @@ internal partial class App : System.Windows.Application
     [STAThread]
     private static void Main()
     {
+        // The workspace guard only waits for the top bar to end, so it skips the app entirely.
+        if (TopBarProcess.RunGuard(Environment.GetCommandLineArgs().Skip(1).ToArray())) return;
         // Detached widget and wallpaper launches must never apply a pending update.
         Velopack.VelopackApp.Build().SetAutoApplyOnStartup(false)
             .OnFirstRun(_ =>
@@ -76,13 +88,19 @@ internal partial class App : System.Windows.Application
             AppPaths.EnsureDirectories();
             Logger.Init(AppPaths.LogsDir);
 
-            if (e.Args.Any(a => a.Equals("--widget-host", StringComparison.OrdinalIgnoreCase)))
+            var barIndex = Array.FindIndex(e.Args, a => a.Equals(TopBarProcess.HostArgument, StringComparison.OrdinalIgnoreCase));
+            if (barIndex >= 0 || e.Args.Any(a => a.Equals("--widget-host", StringComparison.OrdinalIgnoreCase)))
             {
                 ConfigureRendering(liveWallpaper: false);
-                var fileIndex = Array.FindIndex(e.Args, a => a.Equals("--canvas-file", StringComparison.OrdinalIgnoreCase));
-                var file = fileIndex >= 0 && fileIndex + 1 < e.Args.Length ? e.Args[fileIndex + 1] : DesktopCanvasProcess.DefaultFile;
-                try { _widgetHost = new DesktopCanvasHost(file); }
-                catch (Exception ex) { Logger.Error("Starting desktop widgets failed.", ex); Shutdown(); }
+                // Widgets and bars come and go; only the hosts decide when to end.
+                ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                string? Argument(int index) => index >= 0 && index + 1 < e.Args.Length ? e.Args[index + 1] : null;
+                var bar = Argument(barIndex);
+                var canvas = Argument(Array.FindIndex(e.Args, a => a.Equals("--canvas-file", StringComparison.OrdinalIgnoreCase)))
+                    ?? (bar != null ? DesktopHosts.CanvasFileFor(bar) : DesktopCanvasProcess.DefaultFile);
+                MemoryTrim.Soon();
+                try { _desktopHosts = new DesktopHosts(canvas, bar ?? DesktopHosts.BarFileFor(canvas), Shutdown); }
+                catch (Exception ex) { Logger.Error("Starting the desktop host failed.", ex); Shutdown(); }
                 return;
             }
 
@@ -102,6 +120,9 @@ internal partial class App : System.Windows.Application
                     if (e.Args.Any(a => a.Equals("--desktop-canvas", StringComparison.OrdinalIgnoreCase))
                         && EventWaitHandle.TryOpenExisting(@"Local\Belie.Canvas.Open", out var canvasEvent))
                     { using (canvasEvent) canvasEvent.Set(); }
+                    else if (e.Args.Any(a => a.Equals("--topbar-settings", StringComparison.OrdinalIgnoreCase))
+                        && EventWaitHandle.TryOpenExisting(TopBarProcess.SettingsEventName, out var barEvent))
+                    { using (barEvent) barEvent.Set(); }
                     else _activateEvent.Set();
                 }
                 catch
@@ -116,6 +137,9 @@ internal partial class App : System.Windows.Application
             ConfigureRendering(liveWallpaper: false, interactiveShell: true);
             _exitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Exit");
             _canvasActivateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Canvas.Open");
+            _barSettingsEvent = new EventWaitHandle(false, EventResetMode.AutoReset, TopBarProcess.SettingsEventName);
+            _barProfileEvent = new EventWaitHandle(false, EventResetMode.AutoReset, TopBarProcess.ProfileEventName);
+            _wallpaperEvents = Enum.GetValues<WallpaperAction>().Select(action => new EventWaitHandle(false, EventResetMode.AutoReset, TopBarProcess.WallpaperEventName(action))).ToArray();
             var settings = settingsStore.Load();
             UiAppearance.Apply(settings.UiTheme);
             var profileStore = new ProfileStore(AppPaths.ProfilesDir);
@@ -134,23 +158,48 @@ internal partial class App : System.Windows.Application
                 catch (Exception ex) { Logger.Error("Updating profile widgets failed.", ex); }
             };
             _coordinator.Init();
+            // The bar is about to start, so its keys are left to it from the beginning.
+            ReadBar(starting: true);
             _profileShortcuts = new ProfileShortcutManager(() => _coordinator.Profiles,
-                profileStore.Save, _coordinator.ProfilesEdited, id => _coordinator.SwitchManually(id));
+                profileStore.Save, _coordinator.ProfilesEdited, ActivateProfileShortcut, workspaceFor: keys => _barSettings?.WorkspaceFor(keys));
             _coordinator.StateChanged += _profileShortcuts.Reload;
+
+            _wallpaperKeys = new WallpaperKeys(ChangeWallpaper);
+            _wallpaperKeys.Apply(settings);
 
             try { DesktopCanvasProcess.Start(DesktopCanvasProcess.DefaultFile); }
             catch (Exception ex) { Logger.Error("Restoring desktop widgets failed.", ex); }
+            StartTopBar();
+            var started = Environment.TickCount64;
+            _barTimer.Tick += (_, _) =>
+            {
+                if (ReadBar(starting: Environment.TickCount64 - started < 15000)) _profileShortcuts?.Reload();
+            };
+            _barTimer.Start();
 
             var startMinimized = settings.StartMinimizedToTray
                 || e.Args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
 
-            _createMain = () => new MainWindow(_coordinator, profileStore, settingsStore, profileShortcuts: _profileShortcuts);
+            _createMain = () => new MainWindow(_coordinator, profileStore, settingsStore, profileShortcuts: _profileShortcuts)
+            {
+                OpenSwitcher = () => ChangeWallpaper(WallpaperAction.Switcher),
+                WallpaperKeysChanged = () => { _wallpaperKeys.Apply(settings); return _wallpaperKeys.Problem; }
+            };
+            _unloadTimer.Tick += (_, _) =>
+            {
+                if (IsExiting || _main?.TryUnload() != true) return; // Tries again later.
+                _unloadTimer.Stop();
+                _main = null;
+                MemoryTrim.Soon();
+            };
+            MemoryTrim.Soon();
             _tray = new TrayIconManager(
                 _coordinator.GetSnapshot,
                 OpenMainWindow,
                 id => _coordinator.SwitchManually(id),
                 () => _coordinator.TogglePaused(),
-                ExitApplication);
+                ExitApplication,
+                ChangeWallpaper);
             _coordinator.StateChanged += () => _tray.Refresh();
 
             // Background watcher: a second launch signals this event to open the window.
@@ -170,6 +219,8 @@ internal partial class App : System.Windows.Application
             }
             if (e.Args.Any(a => a.Equals("--desktop-canvas", StringComparison.OrdinalIgnoreCase)))
             { OpenMainWindow(); _main?.OpenCanvas(); }
+            if (e.Args.Any(a => a.Equals("--topbar-settings", StringComparison.OrdinalIgnoreCase)))
+            { OpenMainWindow(); _main?.OpenTopBarSettings(); }
             Logger.Info(startMinimized ? "Started minimized to tray." : "Started with main window visible.");
             Updates.UpdateFound += () => _tray?.ShowUpdateAvailable();
             _updateTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(6) };
@@ -188,15 +239,20 @@ internal partial class App : System.Windows.Application
 
     private void WatchForActivationRequests()
     {
-        while (_activateEvent != null && _canvasActivateEvent != null && _exitEvent != null)
+        while (_activateEvent != null && _canvasActivateEvent != null && _exitEvent != null
+            && _barSettingsEvent != null && _barProfileEvent != null)
         {
             try
             {
-                var request = WaitHandle.WaitAny(new WaitHandle[] { _activateEvent, _canvasActivateEvent, _exitEvent });
+                var request = WaitHandle.WaitAny(new WaitHandle[] { _activateEvent, _canvasActivateEvent, _exitEvent, _barSettingsEvent, _barProfileEvent }.Concat(_wallpaperEvents).ToArray());
                 Dispatcher.Invoke(() =>
                 {
                     if (request == 2) { ExitApplication(); return; }
-                    OpenMainWindow(); if (request == 1) _main?.OpenCanvas();
+                    if (request == 4) { ApplyWorkspaceProfile(); return; }
+                    if (request > 4) { ChangeWallpaper((WallpaperAction)(request - 5)); return; }
+                    OpenMainWindow();
+                    if (request == 1) _main?.OpenCanvas();
+                    if (request == 3) _main?.OpenTopBarSettings();
                 });
                 if (request == 2) return;
             }
@@ -207,9 +263,77 @@ internal partial class App : System.Windows.Application
         }
     }
 
+    /// <summary>Notes which workspace keys the bar holds. Returns whether that may have changed.</summary>
+    private bool ReadBar(bool starting)
+    {
+        var store = new TopBarStore(TopBarProcess.DefaultFile);
+        var state = (starting || TopBarProcess.IsRunning(store.FilePath), File.GetLastWriteTimeUtc(store.FilePath));
+        if (state == _barState) return false;
+        _barState = state;
+        _barSettings = state.Item1 ? store.Load() : null;
+        return true;
+    }
+
+    private static void StartTopBar()
+    {
+        try { TopBarProcess.Start(TopBarProcess.DefaultFile); }
+        catch (Exception ex) { Logger.Error("Starting the top bar failed.", ex); }
+    }
+
+    private void ActivateProfileShortcut(Guid id)
+    {
+        if (_coordinator == null) return;
+        try
+        {
+            var shortcut = _coordinator.Profiles.FirstOrDefault(profile => profile.Id == id)?.KeyboardShortcut ?? "";
+            id = TopBarProcess.ForwardShortcut(TopBarProcess.DefaultFile, shortcut, id) ?? id;
+        }
+        catch (Exception ex) { Logger.Error("Opening a workspace from a profile shortcut failed.", ex); }
+        _coordinator.SwitchManually(id);
+    }
+
+    private async void ChangeWallpaper(WallpaperAction action)
+    {
+        try
+        {
+            if (_coordinator == null) return;
+            if (action != WallpaperAction.Switcher) { _coordinator.StepWallpaper(action == WallpaperAction.Next ? 1 : -1); return; }
+            if (_switcher != null) { _switcher.CloseSmoothly(); return; }
+            if ((_coordinator.ActiveProfile ?? _coordinator.Profiles.FirstOrDefault()) is not { } profile) { OpenMainWindow(); return; }
+            var switcher = new WallpaperSwitcher(_coordinator.Settings, _coordinator.Profiles, profile, _coordinator.ChooseWallpaper,
+                WinForms.Screen.FromPoint(WinForms.Cursor.Position).Bounds);
+            _switcher = switcher;
+            switcher.Closed += (_, _) => { if (_switcher == switcher) _switcher = null; MemoryTrim.Soon(); };
+            await switcher.OpenAsync(_coordinator.CurrentMediaPath);
+        }
+        catch (Exception ex) { Logger.Error("The wallpaper switcher failed.", ex); _switcher = null; }
+    }
+
+    private void ApplyWorkspaceProfile()
+    {
+        try
+        {
+            var request = AtomicJsonFile.Read<WorkspaceProfileRequest>(TopBarProcess.ProfileRequestFile(TopBarProcess.DefaultFile));
+            if (request == null || _coordinator == null) return;
+            if (request.Shortcut.Length > 0 && _profileShortcuts?.OwnerOf(request.Shortcut) is { } owner)
+                _coordinator.SwitchManually(request.ProfileId == Guid.Empty ? owner : request.ProfileId);
+            else if (!request.OnlyWithShortcut && request.ProfileId != Guid.Empty && _coordinator.ActiveProfileId != request.ProfileId)
+                _coordinator.SwitchManually(request.ProfileId);
+        }
+        catch (Exception ex) { Logger.Error("Applying a workspace profile failed.", ex); }
+    }
+
     private void OpenMainWindow()
     {
-        _main ??= _createMain?.Invoke();
+        if (_main == null && _createMain != null)
+        {
+            _main = _createMain();
+            _main.IsVisibleChanged += (_, _) =>
+            {
+                _unloadTimer.Stop();
+                if (_main?.IsVisible == false) _unloadTimer.Start();
+            };
+        }
         if (_main == null)
         {
             return;
@@ -233,6 +357,7 @@ internal partial class App : System.Windows.Application
         IsExiting = true;
         try { DesktopCanvasProcess.Start(DesktopCanvasProcess.DefaultFile); }
         catch (Exception ex) { Logger.Error("Keeping desktop widgets running after tray exit failed.", ex); }
+        StartTopBar();
         try
         {
             _tray?.Dispose();
@@ -250,19 +375,21 @@ internal partial class App : System.Windows.Application
             _updating = true;
             IsExiting = true;
             DesktopCanvasProcess.Stop(DesktopCanvasProcess.DefaultFile);
+            TopBarProcess.Stop(TopBarProcess.DefaultFile);
             LiveHostProcess.StopRunning();
             Shutdown();
         }, _updateCancellation.Token);
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _updateTimer?.Stop();
+        _updateTimer?.Stop(); _barTimer.Stop();
         _updateCancellation.Cancel();
         Logger.Info("Shutting down.");
         if (_profileShortcuts != null && _coordinator != null) _coordinator.StateChanged -= _profileShortcuts.Reload;
         _profileShortcuts?.Dispose();
-        _widgetHost?.Dispose();
-        _widgetHost = null;
+        _wallpaperKeys?.Dispose();
+        _desktopHosts?.Dispose();
+        _desktopHosts = null;
         // Hand the live wallpaper over to a detached host process so it keeps playing
         // after this process is gone (skipped when the session itself is ending).
         var handoff = _sessionEnding || _updating ? null : _coordinator?.CaptureLiveHandoff();

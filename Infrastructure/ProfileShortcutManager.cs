@@ -46,6 +46,8 @@ internal sealed class ProfileShortcutManager : IDisposable
     private readonly IProfileHotkeys _hotkeys;
     private readonly Dictionary<Guid, Binding> _bindings = new();
     private readonly Dictionary<Guid, string> _errors = new();
+    private readonly Dictionary<Guid, int> _workspaces = new();
+    private readonly Func<KeyGesture, int?> _workspaceFor;
     private int _nextId;
     private bool _isCapturing;
     public bool IsCapturing
@@ -64,15 +66,24 @@ internal sealed class ProfileShortcutManager : IDisposable
         }
     }
 
+    /// <param name="workspaceFor">The workspace the top bar opens with these keys. The bar then holds them, and reports when they are pressed.</param>
     public ProfileShortcutManager(Func<IReadOnlyList<WallpaperProfile>> profiles, Action<WallpaperProfile> save,
-        Action refresh, Action<Guid> activate, IProfileHotkeys? hotkeys = null)
+        Action refresh, Action<Guid> activate, IProfileHotkeys? hotkeys = null, Func<KeyGesture, int?>? workspaceFor = null)
     {
+        _workspaceFor = workspaceFor ?? (_ => null);
         _profiles = profiles; _save = save; _refresh = refresh; _activate = activate;
         _hotkeys = hotkeys ?? new NativeProfileHotkeys();
         _hotkeys.Pressed += Pressed;
         Reload();
     }
     public string? GetError(Guid id) => _errors.GetValueOrDefault(id);
+    public string? GetNote(Guid id) => _workspaces.TryGetValue(id, out var index) ? $"Also opens workspace {index} while the top bar is on." : null;
+
+    /// <summary>The profile these keys belong to.</summary>
+    public Guid? OwnerOf(string shortcut) => TryParse(shortcut, out var gesture, out _)
+        ? _profiles().FirstOrDefault(profile => TryParse(profile.KeyboardShortcut, out var own, out _) && Format(own!) == Format(gesture!))?.Id : null;
+
+    private int? WorkspaceFor(string shortcut) => TryParse(shortcut, out var gesture, out _) ? _workspaceFor(gesture!) : null;
 
     internal static bool TryParse(string text, out KeyGesture? gesture, out string error)
     {
@@ -101,17 +112,20 @@ internal sealed class ProfileShortcutManager : IDisposable
         if (IsCapturing) return;
         var profiles = _profiles();
         foreach (var (id, binding) in _bindings.ToArray())
-            if (!profiles.Any(p => p.Id == id && p.KeyboardShortcut == binding.Shortcut))
+            if (!profiles.Any(p => p.Id == id && p.KeyboardShortcut == binding.Shortcut) || WorkspaceFor(binding.Shortcut) != null)
             { _hotkeys.Unregister(binding.Id); _bindings.Remove(id); }
-        _errors.Clear();
+        _errors.Clear(); _workspaces.Clear();
+        var shared = new HashSet<string>();
         foreach (var profile in profiles)
         {
             if (string.IsNullOrWhiteSpace(profile.KeyboardShortcut) || _bindings.ContainsKey(profile.Id)) continue;
             if (!TryParse(profile.KeyboardShortcut, out var gesture, out var error))
             { _errors[profile.Id] = error; continue; }
             var canonical = Format(gesture!);
-            if (_bindings.Values.Any(b => b.Shortcut == canonical))
+            if (_bindings.Values.Any(b => b.Shortcut == canonical) || shared.Contains(canonical))
             { _errors[profile.Id] = "This shortcut is assigned to another profile."; continue; }
+            if (_workspaceFor(gesture!) is { } workspace)
+            { _workspaces[profile.Id] = workspace; shared.Add(canonical); continue; }
             var id = NextId();
             if (_hotkeys.Register(id, gesture!)) _bindings[profile.Id] = new Binding(id, profile.KeyboardShortcut);
             else _errors[profile.Id] = "Shortcut unavailable. Choose another key combination.";
@@ -134,8 +148,9 @@ internal sealed class ProfileShortcutManager : IDisposable
         }
         _bindings.TryGetValue(profileId, out var previous);
         if (previous?.Shortcut == shortcut) return true;
-        var newId = gesture == null ? 0 : NextId();
-        if (gesture != null && !_hotkeys.Register(newId, gesture))
+        var workspace = gesture == null ? null : _workspaceFor(gesture);
+        var newId = gesture == null || workspace != null ? 0 : NextId();
+        if (newId != 0 && !_hotkeys.Register(newId, gesture!))
         { error = "Another app is using this shortcut. Choose another combination."; return false; }
         var copy = JsonSerializer.Deserialize<WallpaperProfile>(JsonSerializer.Serialize(profile))!;
         copy.KeyboardShortcut = shortcut;
@@ -150,7 +165,8 @@ internal sealed class ProfileShortcutManager : IDisposable
         _bindings.Remove(profileId);
         if (newId != 0) _bindings[profileId] = new Binding(newId, shortcut);
         profile.KeyboardShortcut = shortcut;
-        _errors.Remove(profileId);
+        _errors.Remove(profileId); _workspaces.Remove(profileId);
+        if (workspace != null) _workspaces[profileId] = workspace.Value;
         _refresh();
         return true;
     }

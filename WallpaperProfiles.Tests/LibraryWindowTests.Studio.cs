@@ -120,6 +120,14 @@ public sealed partial class LibraryWindowTests
         VisualChildren(catalogue).OfType<Button>().Single(button => Equals(button.Content, "Visualizers")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         RenderWorkspace(catalogue, "visualizer-style-catalogue", 880, 720);
         Assert.Equal(8, VisualChildren(catalogue).OfType<AudioSpectrumView>().Count());
+        foreach (var category in new[] { "Players", "System", "Everyday" })
+        {
+            VisualChildren(catalogue).OfType<Button>().Single(button => Equals(button.Content, category)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            RenderWorkspace(catalogue, "gallery-" + category.ToLowerInvariant(), 880, 1500);
+            var settled = DateTime.UtcNow.AddMilliseconds(600); PumpUntil(() => DateTime.UtcNow > settled);
+            if (Environment.GetEnvironmentVariable("BELIE_TOPBAR_EXPORT") is { Length: > 0 } export) Capture((FrameworkElement)VisualChildren(catalogue).OfType<WrapPanel>().OrderByDescending(panel => panel.ActualHeight).First(), Path.Combine(export, "gallery-" + category + ".png"));
+            Assert.True(VisualChildren(catalogue).OfType<Button>().Count(button => System.Windows.Automation.AutomationProperties.GetName(button).StartsWith("Use ")) >= 5);
+        }
         catalogue.Close();
         // Every clock skin must survive changing skins on the same live view.
         var view = new ClockWidgetView(clock);

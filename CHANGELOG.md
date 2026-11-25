@@ -1,5 +1,58 @@
 # Belie patch notes
 
+## [4.0.0] - 2026-11-25 - A desktop of your own
+
+Belie now has a top bar, workspaces with tiling, a wallpaper switcher and animated wallpaper transitions. The bar is off until you turn it on under **Top bar**; workspaces and tiling come with it and can each be turned off. Transitions start on, and can be turned off under **Transitions**.
+
+### Top bar
+
+- A bar along the top or bottom of every monitor, with 20 kinds of module: workspaces, window title, clock, date, media, visualizer, processor, memory, disk, network, volume, battery, uptime, weather, text, launchers, scripts, separators, the island and the wallpaper switcher.
+- Eight looks to start from: Island, Notch, Mocha pills, Blocks, Glass, Terminal, Minimal and Neon. Your own can be saved, shared and opened as one file. Commands in a look from someone else are shown before you use it.
+- The island shows the clock and the music, and grows for a new track, the volume or a workspace.
+- Every module and part can be restyled on its own: colors, font, size, padding, border, rounding and shape. Colors can follow the wallpaper.
+- A stylesheet in the part of CSS that Waybar users know. The bar follows as you type or save the file.
+- Clicks, right clicks and scrolls on a module can run a command or one of Belie's actions.
+- Volume, media controls, a player and a calendar open from the bar.
+
+### Workspaces and tiling
+
+- Up to nine workspaces on each monitor. Open one with Alt and a number, and add Shift to send the window there.
+- Automatic tiling with gaps, animation and resizing that neighbors follow. Focus, swap, float and split tiles with Ctrl+Alt and the arrows, Ctrl+Alt+Shift and the arrows, Ctrl+Alt+F and Ctrl+Alt+J.
+- A workspace can open a profile, and share its shortcut with one.
+- Windows hidden on another workspace are brought back if Belie ends unexpectedly.
+
+### Wallpaper switcher
+
+- Ctrl+Alt+W shows the wallpapers of the profile you are on. Pick one and the slideshow carries on from there; the profile remembers it. Tab looks through another profile.
+- Ctrl+Alt+PageDown and PageUp step through wallpapers.
+- Slanted, carousel, filmstrip and grid layouts, with size, slant, spacing, outline, backdrop and keys to choose.
+
+### Wallpaper transitions
+
+- Ten ways for one wallpaper to give way to the next. Automatic finds a picture's subject, dims the old wallpaper, draws the subject's outline and spreads from it.
+- Length, square size, direction, dimming and glow can be changed, with a preview.
+
+### Widgets
+
+- Nine music players, among them a turning record, a progress ring and a slim capsule.
+- New widgets: system readings, weather, calendar, checklist and focus timer.
+
+### Smoother and lighter
+
+- Opening a workspace that has a profile no longer changes the wallpaper in the middle of the window animation; it waits until the windows are still.
+- Window animations run ahead of the apps that are redrawing, and Windows no longer slows them down to save power.
+- Neighboring tiles follow a dragged edge at your display's refresh rate.
+- Visualizers share one listener, rest when hidden or silent, and stop behind full-screen apps.
+- Reading the network and the volume no longer holds up the bar, and apps with changing titles cause far less work.
+- Transitions are planned in the background, use fewer processor cores, and are skipped when windows cover the desktop.
+- The bar and widgets share one process, and memory that was only needed for a moment is returned.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained. If a profile's shortcut is also a workspace's, such as Alt+1, both happen at once.
+
 ## [3.4.3] - 2026-11-22 - Widgets on every wallpaper
 
 ### Widgets

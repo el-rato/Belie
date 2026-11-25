@@ -298,7 +298,8 @@ internal sealed class DesktopWidgetWindow : Window
         }
         _header.Visibility = HasHeader ? Visibility.Visible : Visibility.Collapsed;
         _grid.RowDefinitions[0].Height = new GridLength(HasHeader ? 38 : 0);
-        _body.Margin = new Thickness(16, HasHeader ? 4 : 16, 16, 18);
+        _body.Margin = widget.Kind == DesktopWidgetKind.NowPlaying && NowPlayingView.FillsCard(widget) && !HasHeader ? new Thickness(0)
+            : new Thickness(16, HasHeader ? 4 : 16, 16, 18);
         _resize.Visibility = widget.Locked ? Visibility.Collapsed : Visibility.Visible;
         _resize.Opacity = widget.Kind is (DesktopWidgetKind.NowPlaying or DesktopWidgetKind.Clock) && !_card.IsMouseOver ? 0 : .5;
         _title.Text = widget.Title;
@@ -307,6 +308,8 @@ internal sealed class DesktopWidgetWindow : Window
         if (widget.Kind is DesktopWidgetKind.Clock or DesktopWidgetKind.Visualizer) appearance = $"{widget.Kind}|{widget.Id}";
         if (widget.Kind == DesktopWidgetKind.Link)
             appearance += $"|{widget.LinkPageTitle}|{widget.LinkDescription}|{widget.LinkCustomDescription}|{widget.LeetCodeUsername}|{widget.LinkUpdatedAt}|{DateTime.UtcNow.Date}";
+        if (widget.Kind is DesktopWidgetKind.System or DesktopWidgetKind.Weather or DesktopWidgetKind.Calendar or DesktopWidgetKind.Checklist or DesktopWidgetKind.Timer)
+            appearance = widget.Kind.ToString(); // These update in place, so a running timer carries on.
         if (widget.Kind == DesktopWidgetKind.Sketch)
             appearance = $"Sketch|{widget.Id}|{widget.Locked}|{widget.TextColor}";
         if (widget.Kind == DesktopWidgetKind.Image)
@@ -320,7 +323,7 @@ internal sealed class DesktopWidgetWindow : Window
                 case DesktopWidgetKind.Note:
                     _body.Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                         Content = new TextBlock { Text = widget.Content, FontSize = widget.FontSize,
-                            TextAlignment = (System.Windows.TextAlignment)widget.Alignment, TextWrapping = TextWrapping.Wrap } };
+                            TextAlignment = widget.Alignment.ToText(), TextWrapping = TextWrapping.Wrap } };
                     break;
                 case DesktopWidgetKind.Countdown:
                     _body.Content = _countdown;
@@ -356,6 +359,18 @@ internal sealed class DesktopWidgetWindow : Window
                 case DesktopWidgetKind.Clock:
                     _body.Content = new ClockWidgetView(widget);
                     break;
+                case DesktopWidgetKind.System: _body.Content = new SystemWidgetView(widget); break;
+                case DesktopWidgetKind.Weather: _body.Content = new WeatherWidgetView(widget); break;
+                case DesktopWidgetKind.Calendar: _body.Content = new CalendarWidgetView(widget); break;
+                case DesktopWidgetKind.Timer: _body.Content = new TimerWidgetView(widget); break;
+                case DesktopWidgetKind.Checklist:
+                    var listId = widget.Id;
+                    _body.Content = new ChecklistWidgetView(widget, content =>
+                    {
+                        try { _store.UpdateWidget(listId, saved => saved.Content = content); }
+                        catch (Exception ex) { Logger.Error("Saving checklist failed.", ex); }
+                    });
+                    break;
                 case DesktopWidgetKind.Visualizer:
                     _body.Content = new AudioSpectrumView();
                     break;
@@ -363,6 +378,7 @@ internal sealed class DesktopWidgetWindow : Window
         }
         if (widget.Kind == DesktopWidgetKind.Sketch) _sketch?.UpdateDrawing(widget);
         if (_body.Content is NowPlayingView music) music.UpdateAppearance(widget);
+        if (_body.Content is InfoWidgetView info) info.UpdateAppearance(widget);
         if (_body.Content is ClockWidgetView clock) clock.UpdateAppearance(widget);
         if (_body.Content is AudioSpectrumView spectrum) spectrum.UpdateAppearance(true, Foreground, widget);
         RefreshCountdown();
@@ -447,7 +463,7 @@ internal sealed class DesktopWidgetWindow : Window
             _countdown.Text = _widget.CountdownText(DateTimeOffset.Now);
             _countdown.FontSize = _widget.FontSize;
             _countdown.FontWeight = _widget.Bold ? FontWeights.Bold : FontWeights.Light;
-            _countdown.TextAlignment = (System.Windows.TextAlignment)_widget.Alignment;
+            _countdown.TextAlignment = _widget.Alignment.ToText();
         }
     }
 
@@ -536,6 +552,10 @@ internal sealed class DesktopWidgetWindow : Window
         var desktop = FindDesktop();
         if (desktop == IntPtr.Zero) return new IntPtr(-2);
         var previous = GetWindow(desktop, 3);
+        // Widgets stay above a wallpaper that is changing.
+        var title = new System.Text.StringBuilder(64);
+        while (previous != IntPtr.Zero && previous != _handle && NativeMethods.GetWindowText(previous, title, title.Capacity) > 0
+            && title.ToString() == WallpaperTransition.WindowTitle) previous = GetWindow(previous, 3);
         if (previous == _handle) return _handle;
         if (previous != IntPtr.Zero && (NativeMethods.GetWindowLong(previous, NativeMethods.GWL_EXSTYLE) & 8) != 0)
             return new IntPtr(-2);

@@ -25,15 +25,37 @@ Use your editor's **Go to definition** on each called method. **Find all referen
 | Wallpaper preview, browsing, ordering, source pickers | `UI/MainWindow.Preview.cs` |
 | Save, apply, duplicate, delete, profile editor launch | `UI/MainWindow.Editing.cs` |
 | Themes, updates, settings dialog | `UI/MainWindow.Settings.cs` |
+| Transition between wallpaper pictures | `Engine/WallpaperTransition.cs` (windows, frames, hand-over), `Engine/TransitionField.cs` (which cell changes when, subject outline), `Engine/TransitionPainter.cs` (drawing a frame, dimming). Skipped when windows together cover the desktop: `DesktopLayer.IsDesktopCoveredTogether` |
 | Library organization | `UI/LibraryWindow.xaml.cs` |
 | Online wallpaper discovery | `UI/LibraryWindow.Marketplace.cs`, `Infrastructure/WallhavenClient.cs` |
 | Widget editor state, selection, saving, deletion | `UI/DesktopCanvasView.cs` |
 | Widget editor controls and gallery construction | `UI/DesktopCanvasView.Workspace.cs` |
 | Widget appearance and preview | `UI/DesktopCanvasView.Appearance.cs` |
 | Per-wallpaper layouts, canvas interaction, presets, skins | `UI/DesktopCanvasView.Studio.cs` |
+| Widget gallery (players, clocks, system, everyday) | `UI/WidgetStyleCatalog.cs` |
+| Music player layouts | `UI/NowPlayingView.cs` |
+| System, weather, calendar, checklist, timer widgets | `UI/InfoWidgetViews.cs` |
 | Actual desktop widget rendering and dragging | `UI/DesktopWidgetWindow.cs` |
 | Widget host lifecycle and visible windows | `Engine/DesktopCanvasHost.cs` |
 | Starting/signaling the detached widget process | `Engine/DesktopCanvasProcess.cs` |
+| One process for the widgets and the top bar | `Engine/DesktopHosts.cs` |
+| Top bar process, refresh, shortcuts | `Engine/TopBarHost.cs`, `Engine/TopBarProcess.cs` |
+| A workspace's profile, sent once its animation ends | `TopBarHost.SendProfileWhenStill` |
+| Listening to the sound, shared by every visualizer | `Engine/DesktopAudioSpectrum.cs` (`Rent`, `Return`) |
+| Top bar rendering and docking | `UI/TopBarWindow.cs`, `Infrastructure/AppBar.cs` |
+| Top bar and Workspaces pages | `UI/TopBarPages.cs`, on the self-saving form in `UI/SettingsPage.cs`; values in `Models/TopBarSettings.cs` |
+| Bar looks, module and part editors | `Engine/BarRice.cs`, `UI/TopBarPage.Looks.cs`, `UI/TopBarPage.Editing.cs`, `UI/BarPreview.cs` |
+| Bar stylesheet (`topbar.css`), fonts, shapes | `Engine/BarStylesheet.cs`, `UI/BarFrame.cs` |
+| Bar island, script modules | `UI/BarIsland.cs`, `Engine/BarScripts.cs` |
+| Wallpaper switcher and its keys | `UI/WallpaperSwitcher.cs`, `UI/SwitcherDeck.cs`, `UI/SwitcherPage.cs`, `Engine/WallpaperKeys.cs` |
+| Transitions page and its preview | `UI/TransitionsPage.cs` |
+| Bar readings: system, weather, colors of the wallpaper | `Engine/SystemReadings.cs`, `Engine/WeatherSource.cs`, `Engine/WallpaperColors.cs` |
+| Workspace and tiling keys, shared with profile shortcuts | `Engine/WorkspaceKeys.cs`, `Infrastructure/ProfileShortcutManager.cs` |
+| Workspace rules | `Workspaces/WorkspaceManager.cs` |
+| Automatic tiling | `Workspaces/TilingEngine.cs`, `Workspaces/DwindleTree.cs` |
+| Workspace and window animations, their curves | `UI/SceneOverlay.cs`, `Workspaces/Motion.cs` |
+| Which windows workspaces may touch | `Workspaces/NativeWindowSystem.cs` |
+| Bringing hidden windows back after a crash | `Workspaces/HiddenWindowJournal.cs`, `TopBarProcess.RunGuard` |
 | Widget fields, defaults, copy behavior | `Models/DesktopWidget.cs` |
 | Composition, global/default/custom layout rules | `Models/DesktopCanvasDocument.cs` |
 | JSON loading, migration, validation | `Persistence/*Store.cs` |
@@ -53,7 +75,9 @@ Use your editor's **Go to definition** on each called method. **Find all referen
 ## What is intentionally separate
 
 - Smooth live playback and icon-safe playback use different Windows rendering mechanisms. Both implementations are used.
-- The detached live host and widget host keep rendering alive independently of the tray app.
+- The detached live host and desktop host (widgets and top bar) keep rendering alive independently of the tray app.
+- The wallpaper switcher belongs to the tray app; the bar asks for it through named events (`TopBarProcess.WallpaperEventName`). Choosing a wallpaper never stops a slideshow: it carries on from there.
+- A look (`BarRice`) changes what the bar shows and how it is drawn, never workspaces, profile links or tiling. Looks from a file may hold commands, so importing one lists them and asks.
 - The full profile editor supports rules and scene settings; the inline profile editor supports common daily edits.
 - Legacy canvas migration preserves existing user data, including saved boards. Its backup and validation paths are still needed.
 
@@ -79,6 +103,8 @@ When VSTest's localhost connection is unavailable, use the installed xUnit runne
 ./scripts/Test-InProcess.ps1 -Suite All
 ./scripts/Test-InProcess.ps1 -Suite Stress -NoBuild
 ```
+
+Tests in the `Desktop` category dock a real top bar for a few seconds and hide windows of a helper process they start. They do nothing unless `BELIE_DESKTOP_TESTS` is `1`.
 
 The script records test names, failures, elapsed times, and stress measurements in `TestResults/cleanup/All.json` or `Stress.json`. It keeps temporary files and logs under that ignored test-results directory. The first command requires restored dependencies; run `dotnet restore WallpaperProfiles.Tests/WallpaperProfiles.Tests.csproj` on a fresh checkout.
 

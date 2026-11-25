@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Threading;
+using WallpaperProfiles.Engine;
 using WallpaperProfiles.Infrastructure;
+using WallpaperProfiles.Persistence;
 
 namespace WallpaperProfiles.UI;
 
@@ -61,6 +63,54 @@ internal partial class MainWindow
         ShowPane(CanvasPane, CanvasNavButton, "/  Widgets");
     }
 
+    private void ShowTopBar_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryLeaveWidgetDraft()) return;
+        var page = TopBarPane.Content as TopBarPage;
+        if (page == null) TopBarPane.Content = new TopBarPage(new TopBarStore(TopBarFile), StartTopBar);
+        else page.Reload();
+        ShowPane(TopBarPane, TopBarNavButton, "/  Top bar");
+    }
+
+    private void ShowWorkspaces_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryLeaveWidgetDraft()) return;
+        var page = WorkspacesPane.Content as WorkspacesPage;
+        if (page == null) WorkspacesPane.Content = new WorkspacesPage(new TopBarStore(TopBarFile), () => _coordinator.Profiles, StartTopBar);
+        else page.Reload();
+        ShowPane(WorkspacesPane, WorkspacesNavButton, "/  Workspaces");
+    }
+
+    private void ShowTransitions_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryLeaveWidgetDraft()) return;
+        var page = TransitionsPane.Content as TransitionsPage;
+        if (page == null) TransitionsPane.Content = new TransitionsPage(_settingsStore, _settings, PreviewPictures);
+        else page.Reload();
+        ShowPane(TransitionsPane, TransitionsNavButton, "/  Transitions");
+    }
+
+    internal Action OpenSwitcher { get; init; } = () => { };
+    internal Func<string> WallpaperKeysChanged { get; init; } = () => "";
+
+    private void ShowSwitcher_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryLeaveWidgetDraft()) return;
+        // Built again each time, so that it shows the profile in use.
+        SwitcherPane.Content = new SwitcherPage(_settingsStore, _settings, () => _coordinator.ActiveProfile is { } profile
+            ? (WallpaperEngine.GetProfileMedia(profile), _coordinator.CurrentMediaPath) : (Array.Empty<string>(), ""), OpenSwitcher, WallpaperKeysChanged);
+        ShowPane(SwitcherPane, SwitcherNavButton, "/  Wallpaper switcher");
+    }
+
+    private IEnumerable<string> PreviewPictures() => new[] { _coordinator.CurrentMediaPath ?? "" }
+        .Concat(_coordinator.Profiles.OrderByDescending(profile => profile.Id == _coordinator.ActiveProfileId).SelectMany(WallpaperEngine.GetProfileMedia))
+        .Where(path => WallpaperEngine.IsImageFile(path) && File.Exists(path)).Distinct(StringComparer.OrdinalIgnoreCase).Take(2);
+
+    internal string TopBarFile { get; init; } = TopBarProcess.DefaultFile;
+    internal Action<string> StartTopBar { get; init; } = TopBarProcess.Start;
+    internal void OpenTopBarSettings() => Dispatcher.BeginInvoke(DispatcherPriority.Background,
+        new Action(() => ShowTopBar_Click(this, new RoutedEventArgs())));
+
     private void ComposeWallpaper_Click(object sender, RoutedEventArgs e)
     {
         if (_selected == null || !TryLeaveAllDrafts()) return;
@@ -76,9 +126,9 @@ internal partial class MainWindow
 
     private void ShowPane(FrameworkElement selectedPane, System.Windows.Controls.Button selectedButton, string title)
     {
-        foreach (var pane in new FrameworkElement[] { ProfilePane, LibraryPane, DashboardPane, CanvasPane })
+        foreach (var pane in new FrameworkElement[] { ProfilePane, LibraryPane, DashboardPane, CanvasPane, TopBarPane, WorkspacesPane, TransitionsPane, SwitcherPane })
             pane.Visibility = pane == selectedPane ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var button in new[] { ProfilesNavButton, LibraryNavButton, DashboardNavButton, CanvasNavButton })
+        foreach (var button in NavigationButtons)
         {
             if (button == selectedButton)
                 button.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "AccentSubtleBrush");
@@ -92,9 +142,12 @@ internal partial class MainWindow
     {
         var profilesVisible = selected == ProfilesNavButton;
         ProfileSearchArea.Visibility = ProfileRailArea.Visibility = NewProfileButton.Visibility = profilesVisible ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var button in new[] { DashboardNavButton, CanvasNavButton, ProfilesNavButton, LibraryNavButton })
+        foreach (var button in NavigationButtons)
             button.Tag = button == selected ? "Selected" : null;
     }
+
+    private System.Windows.Controls.Button[] NavigationButtons => new[]
+    { DashboardNavButton, CanvasNavButton, ProfilesNavButton, LibraryNavButton, TopBarNavButton, WorkspacesNavButton, TransitionsNavButton, SwitcherNavButton };
 
     private bool? _shellCompact;
 
@@ -109,7 +162,7 @@ internal partial class MainWindow
         SidebarTop.Margin = compact ? new Thickness(8, 16, 8, 8) : new Thickness(16, 24, 16, 16);
         SidebarBottom.Margin = compact ? new Thickness(8) : new Thickness(16);
         SidebarHeading.Visibility = ProfileRailHeading.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        foreach (var button in new[] { DashboardNavButton, CanvasNavButton, ProfilesNavButton, LibraryNavButton, SettingsButton })
+        foreach (var button in NavigationButtons.Append(SettingsButton))
         {
             button.ToolTip ??= System.Windows.Automation.AutomationProperties.GetName(button);
             if (button.Content is not System.Windows.Controls.StackPanel content) continue;

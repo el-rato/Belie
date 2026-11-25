@@ -61,8 +61,20 @@ internal sealed partial class DesktopCanvasView
         widget.ClockShowGreeting = _clockGreeting.IsChecked == true;
         widget.ClockShowVisualizer = _clockVisualizer.IsChecked == true;
         ReadSkin(widget);
+        widget.MusicColorsFromArt = _artColors.IsChecked == true; widget.MusicArtBackdrop = _artBackdrop.IsChecked == true;
+        widget.SystemSkin = _systemSkin.SelectedItem is SystemSkin system ? system : SystemSkin.Rings;
+        widget.SystemMetrics = ReadMetrics();
+        widget.WeatherSkin = _weatherSkin.SelectedItem is WeatherSkin weather ? weather : WeatherSkin.Forecast;
+        widget.WeatherFahrenheit = _fahrenheit.IsChecked == true;
+        widget.TimerMinutes = (int)_timerMinutes.Value; widget.TimerBreakMinutes = (int)_timerBreak.Value;
         widget.BorderColor = _borderColor.Text.Trim().ToUpperInvariant(); widget.BorderWidth = _borderWidth.Value;
     }
+    private SystemMetrics ReadMetrics() => _metrics.Where(item => item.Box.IsChecked == true).Aggregate(SystemMetrics.None, (all, item) => all | item.Metric);
+    private static bool IsInfo(DesktopWidgetKind kind) => kind is DesktopWidgetKind.System or DesktopWidgetKind.Weather or DesktopWidgetKind.Calendar or DesktopWidgetKind.Checklist or DesktopWidgetKind.Timer;
+    private static string KindName(DesktopWidgetKind kind) => kind switch
+    {
+        DesktopWidgetKind.NowPlaying => "Now playing", DesktopWidgetKind.System => "System monitor", DesktopWidgetKind.Timer => "Focus timer", _ => kind.ToString()
+    };
     private void QueuePreview()
     {
         if (_loading || _previewPending) return;

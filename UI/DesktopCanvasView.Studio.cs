@@ -27,7 +27,7 @@ internal sealed partial class DesktopCanvasView
     private Button _resetPosition = null!;
     private readonly TextBlock _positionStatus = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) };
     private readonly Grid _galleryFrame = new();
-    private readonly StackPanel _skinControls = new();
+    private readonly StackPanel _skinControls = new(), _spectrumControls = new();
     private readonly ComboBox _clockSkin = new() { ItemsSource = Enum.GetValues<ClockSkin>() };
     private readonly ComboBox _spectrumSkin = new() { ItemsSource = Enum.GetValues<SpectrumSkin>() };
     private readonly Slider _density = new() { Minimum = 12, Maximum = 96, TickFrequency = 1, IsSnapToTickEnabled = true };
@@ -122,9 +122,10 @@ internal sealed partial class DesktopCanvasView
         commands.Children.Add(ActionButton("Export skin", "ExportWidgetSkinButton", ExportSkin));
         _skinControls.Children.Add(commands);
         Field(_skinControls, "Clock design", _clockSkin);
-        Field(_skinControls, "Visualizer shape", _spectrumSkin);
-        Field(_skinControls, "Density", _density); Field(_skinControls, "Line thickness", _spectrumThickness);
-        Field(_skinControls, "Audio sensitivity", _sensitivity); Field(_skinControls, "Motion smoothing", _smoothing);
+        Field(_spectrumControls, "Visualizer shape", _spectrumSkin);
+        Field(_spectrumControls, "Density", _density); Field(_spectrumControls, "Line thickness", _spectrumThickness);
+        Field(_spectrumControls, "Audio sensitivity", _sensitivity); Field(_spectrumControls, "Motion smoothing", _smoothing);
+        _skinControls.Children.Add(_spectrumControls);
         _skinControls.Children.Add(ActionButton("Use wallpaper colors", "MatchWallpaperColorsButton", MatchWallpaperColors));
         _stylePage.Children.Add(_skinControls);
         foreach (var (name, control) in new (string, FrameworkElement)[] { ("ClockSkinPicker", _clockSkin), ("VisualizerSkinPicker", _spectrumSkin),
@@ -140,7 +141,8 @@ internal sealed partial class DesktopCanvasView
         _sensitivity.Value = widget.SpectrumSensitivity; _smoothing.Value = widget.SpectrumSmoothing;
         _positionX.Text = widget.X.ToString(CultureInfo.InvariantCulture); _positionY.Text = widget.Y.ToString(CultureInfo.InvariantCulture);
         _loadedX = widget.X; _loadedY = widget.Y;
-        _skinControls.Visibility = widget.Kind is DesktopWidgetKind.Clock or DesktopWidgetKind.Visualizer or DesktopWidgetKind.NowPlaying ? Visibility.Visible : Visibility.Collapsed;
+        _skinControls.Visibility = IsInfo(widget.Kind) || widget.Kind is DesktopWidgetKind.Clock or DesktopWidgetKind.Visualizer or DesktopWidgetKind.NowPlaying ? Visibility.Visible : Visibility.Collapsed;
+        _spectrumControls.Visibility = widget.Kind is DesktopWidgetKind.Clock or DesktopWidgetKind.Visualizer or DesktopWidgetKind.NowPlaying ? Visibility.Visible : Visibility.Collapsed;
         _clockSkin.Visibility = widget.Kind == DesktopWidgetKind.Clock ? Visibility.Visible : Visibility.Collapsed;
         if (_clockSkin.Parent is StackPanel parent)
         {
@@ -329,7 +331,9 @@ internal sealed partial class DesktopCanvasView
             }
             else if (draft.Kind == style.Kind) WidgetStyles.Apply(draft, style);
             else { _message.Text = "Choose a skin for this widget type, or add it from the studio catalogue."; return; }
-            _selected = null; Select(draft, isNew); _savedDraft = savedSnapshot; SetEditorTab(1); RefreshPreview();
+            _selected = null; Select(draft, isNew); _savedDraft = savedSnapshot; SetEditorTab(1);
+            if (draft.Kind == style.Kind && (IsInfo(draft.Kind) || draft.Kind == DesktopWidgetKind.NowPlaying)) (_width.Value, _height.Value) = (style.Width, style.Height);
+            RefreshPreview();
         }
         else
         {
@@ -370,11 +374,19 @@ internal sealed partial class DesktopCanvasView
         _message.Text = "Layout preset saved. Find it in Layout presets.";
     }
 
+    /// <summary>How the widget looks, without what is written in it.</summary>
+    private DesktopWidget DraftSkin()
+    {
+        var widget = DraftWidget();
+        if (IsInfo(widget.Kind)) widget.Content = "";
+        return widget;
+    }
+
     private void SaveSkin()
     {
         if (_selected == null) return;
         var name = AskName("Save skin"); if (name == null) return;
-        var widget = DraftWidget(); if (widget.Kind == DesktopWidgetKind.NowPlaying) widget.Kind = DesktopWidgetKind.Visualizer;
+        var widget = DraftSkin();
         _store.Update(document => { document.StylePresets.RemoveAll(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)); document.StylePresets.Add(new() { Name = name, Style = widget }); });
         _message.Text = "Skin saved in My styles. Your widget draft is still available.";
     }
@@ -384,7 +396,7 @@ internal sealed partial class DesktopCanvasView
         if (_selected == null) return;
         var picker = new Microsoft.Win32.SaveFileDialog { Filter = "Belie skin (*.json)|*.json", FileName = "My Belie skin.json" };
         if (picker.ShowDialog(Window.GetWindow(this)) != true) return;
-        var widget = DraftWidget(); if (widget.Kind == DesktopWidgetKind.NowPlaying) widget.Kind = DesktopWidgetKind.Visualizer;
+        var widget = DraftSkin();
         File.WriteAllText(picker.FileName, JsonSerializer.Serialize(new WidgetStylePreset { Name = widget.DisplayTitle, Style = widget }, JsonOptions.Shared));
         _message.Text = "Skin exported.";
     }

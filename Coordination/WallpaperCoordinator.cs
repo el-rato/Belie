@@ -30,6 +30,8 @@ internal sealed class WallpaperCoordinator : IDisposable
     private readonly Action<WallpaperProfile> _applyWallpaper;
     private readonly SlideshowController _slideshow;
     private string _currentMediaPath = "";
+    private bool _stepping;
+    private readonly WallpaperTransition _transition = new();
     private readonly LiveWallpaperController _live = new();
     private readonly IconSafeLiveController _iconSafeLive = new();
     private readonly TriggerManager _triggers;
@@ -66,6 +68,7 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     public Guid? ActiveProfileId => _currentId;
     public string CurrentMediaPath => _currentMediaPath;
+    public WallpaperProfile? ActiveProfile => _profiles.FirstOrDefault(profile => profile.Id == _currentId);
 
     public bool Paused { get; private set; }
 
@@ -131,6 +134,30 @@ internal sealed class WallpaperCoordinator : IDisposable
         }
         Logger.Info($"Manual switch requested -> {DescribeProfile(profileId)}.");
         Evaluate("manual switch", forceReapply: true);
+    }
+
+    /// <summary>Shows one of a profile's wallpapers now. A slideshow carries on from it, and the profile opens with it from now on.</summary>
+    public void ChooseWallpaper(Guid profileId, string path)
+    {
+        if (!_profiles.Any(profile => profile.Id == profileId)) return;
+        RememberWallpaper(profileId, path);
+        if (profileId == _currentId) _ = _slideshow.ShowAsync(path);
+        else SwitchManually(profileId);
+    }
+
+    /// <summary>Shows the next wallpaper of the active profile, or the one before.</summary>
+    public void StepWallpaper(int by)
+    {
+        if (_currentId == null) return;
+        _stepping = true;
+        _ = _slideshow.StepAsync(by);
+    }
+
+    private void RememberWallpaper(Guid profileId, string path)
+    {
+        if (string.Equals(_settings.ChosenWallpapers.GetValueOrDefault(profileId), path, StringComparison.OrdinalIgnoreCase)) return;
+        _settings.ChosenWallpapers[profileId] = path;
+        SaveSettingsSafe();
     }
 
     public void TogglePaused()
@@ -303,11 +330,13 @@ internal sealed class WallpaperCoordinator : IDisposable
         _iconSafeLive.Stop();
         // Invalidate any wallpaper apply still queued for the previous profile.
         WallpaperEngine.NextApplyGeneration();
-        _slideshow.Start(profile);
+        _stepping = false;
+        _slideshow.Start(profile, _settings.ChosenWallpapers.GetValueOrDefault(profile.Id));
     }
 
     private async void ApplyMedia(string path, WallpaperProfile profile)
     {
+        if (_stepping) { _stepping = false; RememberWallpaper(profile.Id, path); }
         // GIFs discovered in a folder retain their existing static slideshow behavior.
         var live = WallpaperEngine.IsLiveFile(path) && (!Directory.Exists(profile.FolderPath)
             || profile.AdditionalWallpaperPaths.Contains(path, StringComparer.OrdinalIgnoreCase));
@@ -332,9 +361,12 @@ internal sealed class WallpaperCoordinator : IDisposable
         }
         else
         {
+            // A video's last frame is not a wallpaper, so there is no picture to change from.
+            var style = _live.IsActive || _iconSafeLive.IsActive ? WallpaperTransitionStyle.None : _settings.Transition;
             _live.Stop();
             _iconSafeLive.Stop();
-            if (!await WallpaperEngine.SetWallpaperAsync(path, profile.FitMode, generation)) return;
+            if (!await _transition.ChangeAsync(path, profile.FitMode, style,
+                () => WallpaperEngine.SetWallpaperAsync(path, profile.FitMode, generation))) return;
         }
         if (generation != WallpaperEngine.ApplyGeneration || _currentId != profile.Id) return;
         _currentMediaPath = path;
@@ -406,6 +438,7 @@ internal sealed class WallpaperCoordinator : IDisposable
         _tickTimer.Stop();
         _triggers.Dispose();
         _slideshow.Dispose();
+        _transition.Dispose();
         _live.Dispose();
         _iconSafeLive.Dispose();
         _scene.Dispose();

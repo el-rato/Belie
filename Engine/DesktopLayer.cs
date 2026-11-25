@@ -267,6 +267,41 @@ internal static class DesktopLayer
         }
     }
 
+    /// <summary>Whether windows side by side hide the desktop, as tiles do, even when none of them does alone.</summary>
+    public static bool IsDesktopCoveredTogether()
+    {
+        try
+        {
+            var all = System.Windows.Forms.SystemInformation.VirtualScreen;
+            const int columns = 96, rows = 54;
+            var hidden = new bool[columns * rows];
+            NativeMethods.EnumWindows((window, _) =>
+            {
+                if (!NativeMethods.IsWindowVisible(window) || NativeMethods.IsIconic(window)) return true;
+                // Windows that can be see-through hide nothing for certain.
+                var style = NativeMethods.GetWindowLong(window, NativeMethods.GWL_EXSTYLE);
+                if ((style & (NativeMethods.WS_EX_LAYERED | NativeMethods.WS_EX_TRANSPARENT)) != 0 || GetClassName(window) is "Progman" or "WorkerW") return true;
+                if (NativeMethods.DwmGetWindowAttribute(window, NativeMethods.DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return true;
+                if (NativeMethods.GetWindowRect(window, out var rect)) Cover(hidden, columns, rows, all, System.Drawing.Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom));
+                return true;
+            }, IntPtr.Zero);
+            return Covered(hidden);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Marks the squares whose middle a window covers.</summary>
+    internal static void Cover(bool[] hidden, int columns, int rows, System.Drawing.Rectangle all, System.Drawing.Rectangle window)
+    {
+        int First(int edge, int start, int size, int count) => Math.Clamp((int)Math.Ceiling((edge - start) * (double)count / size - .5), 0, count);
+        int left = First(window.Left, all.X, all.Width, columns), right = First(window.Right, all.X, all.Width, columns);
+        int top = First(window.Top, all.Y, all.Height, rows), bottom = First(window.Bottom, all.Y, all.Height, rows);
+        for (var y = top; y < bottom; y++) for (var x = left; x < right; x++) hidden[y * columns + x] = true;
+    }
+
+    /// <summary>A bar, the taskbar and the gaps between tiles are not enough to see a wallpaper by.</summary>
+    internal static bool Covered(bool[] hidden) => hidden.Count(cell => !cell) < hidden.Length * .14;
+
     private static string GetClassName(IntPtr hwnd)
     {
         try

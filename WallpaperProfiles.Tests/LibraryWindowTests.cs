@@ -145,6 +145,8 @@ public sealed partial class LibraryWindowTests
                 {
                     CheckWorkspaceNavigation(dir, store, imagePath);
                     CheckWallpaperStudio(dir, imagePath);
+                    CheckTopBar(dir);
+                    CheckRice(dir);
                     CheckAmbientPlayback(dir);
                 }
             }

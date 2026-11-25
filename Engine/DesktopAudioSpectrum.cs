@@ -15,6 +15,18 @@ internal sealed class DesktopAudioSpectrum : IDisposable
     private DateTime _nextDeviceCheck;
     public string? Error { get; private set; }
 
+    [ThreadStatic] private static DesktopAudioSpectrum? _shared;
+    [ThreadStatic] private static int _users;
+
+    /// <summary>However many visualizers a thread shows, they listen once. Every Rent needs its Return.</summary>
+    public static DesktopAudioSpectrum Rent() { _users++; return _shared ??= new DesktopAudioSpectrum(); }
+
+    public static void Return()
+    {
+        if (_users == 0 || --_users > 0) return;
+        _shared?.Dispose(); _shared = null;
+    }
+
     public float[] Read()
     {
         if (DateTime.UtcNow >= _nextDeviceCheck)
@@ -68,6 +80,12 @@ internal sealed class SpectrumAnalyzer
     internal const int SampleRate = 44100;
     internal const int BarCount = 56;
     private const int FftSize = 2048;
+    private static readonly float[] Window = Enumerable.Range(0, FftSize).Select(i => (float)FastFourierTransform.HannWindow(i, FftSize)).ToArray();
+    private static readonly (int Low, int High)[] Bins = Enumerable.Range(0, BarCount).Select(band =>
+    {
+        var low = Math.Clamp((int)(45 * Math.Pow(16000d / 45, band / (double)BarCount) * FftSize / SampleRate), 1, FftSize / 2 - 1);
+        return (low, Math.Clamp((int)(45 * Math.Pow(16000d / 45, (band + 1d) / BarCount) * FftSize / SampleRate), low + 1, FftSize / 2));
+    }).ToArray();
     private readonly object _gate = new();
     private readonly Complex[] _fft = new Complex[FftSize];
     private readonly float[] _bands = new float[BarCount];
@@ -84,15 +102,14 @@ internal sealed class SpectrumAnalyzer
                 var right = BitConverter.ToInt16(buffer, offset + 2) / 32768f;
                 // Select the stronger channel so opposite-phase stereo does not cancel.
                 var sample = Math.Abs(left) >= Math.Abs(right) ? left : right;
-                _fft[_position].X = sample * (float)FastFourierTransform.HannWindow(_position, FftSize);
+                _fft[_position].X = sample * Window[_position];
                 _fft[_position].Y = 0;
                 if (++_position != FftSize) continue;
                 _position = 0;
                 FastFourierTransform.FFT(true, 11, _fft);
                 for (var band = 0; band < BarCount; band++)
                 {
-                    var low = Math.Clamp((int)(45 * Math.Pow(16000d / 45, band / (double)BarCount) * FftSize / SampleRate), 1, FftSize / 2 - 1);
-                    var high = Math.Clamp((int)(45 * Math.Pow(16000d / 45, (band + 1d) / BarCount) * FftSize / SampleRate), low + 1, FftSize / 2);
+                    var (low, high) = Bins[band];
                     double peak = 0;
                     for (var bin = low; bin < high; bin++) peak = Math.Max(peak, Math.Sqrt(_fft[bin].X * _fft[bin].X + _fft[bin].Y * _fft[bin].Y));
                     _bands[band] = (float)Math.Clamp((20 * Math.Log10(Math.Max(peak, 1e-8)) + 65) / 55, 0, 1);

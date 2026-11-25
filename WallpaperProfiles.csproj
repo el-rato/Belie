@@ -14,16 +14,20 @@
     <ApplicationIcon>appicon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Keep this release version aligned with CHANGELOG.md; changes on main publish an update. -->
-    <Version>3.4.3</Version>
-    <FileVersion>3.4.3.0</FileVersion>
-    <AssemblyVersion>3.4.3.0</AssemblyVersion>
+    <Version>4.0.0</Version>
+    <FileVersion>4.0.0.0</FileVersion>
+    <AssemblyVersion>4.0.0.0</AssemblyVersion>
     <Product>Belie</Product>
-    <Description>Personal desktop canvas and wallpaper profiles with desktop widgets, live wallpapers, scenes, schedules, and event triggers.</Description>
+    <Description>Wallpaper profiles with a top bar, tiling workspaces, desktop widgets, live wallpapers, scenes, schedules, and event triggers.</Description>
     <Copyright>Copyright © 2026</Copyright>
     <NeutralLanguage>en</NeutralLanguage>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DebugType>embedded</DebugType>
+    <!-- Belie sits in the background with a small heap, so less memory matters more than throughput. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -35,6 +39,10 @@
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />
     <Page Include="App.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
   </ItemGroup>
 
   <ItemGroup>

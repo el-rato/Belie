@@ -16,13 +16,15 @@ internal sealed class DesktopCanvasHost : IDisposable
     private readonly DispatcherTimer _timer;
     private readonly Dictionary<Guid, DesktopWidgetWindow> _windows = new();
     private readonly Func<DesktopWidget, DesktopWidgetWindow> _createWindow;
+    private readonly Action _exit;
     private bool _disposed;
     private readonly HashSet<Guid> _linksRefreshing = new();
     private readonly Dictionary<Guid, DateTimeOffset> _linkAttempts = new();
     private readonly Dictionary<Guid, string> _linkSources = new();
 
-    public DesktopCanvasHost(string file, Func<DesktopWidget, DesktopWidgetWindow>? createWindow = null)
+    public DesktopCanvasHost(string file, Func<DesktopWidget, DesktopWidgetWindow>? createWindow = null, Action? exit = null)
     {
+        _exit = exit ?? System.Windows.Application.Current.Shutdown;
         _store = new DesktopCanvasStore(file);
         _mutex = new Mutex(true, DesktopCanvasProcess.MutexName(file), out var first);
         if (!first) { _mutex.Dispose(); throw new InvalidOperationException("The desktop canvas is already running."); }
@@ -45,10 +47,10 @@ internal sealed class DesktopCanvasHost : IDisposable
         if (_disposed) return;
         try
         {
-            if (_stop.WaitOne(0)) { System.Windows.Application.Current.Shutdown(); return; }
+            if (_stop.WaitOne(0)) { _exit(); return; }
             var document = _store.Load();
             if (!document.Enabled || !document.Widgets.Any(w => w.Enabled))
-            { System.Windows.Application.Current.Shutdown(); return; }
+            { _exit(); return; }
             // Stay alive when the current profile has no widgets; the next switch can reveal them.
             var enabled = document.VisibleWidgets().ToDictionary(w => w.Id);
             foreach (var id in _windows.Keys.Where(id => !enabled.ContainsKey(id)).ToArray())

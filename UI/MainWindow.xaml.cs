@@ -153,11 +153,25 @@ internal partial class MainWindow : Window
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (!App.IsExiting && !System.Windows.Application.Current.Dispatcher.HasShutdownStarted)
+        if (!_unloading && !App.IsExiting && !System.Windows.Application.Current.Dispatcher.HasShutdownStarted)
         {
             e.Cancel = true;
             if (TryLeaveWidgetDraft() && TryLeaveDraft()) Hide();
         }
+    }
+
+    private bool _unloading;
+
+    /// <summary>
+    /// Closes the window for good while it waits in the tray, so its pictures and previews stop using memory.
+    /// Opening Belie builds a new one. False when that would interrupt something.
+    /// </summary>
+    internal bool TryUnload()
+    {
+        if (IsVisible || OwnedWindows.Count > 0 || IsDraftDirty || _libraryView?.IsWorking == true) return false;
+        _unloading = true;
+        Close();
+        return true;
     }
 
     private void TrySetAppIcon()

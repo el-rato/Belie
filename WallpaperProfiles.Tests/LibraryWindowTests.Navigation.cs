@@ -192,6 +192,59 @@ public sealed partial class LibraryWindowTests
         Assert.Empty(profiles.LoadAll().Single(p => p.Id == profile.Id).KeyboardShortcut);
         Assert.Equal("Assign shortcut", ((Button)main.FindName("ShortcutButton")).Content);
         CheckNowPlayingWidget(main, dir);
+        CheckShellPages(main, settings, dir);
         library.Close();
+        CheckUnload(() => new MainWindow(coordinator, profiles, settings, libraryStore, shortcuts) { ChooseDraftAction = () => DraftChoice.Discard });
+    }
+
+    private static void CheckShellPages(MainWindow main, SettingsStore settings, string dir)
+    {
+        typeof(MainWindow).GetProperty("TopBarFile", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(main, Path.Combine(dir, "shell-topbar.json"));
+        typeof(MainWindow).GetProperty("StartTopBar", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(main, new Action<string>(_ => { }));
+        foreach (var name in new[] { "TopBar", "Workspaces", "Transitions", "Switcher" })
+        {
+            Click(main, name + "NavButton");
+            var pane = (ContentControl)main.FindName(name + "Pane");
+            Assert.Equal(Visibility.Visible, pane.Visibility);
+            Assert.Equal(Visibility.Collapsed, ((FrameworkElement)main.FindName("ProfilePane")).Visibility);
+            Assert.Equal("Selected", ((Button)main.FindName(name + "NavButton")).Tag);
+            RenderWorkspace(main, "shell-" + name.ToLowerInvariant(), 1180, 820);
+            RenderWorkspace(main, "shell-" + name.ToLowerInvariant() + "-compact", 700, 650);
+        }
+        var page = (TransitionsPage)((ContentControl)main.FindName("TransitionsPane")).Content;
+        VisualChildren(page).OfType<Button>().Single(button => Equals(button.Content, "Pixel colonies")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(page.SaveNow());
+        Assert.Equal(WallpaperTransitionStyle.Colonies, settings.Load().WallpaperTransition);
+        Click(main, "ProfilesNavButton");
+        RenderWorkspace(main, "shell-profiles", 1180, 820);
+        RenderWorkspace(main, "shell-profiles-compact", 700, 650);
+    }
+
+    private static void CheckUnload(Func<MainWindow> create)
+    {
+        var window = OpenAndUnload(create);
+        for (var i = 0; i < 20 && window.IsAlive; i++)
+        {
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            GC.Collect(); GC.WaitForPendingFinalizers();
+        }
+        Assert.False(window.IsAlive, "Something still holds the closed main window, so its memory would never be freed.");
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static WeakReference OpenAndUnload(Func<MainWindow> create)
+    {
+        var main = create();
+        main.Loaded -= (RoutedEventHandler)Delegate.CreateDelegate(typeof(RoutedEventHandler), main,
+            typeof(MainWindow).GetMethod("OnLoaded", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)!);
+        main.Opacity = 0; main.ShowInTaskbar = false; main.ShowActivated = false; main.Show();
+        Assert.False(main.TryUnload()); // Still on screen.
+        Click(main, "LibraryNavButton");
+        Click(main, "CanvasNavButton");
+        main.Close();
+        Assert.False(main.IsVisible);
+        Assert.True(main.TryUnload());
+        Assert.DoesNotContain(main, System.Windows.Application.Current.Windows.OfType<MainWindow>());
+        return new WeakReference(main);
     }
 }

@@ -92,6 +92,10 @@ internal sealed class DesktopCanvasStore
         widget.BorderColor ??= "#738579";
         widget.MusicAccentColor ??= "#A9C9B4";
         if (!Enum.IsDefined(widget.MusicLayout)) widget.MusicLayout = NowPlayingLayout.Horizontal;
+        if (!Enum.IsDefined(widget.SystemSkin)) widget.SystemSkin = SystemSkin.Rings;
+        if (!Enum.IsDefined(widget.WeatherSkin)) widget.WeatherSkin = WeatherSkin.Forecast;
+        widget.SystemMetrics &= SystemMetrics.Cpu | SystemMetrics.Memory | SystemMetrics.Disk | SystemMetrics.Network | SystemMetrics.Battery | SystemMetrics.Uptime;
+        widget.TimerMinutes = Math.Clamp(widget.TimerMinutes, 1, 240); widget.TimerBreakMinutes = Math.Clamp(widget.TimerBreakMinutes, 1, 120);
         widget.BorderWidth = Clamp(widget.BorderWidth, 0, 6, 1);
         widget.Drawing ??= ""; widget.LeetCodeUsername ??= ""; widget.PotdCompletions ??= new();
         widget.LinkDescription ??= ""; widget.LinkCustomDescription ??= ""; widget.LinkPageTitle ??= "";

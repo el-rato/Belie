@@ -1,9 +1,12 @@
 namespace WallpaperProfiles.Models;
 
-internal enum DesktopWidgetKind { Note, Countdown, Image, Link, Sketch, NowPlaying, Clock, Visualizer }
+internal enum DesktopWidgetKind { Note, Countdown, Image, Link, Sketch, NowPlaying, Clock, Visualizer, System, Weather, Calendar, Checklist, Timer }
 internal enum ClockSkin { Script, Editorial, Minimal, Stacked, Analog, Digital, Terminal, Split, Words, DateCard }
 internal enum SpectrumSkin { Mirrored, Bars, Wave, Line, Dots, Ring, Arc, Radial }
-internal enum NowPlayingLayout { Horizontal, Stacked, Minimal }
+internal enum NowPlayingLayout { Horizontal, Stacked, Minimal, Cover, Vinyl, Ring, Pill }
+internal enum SystemSkin { Rings, Bars, Graph, Compact }
+internal enum WeatherSkin { Compact, Details, Forecast }
+[Flags] internal enum SystemMetrics { None = 0, Cpu = 1, Memory = 2, Disk = 4, Network = 8, Battery = 16, Uptime = 32 }
 internal enum WidgetTextAlignment { Left, Center, Right }
 internal enum WidgetImageFit { Fit, Fill, Stretch }
 
@@ -85,6 +88,16 @@ internal sealed class DesktopWidget
     public bool ShowPlaybackProgress { get; set; } = true;
     public bool ShowAudioVisualizer { get; set; }
     public string MusicAccentColor { get; set; } = "#A9C9B4";
+    /// <summary>Takes the playback accent from the album art.</summary>
+    public bool MusicColorsFromArt { get; set; }
+    /// <summary>Shows the album art, blurred, behind the player.</summary>
+    public bool MusicArtBackdrop { get; set; }
+    public SystemSkin SystemSkin { get; set; }
+    public SystemMetrics SystemMetrics { get; set; } = SystemMetrics.Cpu | SystemMetrics.Memory | SystemMetrics.Disk;
+    public WeatherSkin WeatherSkin { get; set; } = WeatherSkin.Forecast;
+    public bool WeatherFahrenheit { get; set; }
+    public int TimerMinutes { get; set; } = 25;
+    public int TimerBreakMinutes { get; set; } = 5;
     public bool ClockUse24Hour { get; set; }
     public bool ClockShowGreeting { get; set; } = true;
     public bool ClockShowVisualizer { get; set; } = true;

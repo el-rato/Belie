@@ -30,6 +30,7 @@ internal partial class LibraryWindow
     private bool _marketInitialized;
     private bool _marketLoading;
     private bool _marketDownloading;
+    internal bool IsWorking => _busy || _marketDownloading;
     private int _marketPage;
     private int _marketLastPage;
     private int _marketTotal;

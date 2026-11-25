@@ -12,7 +12,10 @@ internal sealed class SlideshowController : IDisposable
     private int _index;
     private readonly Queue<string> _randomQueue = new();
     private string _lastApplied = "";
-    private int _busy;
+    private string? _startAt;
+    private int _busy, _wanted;
+    /// <summary>What was shown before, so that going back works in a shuffled slideshow too.</summary>
+    private readonly List<string> _history = new();
     private readonly Action<string, WallpaperProfile> _applyMedia;
 
     public SlideshowController(Action<string, WallpaperProfile>? applyMedia = null)
@@ -23,10 +26,12 @@ internal sealed class SlideshowController : IDisposable
         _timer.Tick += (_, _) => _ = AdvanceAndApplyAsync();
     }
 
-    public async void Start(WallpaperProfile profile)
+    /// <param name="startAt">The wallpaper to begin with, when the profile still has it.</param>
+    public async void Start(WallpaperProfile profile, string? startAt = null)
     {
         Stop();
         _profile = profile;
+        _startAt = startAt;
         // Folder enumeration (potentially a network share) happens off the UI thread.
         var fresh = await Task.Run(() => WallpaperEngine.GetProfileMedia(profile));
         if (!ReferenceEquals(_profile, profile))
@@ -34,18 +39,63 @@ internal sealed class SlideshowController : IDisposable
             return;
         }
         _images = fresh;
-        _index = 0;
+        _index = Math.Max(0, Find(_startAt));
+        _startAt = null;
         _randomQueue.Clear();
         if (_images.Count > 0)
         {
             ApplyCurrent();
         }
-        var interval = Math.Max(0, profile.SlideshowIntervalMinutes);
-        if (interval > 0 && _images.Count > 1 && ReferenceEquals(_profile, profile))
+        if (ReferenceEquals(_profile, profile)) RestartTimer();
+    }
+
+    private int Find(string? path) => path == null ? -1 : _images.FindIndex(i => string.Equals(i, path, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A wallpaper that was just shown stays for a whole interval.</summary>
+    private void RestartTimer()
+    {
+        _timer.Stop();
+        if (_profile is not { SlideshowIntervalMinutes: > 0 } profile || _images.Count < 2) return;
+        _timer.Interval = TimeSpan.FromMinutes(profile.SlideshowIntervalMinutes);
+        _timer.Start();
+    }
+
+    /// <summary>Shows one of the wallpapers now. The slideshow carries on from there.</summary>
+    public async Task ShowAsync(string path)
+    {
+        var profile = _profile;
+        if (profile == null) return;
+        if (Find(path) < 0)
         {
-            _timer.Interval = TimeSpan.FromMinutes(interval);
-            _timer.Start();
+            // It may have been added since the folder was last read, or the folder is still being read.
+            _startAt = path;
+            var fresh = await Task.Run(() => WallpaperEngine.GetProfileMedia(profile));
+            if (!ReferenceEquals(_profile, profile)) return;
+            MergeScan(fresh);
+            if (Find(path) < 0) return;
         }
+        Remember();
+        _index = Find(path);
+        var later = _randomQueue.Where(item => !string.Equals(item, path, StringComparison.OrdinalIgnoreCase)).ToArray();
+        _randomQueue.Clear();
+        foreach (var item in later) _randomQueue.Enqueue(item);
+        ApplyCurrent();
+        RestartTimer();
+    }
+
+    /// <summary>The next wallpaper, or the one before. Presses that come quickly are added up.</summary>
+    public async Task StepAsync(int by)
+    {
+        _wanted += by;
+        if (_timer.IsEnabled) RestartTimer();
+        await AdvanceAndApplyAsync(); // Does nothing while an earlier press is being handled, which picks this one up.
+    }
+
+    private void Remember()
+    {
+        if (_lastApplied.Length == 0) return;
+        _history.Add(_lastApplied);
+        if (_history.Count > 50) _history.RemoveAt(0);
     }
 
     public void Stop()
@@ -53,7 +103,9 @@ internal sealed class SlideshowController : IDisposable
         _timer.Stop();
         _profile = null;
         _images = new List<string>();
-        _index = 0;
+        _index = 0; _wanted = 0;
+        _startAt = null;
+        _history.Clear();
         _randomQueue.Clear();
     }
 
@@ -65,37 +117,55 @@ internal sealed class SlideshowController : IDisposable
         }
         try
         {
-            var profile = _profile;
-            if (profile == null)
+            // The timer asks for the next one.
+            if (_wanted == 0) _wanted = 1;
+            while (_wanted != 0)
             {
-                return;
-            }
-            var fresh = await Task.Run(() => WallpaperEngine.GetProfileMedia(profile));
-            if (!ReferenceEquals(_profile, profile))
-            {
-                return;
-            }
-            MergeScan(fresh);
-            if (_images.Count == 0)
-            {
-                return;
-            }
-            if (_images.Count > 1)
-            {
-                if (_profile.SlideshowRandom)
+                var profile = _profile;
+                if (profile == null)
                 {
-                    PickRandom();
+                    _wanted = 0;
+                    return;
                 }
-                else
+                var fresh = await Task.Run(() => WallpaperEngine.GetProfileMedia(profile));
+                if (!ReferenceEquals(_profile, profile))
                 {
-                    _index = (_index + 1) % _images.Count;
+                    continue; // Another profile took over, and has its own presses.
                 }
+                MergeScan(fresh);
+                var by = _wanted;
+                _wanted = 0;
+                if (_images.Count == 0)
+                {
+                    return;
+                }
+                if (_images.Count > 1) Move(by, profile.SlideshowRandom);
+                ApplyCurrent();
             }
-            ApplyCurrent();
         }
         finally
         {
             Interlocked.Exchange(ref _busy, 0);
+        }
+    }
+
+    private void Move(int by, bool random)
+    {
+        if (!random)
+        {
+            _index = ((_index + by) % _images.Count + _images.Count) % _images.Count;
+            return;
+        }
+        for (; by > 0; by--) { Remember(); PickRandom(); _lastApplied = _images[_index]; }
+        for (; by < 0; by++)
+        {
+            var found = -1;
+            while (found < 0 && _history.Count > 0)
+            {
+                found = Find(_history[^1]);
+                _history.RemoveAt(_history.Count - 1);
+            }
+            _index = found >= 0 ? found : (_index + _images.Count - 1) % _images.Count;
         }
     }
 

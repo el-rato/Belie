@@ -12,11 +12,13 @@ internal sealed class TrayIconManager : IDisposable
     private readonly Action _togglePause;
     private readonly Action _exitApp;
     private readonly Action<Guid> _switchTo;
+    private readonly Action<Engine.WallpaperAction>? _changeWallpaper;
     private WinForms.ContextMenuStrip? _menu;
 
     public TrayIconManager(Func<WallpaperCoordinator.Snapshot> snapshot, Action openMain,
-        Action<Guid> switchTo, Action togglePause, Action exitApp)
+        Action<Guid> switchTo, Action togglePause, Action exitApp, Action<Engine.WallpaperAction>? changeWallpaper = null)
     {
+        _changeWallpaper = changeWallpaper;
         _snapshot = snapshot;
         _openMain = openMain;
         _switchTo = switchTo;
@@ -66,6 +68,13 @@ internal sealed class TrayIconManager : IDisposable
             _menu.Items.Add(new WinForms.ToolStripSeparator());
         }
 
+        if (_changeWallpaper != null)
+        {
+            AddItem("Choose wallpaper", () => _changeWallpaper(Engine.WallpaperAction.Switcher));
+            AddItem("Next wallpaper", () => _changeWallpaper(Engine.WallpaperAction.Next));
+            AddItem("Previous wallpaper", () => _changeWallpaper(Engine.WallpaperAction.Previous));
+            _menu.Items.Add(new WinForms.ToolStripSeparator());
+        }
         AddItem("Open Belie", _openMain);
 
         var pause = new WinForms.ToolStripMenuItem("Pause automation") { Checked = snap.Paused };

@@ -20,6 +20,8 @@ internal sealed class AudioSpectrumView : System.Windows.Controls.UserControl
     private DesktopWidget _widget = new();
     private System.Windows.Media.Brush _color = System.Windows.Media.Brushes.White;
     public bool PreviewMode { get; set; }
+    /// <summary>Draws this many whole bars in the space there is, rather than stretching a picture of many.</summary>
+    public int Bars { get; init; }
 
     public AudioSpectrumView()
     {
@@ -39,7 +41,8 @@ internal sealed class AudioSpectrumView : System.Windows.Controls.UserControl
         if (widget != null) _widget = widget;
         var radial = _widget.SpectrumSkin is SpectrumSkin.Ring or SpectrumSkin.Arc or SpectrumSkin.Radial;
         _surface.Width = radial ? 160 : 440;
-        ((Viewbox)Content).Stretch = radial ? Stretch.Uniform : Stretch.Fill;
+        if (Bars > 0) { if (Content != _surface) { ((Viewbox)Content).Child = null; Content = _surface; } _surface.Width = _surface.Height = double.NaN; }
+        else ((Viewbox)Content).Stretch = radial ? Stretch.Uniform : Stretch.Fill;
         Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
         if (!enabled) Stop();
         else if (IsLoaded) Start();
@@ -50,7 +53,7 @@ internal sealed class AudioSpectrumView : System.Windows.Controls.UserControl
     private void Start()
     {
         // Studio and catalogue previews never open an audio capture session.
-        if (!IsVisible || (!PreviewMode && Window.GetWindow(this) is not DesktopWidgetWindow)) return;
+        if (!IsVisible || (!PreviewMode && Window.GetWindow(this) is not (DesktopWidgetWindow or TopBarWindow))) return;
         Tick(); _timer.Start();
     }
 
@@ -67,30 +70,78 @@ internal sealed class AudioSpectrumView : System.Windows.Controls.UserControl
         if (PreviewMode) FillPreview();
         else
         {
-            _audio ??= new DesktopAudioSpectrum();
+            _audio ??= DesktopAudioSpectrum.Rent();
             var bands = _audio.Read();
+            var changed = false;
             ToolTip = _audio.Error ?? "Live desktop audio · drag to move";
             for (var i = 0; i < _levels.Length; i++)
             {
                 var target = Math.Clamp(bands[i] * _widget.SpectrumSensitivity, 0, 1);
                 var rate = target > _levels[i] ? .6 : 1 - _widget.SpectrumSmoothing;
-                _levels[i] += (float)((target - _levels[i]) * rate);
+                var step = (float)((target - _levels[i]) * rate);
+                if (Math.Abs(step) < .001f) continue;
+                _levels[i] += step; changed = true;
             }
+            if (!changed) return; // Silence is not worth drawing the whole bar or widget again for.
         }
         _surface.InvalidateVisual();
     }
 
     private void Stop()
     {
-        _timer.Stop(); _audio?.Dispose(); _audio = null;
+        _timer.Stop();
+        if (_audio != null) { _audio = null; DesktopAudioSpectrum.Return(); }
         Array.Clear(_levels); _surface.InvalidateVisual();
     }
 
     private sealed class SpectrumSurface(AudioSpectrumView owner) : FrameworkElement
     {
+        private void DrawBars(DrawingContext dc)
+        {
+            double width = RenderSize.Width, height = RenderSize.Height;
+            if (width < 4 || height < 4) return;
+            var count = owner.Bars;
+            var skin = owner._widget.SpectrumSkin;
+            var step = width / count;
+            var thick = Math.Max(1, Math.Min(step * .55, height));
+            var points = new Point[count];
+            for (var i = 0; i < count; i++)
+            {
+                // The loudest of the bands a bar stands for.
+                int from = i * owner._levels.Length / count, to = Math.Max(from + 1, (i + 1) * owner._levels.Length / count);
+                double level = 0;
+                for (var band = from; band < to && band < owner._levels.Length; band++) level = Math.Max(level, owner._levels[band]);
+                var tall = thick + level * (height - thick);
+                var x = i * step + (step - thick) / 2;
+                points[i] = new Point(i * step + step / 2, height - thick / 2 - level * (height - thick));
+                if (skin is SpectrumSkin.Wave or SpectrumSkin.Line) continue;
+                if (skin == SpectrumSkin.Dots)
+                {
+                    for (var y = height - thick; y >= height - tall - .5; y -= thick * 1.4) dc.DrawEllipse(owner._color, null, new Point(x + thick / 2, y + thick / 2), thick / 2, thick / 2);
+                    continue;
+                }
+                dc.DrawRoundedRectangle(owner._color, null, new Rect(x, skin == SpectrumSkin.Bars ? height - tall : (height - tall) / 2, thick, tall), thick / 2, thick / 2);
+            }
+            if (skin is not (SpectrumSkin.Wave or SpectrumSkin.Line)) return;
+            var line = new StreamGeometry();
+            using (var path = line.Open())
+            {
+                path.BeginFigure(new Point(points[0].X, skin == SpectrumSkin.Wave ? height : points[0].Y), skin == SpectrumSkin.Wave, false);
+                for (var i = skin == SpectrumSkin.Wave ? 0 : 1; i < count; i++)
+                {
+                    var before = i == 0 ? points[0] : points[i - 1];
+                    var middle = (before.X + points[i].X) / 2;
+                    path.BezierTo(new Point(middle, before.Y), new Point(middle, points[i].Y), points[i], true, true);
+                }
+                if (skin == SpectrumSkin.Wave) path.LineTo(new Point(points[^1].X, height), true, false);
+            }
+            dc.DrawGeometry(skin == SpectrumSkin.Wave ? owner._color : null, skin == SpectrumSkin.Wave ? null : new Pen(owner._color, Math.Max(1.5, thick * .3)), line);
+        }
+
         protected override void OnRender(DrawingContext dc)
         {
             base.OnRender(dc);
+            if (owner.Bars > 0) { DrawBars(dc); return; }
             var count = Math.Clamp(owner._widget.SpectrumDensity, 12, 96);
             var thickness = Math.Clamp(owner._widget.SpectrumThickness, 1, 10);
             var pen = new Pen(owner._color, thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
