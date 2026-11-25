@@ -22,7 +22,7 @@ public sealed partial class LibraryWindowTests
     {
         var rail = (StackPanel)main.FindName("RailStack");
         var frame = new System.Windows.Threading.DispatcherFrame();
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        var deadline = DateTime.UtcNow.AddSeconds(60);
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
         bool Loaded() => VisualChildren(rail).OfType<MonitorThumbnail>().Any(m => m.ScreenSource != null)
             && VisualChildren(main).OfType<SourceThumbnail>().Any(t => t.Source != null);

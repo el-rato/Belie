@@ -157,12 +157,12 @@ public sealed partial class LibraryWindowTests
                 .Single(w => w.Title.EndsWith(" · Preview", StringComparison.Ordinal));
             try
             {
+                Assert.Equal(WindowState.Maximized, preview.WindowState); // A tiling window manager may change it later.
                 await WaitUntil(() => VisualChildren(preview).OfType<TextBlock>().Any(t => t.Text.Contains("Full-size preview")));
                 preview.UpdateLayout();
                 var image = VisualChildren(preview).OfType<System.Windows.Controls.Image>().Single();
                 Assert.True(image.ActualWidth > 600, $"Preview width: {image.ActualWidth}; window: {preview.ActualWidth}");
                 Assert.True(image.ActualHeight > 300, $"Preview height: {image.ActualHeight}; window: {preview.ActualHeight}");
-                Assert.Equal(WindowState.Maximized, preview.WindowState);
                 var previewContent = (FrameworkElement)preview.Content;
                 RenderWorkspace(preview, "marketplace-expanded", (int)previewContent.ActualWidth, (int)previewContent.ActualHeight);
                 VisualChildren(preview).OfType<Button>().Single(b => b.Content is string text && text.StartsWith("Back to marketplace"))

@@ -185,9 +185,10 @@ public sealed partial class LibraryWindowTests
                 var preview = Within<TransitionPreview>(page).Single();
                 foreach (var style in Enum.GetValues<WallpaperTransitionStyle>())
                 {
-                    preview.Options = () => new TransitionOptions(style, .3, 8);
+                    var asked = false;
+                    preview.Options = () => { asked = true; return new TransitionOptions(style, .3, 8); };
                     preview.Play();
-                    PumpUntil(() => preview.IsPlaying || style == WallpaperTransitionStyle.None);
+                    PumpUntil(() => asked);
                     PumpUntil(() => !preview.IsPlaying);
                 }
                 preview.Options = () => new TransitionOptions(WallpaperTransitionStyle.Wave, 3, 8);

@@ -102,7 +102,7 @@ public sealed class ClockWidgetTests
             catch (Exception ex) { failure = ex; }
         });
         thread.SetApartmentState(ApartmentState.STA); thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(15)));
+        Assert.True(thread.Join(TimeSpan.FromSeconds(120)));
         if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
     }
 

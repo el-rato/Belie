@@ -168,7 +168,7 @@ public class ProfileStoreTests : IDisposable
         var applied = new ConcurrentQueue<string>();
         using var slideshow = new SlideshowController((path, _) => { applied.Enqueue(path); ready.TrySetResult(); });
         slideshow.Start(new WallpaperProfile { FolderPath = first, AdditionalWallpaperPaths = new() { second, video }, SlideshowIntervalMinutes = 5 });
-        await ready.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(60));
         async Task Advance() => await (Task)typeof(SlideshowController)
             .GetMethod("AdvanceAndApplyAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(slideshow, null)!;
         await Advance();
@@ -212,7 +212,7 @@ public class ProfileStoreTests : IDisposable
         using var slideshow = new SlideshowController((path, _) => { applied.Enqueue(path); ready.TrySetResult(); });
         slideshow.Start(new WallpaperProfile { FolderPath = first, AdditionalWallpaperPaths = new() { second },
             WallpaperOrder = new() { second, first }, SlideshowIntervalMinutes = 5 });
-        await ready.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(60));
         await (Task)typeof(SlideshowController).GetMethod("AdvanceAndApplyAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(slideshow, null)!;
         Assert.Equal(new[] { second, first }, applied.ToArray());

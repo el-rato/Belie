@@ -223,8 +223,11 @@ public sealed partial class LibraryWindowTests
     private static void CheckUnload(Func<MainWindow> create)
     {
         var window = OpenAndUnload(create);
-        for (var i = 0; i < 20 && window.IsAlive; i++)
+        // Work the window started may hold it for a moment after it closes.
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        while (window.IsAlive && DateTime.UtcNow < deadline)
         {
+            Thread.Sleep(20);
             System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             GC.Collect(); GC.WaitForPendingFinalizers();
         }

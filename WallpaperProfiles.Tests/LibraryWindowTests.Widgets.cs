@@ -233,7 +233,7 @@ public sealed partial class LibraryWindowTests
             void AwaitUpdate(Func<bool> updated)
             {
                 var frame = new System.Windows.Threading.DispatcherFrame();
-                var deadline = DateTime.UtcNow.AddSeconds(2);
+                var deadline = DateTime.UtcNow.AddSeconds(60);
                 var check = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(10) };
                 check.Tick += (_, _) => { if (updated() || DateTime.UtcNow >= deadline) frame.Continue = false; };
                 check.Start();

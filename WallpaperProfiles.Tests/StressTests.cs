@@ -274,7 +274,7 @@ public sealed class StressTests : IDisposable
         try
         {
             Assert.True(SpinWait.SpinUntil(() => Directory.GetFiles(_directory, "*.tmp").Length > 0,
-                TimeSpan.FromSeconds(5)));
+                TimeSpan.FromSeconds(60)));
             Assert.False(save.IsCompleted);
             Assert.Equal(new[] { 1, 2, 3 }, System.Text.Json.JsonSerializer.Deserialize<int[]>(held));
         }

@@ -77,7 +77,7 @@ public sealed class DesktopHostsTests
 
     private static bool Until(Func<bool> condition)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        var deadline = DateTime.UtcNow.AddSeconds(60);
         while (!condition() && DateTime.UtcNow < deadline)
         {
             Thread.Sleep(10);

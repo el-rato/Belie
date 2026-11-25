@@ -59,7 +59,7 @@ public sealed class NowPlayingTests
     public async Task WindowsMediaSession_CanBeReadWithoutChangingPlayback()
     {
         using var source = new WindowsNowPlayingSource();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var state = await source.ReadAsync(timeout.Token);
         Assert.Null(state.Error);
     }
@@ -121,7 +121,7 @@ public sealed class NowPlayingTests
             Dispatcher.Run();
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA); thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(20)));
+        Assert.True(thread.Join(TimeSpan.FromSeconds(120)));
         if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
     }
 

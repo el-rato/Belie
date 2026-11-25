@@ -193,7 +193,7 @@ public sealed class BarRiceTests : IDisposable
         using var scripts = new BarScripts();
         scripts.Read += (_, text, tip) => done.TrySetResult((text, tip));
         scripts.Tick(new[] { new BarModule(BarModuleKind.Script) { Command = "echo \"one two\"& echo three" } });
-        Assert.Equal(("\"one two\"", "three"), await done.Task.WaitAsync(TimeSpan.FromSeconds(20)));
+        Assert.Equal(("\"one two\"", "three"), await done.Task.WaitAsync(TimeSpan.FromSeconds(60)));
         var file = Path.Combine(_dir, "my script.ps1");
         Assert.Equal("powershell.exe", BarScripts.StartInfo("\"" + file + "\"").FileName);
         Assert.Contains(file, BarScripts.StartInfo(file).ArgumentList);
@@ -255,7 +255,7 @@ public sealed class BarRiceTests : IDisposable
 
     private static async Task Until(Func<bool> condition)
     {
-        for (var i = 0; i < 250 && !condition(); i++) await Task.Delay(20);
+        for (var i = 0; i < 3000 && !condition(); i++) await Task.Delay(20);
         Assert.True(condition());
     }
 

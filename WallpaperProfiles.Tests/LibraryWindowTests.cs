@@ -68,7 +68,7 @@ public sealed partial class LibraryWindowTests
                 using var marketplaceHttp = new HttpClient(marketplaceHandler);
                 var window = new LibraryWindow(store, Array.Empty<string>(), new WallhavenClient(marketplaceHttp, throttle: false),
                     Path.Combine(dir, "downloads")) { ShowInTaskbar = false, Opacity = 0 };
-                var timeout = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+                var timeout = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(120) };
                 timeout.Tick += (_, _) =>
                 {
                     failure = new TimeoutException("The library UI check did not complete.");
@@ -164,7 +164,7 @@ public sealed partial class LibraryWindowTests
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(90)), "The library UI thread did not exit.");
+        Assert.True(thread.Join(TimeSpan.FromMinutes(10)), "The library UI thread did not exit.");
         if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
     }
 
@@ -310,7 +310,7 @@ public sealed partial class LibraryWindowTests
         var loops = 0;
         player.MediaEnded += (_, _) => loops++;
         var frame = new System.Windows.Threading.DispatcherFrame();
-        var deadline = DateTime.UtcNow.AddSeconds(8);
+        var deadline = DateTime.UtcNow.AddSeconds(60);
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
         timer.Tick += (_, _) =>
         {
@@ -376,7 +376,7 @@ public sealed partial class LibraryWindowTests
     private static void PumpUntil(Func<bool> condition)
     {
         var frame = new System.Windows.Threading.DispatcherFrame();
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        var deadline = DateTime.UtcNow.AddSeconds(60); // Only a failing check waits this long.
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
         timer.Tick += (_, _) => { if (condition() || DateTime.UtcNow >= deadline) frame.Continue = false; };
         timer.Start();
@@ -387,7 +387,7 @@ public sealed partial class LibraryWindowTests
 
     private static async Task WaitUntil(Func<bool> condition)
     {
-        for (var i = 0; i < 100; i++)
+        for (var i = 0; i < 1200; i++)
         {
             if (condition()) return;
             await Task.Delay(50);

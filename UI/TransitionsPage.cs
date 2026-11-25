@@ -119,7 +119,7 @@ internal sealed class TransitionPreview : Grid
     private Bitmap[]? _pictures;
     private int _current;
     private double _length;
-    private bool _preparing;
+    private Task<Bitmap[]>? _reading;
 
     public Func<TransitionOptions> Options { get; set; } = () => WallpaperTransitionStyle.Automatic;
     public bool IsPlaying => _clock.IsRunning;
@@ -147,15 +147,13 @@ internal sealed class TransitionPreview : Grid
     private async Task<bool> Prepare()
     {
         if (_pictures != null) return true;
-        if (_preparing) return false;
-        _preparing = true;
-        try
-        {
-            var paths = _paths().ToArray();
-            _pictures = await Task.Run(() => Read(paths));
-            return true;
-        }
-        finally { _preparing = false; }
+        if (_reading == null) { var paths = _paths().ToArray(); _reading = Task.Run(() => Read(paths)); }
+        // Showing and playing may both wait for the same pictures.
+        var reading = _reading;
+        try { await reading; }
+        catch { if (_reading == reading) _reading = null; throw; }
+        if (_reading == reading) { _reading = null; _pictures = reading.Result; }
+        return _pictures != null;
     }
 
     private static Bitmap[] Read(IEnumerable<string> paths)
@@ -240,6 +238,6 @@ internal sealed class TransitionPreview : Grid
     {
         Stop();
         if (_pictures != null) foreach (var picture in _pictures) picture.Dispose();
-        _pictures = null;
+        _pictures = null; _reading = null;
     }
 }
