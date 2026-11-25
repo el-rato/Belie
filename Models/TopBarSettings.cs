@@ -16,6 +16,27 @@ internal enum BarModuleKind
     Island, Wallpaper, Script, Separator
 }
 
+/// <summary>
+/// The exact built-in actions a module may trigger without a shell, and the single source of truth for what
+/// counts as safe. Review, stripping and the launcher all defer to this, so "shown to the user" and "run through
+/// a shell" are the same set: anything not listed here is treated as an ordinary command, never hidden.
+/// </summary>
+internal static class BarActions
+{
+    internal static readonly IReadOnlySet<string> BuiltIn = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "belie:wallpapers", "belie:next-wallpaper", "belie:previous-wallpaper", "belie:settings",
+        "belie:mute", "belie:volume-up", "belie:volume-down", "belie:play", "belie:next-track",
+        "belie:previous-track", "belie:next-workspace", "belie:previous-workspace",
+    };
+
+    /// <summary>A recognized built-in action, carried out in-process with no shell.</summary>
+    internal static bool IsBuiltIn(string command) => BuiltIn.Contains(command.Trim());
+
+    /// <summary>Looks like a built-in action, recognized or not. An unrecognized one must never reach a shell.</summary>
+    internal static bool ClaimsBuiltIn(string command) => command.TrimStart().StartsWith("belie:", StringComparison.OrdinalIgnoreCase);
+}
+
 /// <summary>One thing shown on the bar.</summary>
 internal sealed class BarModule
 {
@@ -58,9 +79,10 @@ internal sealed class BarModule
         Interval = Math.Clamp(Interval, 1, 86400);
     }
 
-    /// <summary>Everything this module would run.</summary>
+    /// <summary>Everything this module would run. Only the exact built-in actions are left out; a string that merely
+    /// starts with "belie:" but is not a built-in (e.g. "belie:&amp; evil") is reported, because it reaches a shell.</summary>
     internal IEnumerable<string> Commands => new[] { Command, OnClick, OnRightClick, OnMiddleClick, OnScrollUp, OnScrollDown }
-        .Where(command => command.Length > 0 && !command.StartsWith("belie:", StringComparison.OrdinalIgnoreCase));
+        .Where(command => command.Length > 0 && !BarActions.IsBuiltIn(command));
     /// <summary>Only modules that carry their own text can appear more than once.</summary>
     internal static bool Repeats(BarModuleKind kind) => kind is BarModuleKind.Text or BarModuleKind.Launcher or BarModuleKind.Script or BarModuleKind.Separator;
 }

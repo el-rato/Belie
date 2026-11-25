@@ -44,8 +44,8 @@ internal sealed class BarRice
             list.RemoveAll(module => module.Kind is BarModuleKind.Script or BarModuleKind.Launcher && module.Commands.Any());
             foreach (var module in list)
             {
-                // Belie's own actions are harmless.
-                static string Own(string command) => command.StartsWith("belie:", StringComparison.OrdinalIgnoreCase) ? command : "";
+                // Only Belie's own recognized actions are harmless; anything else, "belie:"-looking or not, is cleared.
+                static string Own(string command) => BarActions.IsBuiltIn(command) ? command : "";
                 module.Command = Own(module.Command); module.OnClick = Own(module.OnClick); module.OnRightClick = Own(module.OnRightClick);
                 module.OnMiddleClick = Own(module.OnMiddleClick); module.OnScrollUp = Own(module.OnScrollUp); module.OnScrollDown = Own(module.OnScrollDown);
             }

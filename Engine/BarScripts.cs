@@ -30,7 +30,9 @@ internal sealed class BarScripts : IDisposable
     /// <summary>Runs whatever is due. Called every second.</summary>
     public void Tick(IEnumerable<BarModule> modules)
     {
-        var scripts = modules.Where(module => module.Kind == BarModuleKind.Script && module.Command.Length > 0).ToArray();
+        // A script shows the output of a shell command; a "belie:" action produces none and must never be shelled.
+        var scripts = modules.Where(module => module.Kind == BarModuleKind.Script && module.Command.Length > 0
+            && !BarActions.ClaimsBuiltIn(module.Command)).ToArray();
         foreach (var gone in _due.Keys.Except(scripts).ToArray()) _due.Remove(gone);
         foreach (var script in scripts)
         {

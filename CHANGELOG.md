@@ -1,5 +1,17 @@
 # Belie patch notes
 
+## [4.0.3] - 2026-11-26 - Safer shared looks
+
+### Fixed
+
+- A top bar look from someone else is checked more carefully before it can do anything. A look can no longer carry a hidden command that runs without being listed in the **commands in this look** review first, and choosing to use a look without its commands now clears all of them. Only Belie's own built-in actions, such as play, mute and switching the wallpaper, count as safe. Looks you make yourself are unaffected.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained.
+
 ## [4.0.2] - 2026-11-26 - Choose the bar, workspaces or neither
 
 ### Changed

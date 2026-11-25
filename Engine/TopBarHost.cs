@@ -415,6 +415,8 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
                 case "belie:next-workspace": _workspaces?.Cycle(TargetMonitor(), 1); return;
                 case "belie:previous-workspace": _workspaces?.Cycle(TargetMonitor(), -1); return;
             }
+            // An unrecognized "belie:" string is not a shell command and is never handed to the shell.
+            if (BarActions.ClaimsBuiltIn(command)) { Logger.Warn("Ignoring an unknown bar action: " + command); return; }
             var (file, arguments) = SplitCommand(command);
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file, arguments) { UseShellExecute = true })?.Dispose();
         }
