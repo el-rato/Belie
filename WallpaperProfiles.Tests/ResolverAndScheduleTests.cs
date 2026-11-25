@@ -55,6 +55,15 @@ public class ScheduleRuleTests
 
 public class ProfileResolverTests
 {
+    // A rule until 23:59 does not match in the last minute of the day, so these never read the real clock.
+    private static readonly DateTime Noon = new(2026, 6, 17, 12, 0, 0);
+
+    private sealed class StoppedClock : TimeProvider
+    {
+        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+        public override DateTimeOffset GetUtcNow() => new(Noon, TimeSpan.Zero);
+    }
+
     private static WallpaperProfile Profile(string name, params ScheduleRule[] rules) => new()
     {
         Id = Guid.NewGuid(),
@@ -80,12 +89,12 @@ public class ProfileResolverTests
     [Fact]
     public void ManualSwitch_WinsOverScheduleAndEvents()
     {
-        var resolver = new ProfileResolver();
-        var scheduled = Profile("Scheduled", DailyRule(new TimeOnly(0, 0), new TimeOnly(23, 59), DateTime.UtcNow));
+        var resolver = new ProfileResolver(new StoppedClock());
+        var scheduled = Profile("Scheduled", DailyRule(new TimeOnly(0, 0), new TimeOnly(23, 59), Noon));
         var manual = Profile("Manual");
         resolver.SetManual(manual.Id);
 
-        var decision = resolver.Resolve(DateTime.Now, [scheduled, manual], [Ev(scheduled.Id, 99, DateTime.UtcNow)]);
+        var decision = resolver.Resolve(Noon, [scheduled, manual], [Ev(scheduled.Id, 99, Noon)]);
 
         Assert.Equal(manual.Id, decision.ProfileId);
         Assert.Equal(ResolutionSource.Manual, decision.Source);
@@ -94,12 +103,12 @@ public class ProfileResolverTests
     [Fact]
     public void ManualSwitch_WithoutRules_NeverExpires()
     {
-        var resolver = new ProfileResolver();
+        var resolver = new ProfileResolver(new StoppedClock());
         var manual = Profile("Manual");
         resolver.SetManual(manual.Id);
 
         // Far future: with no schedule rules there is no boundary, so manual holds.
-        var decision = resolver.Resolve(DateTime.Now.AddDays(30), [manual], []);
+        var decision = resolver.Resolve(Noon.AddDays(30), [manual], []);
 
         Assert.Equal(manual.Id, decision.ProfileId);
     }
@@ -107,11 +116,11 @@ public class ProfileResolverTests
     [Fact]
     public void ManualSwitch_ExpiresAtNextScheduledBoundary()
     {
-        var resolver = new ProfileResolver();
-        var tomorrow = DateTime.Now.Date.AddDays(1);
+        var resolver = new ProfileResolver(new StoppedClock());
+        var tomorrow = Noon.Date.AddDays(1);
         var scheduled = Profile("Scheduled", new ScheduleRule
         {
-            CreatedAtUtc = DateTime.UtcNow,
+            CreatedAtUtc = Noon,
             DaysOfWeek = new HashSet<DayOfWeek> { tomorrow.DayOfWeek },
             StartTime = new TimeOnly(9, 0),
             EndTime = new TimeOnly(17, 0),
@@ -132,28 +141,28 @@ public class ProfileResolverTests
     [Fact]
     public void HighestPriorityEvent_Wins_And_TiesBreakByMostRecent()
     {
-        var resolver = new ProfileResolver();
+        var resolver = new ProfileResolver(new StoppedClock());
         var low = Profile("Low");
         var high = Profile("High");
         var other = Profile("Other");
 
-        var decision = resolver.Resolve(DateTime.Now, [low, high, other],
-            [Ev(low.Id, 10, DateTime.UtcNow), Ev(high.Id, 50, DateTime.UtcNow)]);
+        var decision = resolver.Resolve(Noon, [low, high, other],
+            [Ev(low.Id, 10, Noon), Ev(high.Id, 50, Noon)]);
         Assert.Equal(high.Id, decision.ProfileId);
 
-        var tied = resolver.Resolve(DateTime.Now, [low, high, other],
-            [Ev(low.Id, 50, DateTime.UtcNow.AddMinutes(-5)), Ev(high.Id, 50, DateTime.UtcNow)]);
+        var tied = resolver.Resolve(Noon, [low, high, other],
+            [Ev(low.Id, 50, Noon.AddMinutes(-5)), Ev(high.Id, 50, Noon)]);
         Assert.Equal(high.Id, tied.ProfileId);
     }
 
     [Fact]
     public void OverlappingScheduleRules_MostRecentlyCreated_Wins()
     {
-        var resolver = new ProfileResolver();
-        var older = Profile("Older", DailyRule(new TimeOnly(0, 0), new TimeOnly(23, 59), DateTime.UtcNow.AddDays(-2)));
-        var newer = Profile("Newer", DailyRule(new TimeOnly(0, 0), new TimeOnly(23, 59), DateTime.UtcNow.AddDays(-1)));
+        var resolver = new ProfileResolver(new StoppedClock());
+        var older = Profile("Older", DailyRule(new TimeOnly(0, 0), new TimeOnly(23, 59), Noon.AddDays(-2)));
+        var newer = Profile("Newer", DailyRule(new TimeOnly(0, 0), new TimeOnly(23, 59), Noon.AddDays(-1)));
 
-        var decision = resolver.Resolve(DateTime.Now, [older, newer], []);
+        var decision = resolver.Resolve(Noon, [older, newer], []);
 
         Assert.Equal(newer.Id, decision.ProfileId);
     }
@@ -161,10 +170,10 @@ public class ProfileResolverTests
     [Fact]
     public void NothingMatches_ReturnsNullDecision()
     {
-        var resolver = new ProfileResolver();
+        var resolver = new ProfileResolver(new StoppedClock());
         var empty = Profile("Empty");
 
-        var decision = resolver.Resolve(DateTime.Now, [empty], []);
+        var decision = resolver.Resolve(Noon, [empty], []);
 
         Assert.Null(decision.ProfileId);
     }
