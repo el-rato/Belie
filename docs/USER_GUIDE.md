@@ -238,7 +238,7 @@ Belie.exe --help
 ```
 dotnet tool install -g vpk --version 1.2.161
 dotnet publish WallpaperProfiles.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o release-output/app
-vpk pack --packId Belie --packVersion 4.0.0 --packDir release-output/app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon appicon.ico --outputDir release-output/packages
+vpk pack --packId Belie --packVersion 4.0.1 --packDir release-output/app --mainExe Belie.exe --packTitle Belie --runtime win-x64 --icon appicon.ico --outputDir release-output/packages
 ```
 
 Result: a Windows installer, portable ZIP, full update package, and release feed in

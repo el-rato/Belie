@@ -1,5 +1,18 @@
 # Belie patch notes
 
+## [4.0.1] - 2026-11-26 - Steadier profile loading
+
+### Fixed
+
+- Opening a profile loads its wallpapers once. On a slower PC the list could fill, empty and fill again.
+- Pressing Play in the transition preview while its pictures are loading now plays it once they are ready.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained.
+
 ## [4.0.0] - 2026-11-25 - A desktop of your own
 
 Belie now has a top bar, workspaces with tiling, a wallpaper switcher and animated wallpaper transitions. The bar is off until you turn it on under **Top bar**; workspaces and tiling come with it and can each be turned off. Transitions start on, and can be turned off under **Transitions**.
