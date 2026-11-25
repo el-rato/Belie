@@ -161,6 +161,8 @@ internal sealed class NowPlayingView : System.Windows.Controls.UserControl
         FontWeight = widget.Bold ? FontWeights.Bold : FontWeights.Normal;
         FontStyle = widget.Italic ? FontStyles.Italic : FontStyles.Normal;
         _track.FontSize = widget.FontSize;
+        // A slanted last letter leans past where its line ends, and the edge of the card would cut it off.
+        foreach (var line in new[] { _player, _track, _artist }) line.Padding = ItalicRoom(widget.Italic, line.FontSize);
         var accent = widget.MusicColorsFromArt && _artAccent is { } found ? new SolidColorBrush(found) : ColorBrush(widget.MusicAccentColor, Color.FromRgb(169, 201, 180));
         _ring.Color = accent; _ring.Track = new SolidColorBrush(Color.FromArgb(60, accent.Color.R, accent.Color.G, accent.Color.B));
         _spectrum.UpdateAppearance(widget.ShowAudioVisualizer, accent, widget);
@@ -407,6 +409,8 @@ internal sealed class NowPlayingView : System.Windows.Controls.UserControl
         ApplyState(_state);
         await RefreshAsync();
     }
+
+    internal static Thickness ItalicRoom(bool italic, double fontSize) => new(0, 0, italic ? Math.Ceiling(fontSize * .25) : 0, 0);
 
     private static SolidColorBrush ColorBrush(string value, Color fallback) => new(SceneController.TryParseAccent(value, out var color) ? color : fallback);
 }

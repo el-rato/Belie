@@ -234,19 +234,59 @@ internal sealed class TopBarWindow : Window
             NativeMethods.SetWindowLong(_handle, NativeMethods.GWL_EXSTYLE,
                 (style | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE) & ~NativeMethods.WS_EX_APPWINDOW);
             _dock = new AppBar(HwndSource.FromHwnd(_handle));
-            _dock.FullscreenChanged += fullscreen =>
-            {
-                Topmost = !fullscreen;
-                // Nothing of the bar is seen, so a game gets its share of the machine too.
-                _bar.Visibility = fullscreen && WallpaperProfiles.Workspaces.NativeWindowSystem.MonitorOf(NativeMethods.GetForegroundWindow()) == Monitor ? Visibility.Hidden : Visibility.Visible;
-                if (fullscreen) { ClosePopup(); NativeMethods.SetWindowPos(_handle, NativeMethods.HwndBottom, 0, 0, 0, 0,
-                    NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE); }
-            };
+            _dock.FullscreenChanged += fullscreen => { _shellFullscreen = fullscreen; CheckFullscreen(); };
             Place(_screen);
         };
         DpiChanged += (_, _) => Dispatcher.BeginInvoke(() => Place(_screen));
         Closed += (_, _) => { ClosePopup(); CompositionTarget.Rendering -= DrawPill; _dock?.Dispose(); };
     }
+
+    private bool _shellFullscreen, _covered;
+
+    /// <summary>
+    /// Steps aside for a full-screen app on this monitor. Windows also reports "full screen" when the desktop itself
+    /// gets focus (closing the last window does that), so its word is checked against the window actually in front.
+    /// Called on the shell's notice and again whenever the foreground changes.
+    /// </summary>
+    internal void CheckFullscreen()
+    {
+        var covered = false;
+        if (_shellFullscreen)
+        {
+            var front = NativeMethods.GetForegroundWindow();
+            covered = front != IntPtr.Zero && front != NativeMethods.GetShellWindow()
+                && WallpaperProfiles.Workspaces.NativeWindowSystem.MonitorOf(front) == Monitor
+                && NativeMethods.GetWindowRect(front, out var rect) && MonitorBounds(front) is { } monitor
+                && IsFullscreenApp(NativeMethods.ClassName(front),
+                    System.Drawing.Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom), monitor);
+        }
+        if (covered == _covered) return;
+        _covered = covered;
+        Topmost = !covered;
+        // Nothing of the bar is seen, so a game gets its share of the machine too.
+        _bar.Visibility = covered ? Visibility.Hidden : Visibility.Visible;
+        if (covered)
+        {
+            ClosePopup();
+            NativeMethods.SetWindowPos(_handle, NativeMethods.HwndBottom, 0, 0, 0, 0,
+                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
+        }
+    }
+
+    private static System.Drawing.Rectangle? MonitorBounds(IntPtr window)
+    {
+        var info = new NativeMethods.MONITORINFOEX { Size = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFOEX>() };
+        var monitor = NativeMethods.MonitorFromWindow(window, NativeMethods.MONITOR_DEFAULTTONEAREST);
+        if (monitor == IntPtr.Zero || !NativeMethods.GetMonitorInfo(monitor, ref info)) return null;
+        return System.Drawing.Rectangle.FromLTRB(info.Monitor.Left, info.Monitor.Top, info.Monitor.Right, info.Monitor.Bottom);
+    }
+
+    private static readonly HashSet<string> ShellClasses = new(StringComparer.OrdinalIgnoreCase)
+        { "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd" };
+
+    /// <summary>Whether a window is a real app filling its whole monitor, rather than the desktop or the taskbar.</summary>
+    internal static bool IsFullscreenApp(string className, System.Drawing.Rectangle window, System.Drawing.Rectangle monitor)
+        => className.Length > 0 && !ShellClasses.Contains(className) && !monitor.IsEmpty && window.Contains(monitor);
 
     private double FullHeight => _settings.Height + _settings.BarMargin;
     /// <summary>Room past the bar for what reaches over other windows. It is see-through, and clicks go through it.</summary>

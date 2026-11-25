@@ -1,5 +1,18 @@
 # Belie patch notes
 
+## [4.0.4] - 2026-11-26 - Top bar stays put
+
+### Fixed
+
+- The top bar no longer disappears when Belie's window is closed to the tray, or whenever the desktop has focus. Windows reports the desktop as a full-screen app, and the bar used to hide for it. Now the bar only steps aside for an app that really covers its monitor, and comes back as soon as you switch away.
+- The last letter of an italic song title or artist in the **Now playing** widget is no longer cut off at the edge.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained.
+
 ## [4.0.3] - 2026-11-26 - Safer shared looks
 
 ### Fixed

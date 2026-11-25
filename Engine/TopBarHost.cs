@@ -319,7 +319,12 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
         if (NativeMethods.ClassName(foreground) is not ("Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" or ""))
             NativeMethods.GetWindowText(foreground, title, title.Capacity);
         var monitor = NativeWindowSystem.MonitorOf(foreground);
-        foreach (var window in _windows.Values) window.UpdateTitle(window.Monitor == monitor ? title.ToString() : "");
+        foreach (var window in _windows.Values)
+        {
+            window.UpdateTitle(window.Monitor == monitor ? title.ToString() : "");
+            // The shell's full-screen notice does not repeat when focus moves, so each bar looks again itself.
+            window.CheckFullscreen();
+        }
     }
 
     private void Tick()
