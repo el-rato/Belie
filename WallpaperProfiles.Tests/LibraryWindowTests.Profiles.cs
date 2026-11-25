@@ -114,7 +114,7 @@ public sealed partial class LibraryWindowTests
             try
             {
                 Click(editor, "AddFromLibraryButton");
-                if (failure != null) throw failure;
+                if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
                 Assert.Equal(imagePath, ((TextBox)editor.FindName("FolderBox")).Text);
                 Assert.Equal("5", ((TextBox)editor.FindName("IntervalBox")).Text);
                 var wallpapers = (ItemsControl)editor.FindName("ProfileWallpaperList");
@@ -158,7 +158,7 @@ public sealed partial class LibraryWindowTests
             finally { cancelEditor.Close(); }
         };
         Assert.False(cancelEditor.ShowDialog());
-        if (failure != null) throw failure;
+        if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
         Assert.Equal(new[] { secondWallpaper }, model.AdditionalWallpaperPaths);
         Assert.Equal(new[] { secondWallpaper, imagePath }, model.WallpaperOrder);
         Assert.True(File.Exists(secondWallpaper));

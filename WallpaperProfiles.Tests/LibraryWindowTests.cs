@@ -333,11 +333,12 @@ public sealed partial class LibraryWindowTests
     {
         window.UpdateLayout();
         var list = (WallpaperThumbnailList)window.FindName("ProfileWallpaperList");
-        PumpUntil(() => VisualChildren(list).OfType<SourceThumbnail>().All(image => image.Source != null));
+        var preview = (MonitorThumbnail)window.FindName(window is MainWindow ? "PreviewMon" : "EditorPreview");
+        PumpUntil(() => VisualChildren(list).OfType<SourceThumbnail>().Count(image => image.Source != null) == list.Items.Count
+            && list.Items.Contains(path) && preview.ScreenSource != null);
         window.UpdateLayout();
         var originalThumbnails = VisualChildren(list).OfType<SourceThumbnail>().ToDictionary(image => image.FilePath);
         var originalImages = originalThumbnails.ToDictionary(pair => pair.Key, pair => pair.Value.Source);
-        var preview = (MonitorThumbnail)window.FindName(window is MainWindow ? "PreviewMon" : "EditorPreview");
         var previewImage = preview.ScreenSource;
         var previewPath = preview.PreviewFilePath;
         var index = list.Items.IndexOf(path);

@@ -23,6 +23,7 @@ internal partial class MainWindow
 
     private async Task ValidatePathAsync()
     {
+        _pathDebounce.Stop(); // This load covers the one that was waiting, which would empty the preview again.
         var path = FolderBox.Text.Trim();
         var version = ++_pathVersion;
         ++_previewRequest;

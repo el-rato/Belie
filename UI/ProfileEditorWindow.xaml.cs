@@ -155,6 +155,7 @@ internal partial class ProfileEditorWindow : Window
     private async Task ValidatePathAsync()
     {
         if (_closed) return;
+        _pathDebounce.Stop(); // This load covers the one that was waiting, which would empty the list again.
         var path = FolderBox.Text.Trim();
         SourceNameText.Text = path.Length == 0 ? "No source selected" : Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar));
         SourceNameText.ToolTip = path;
