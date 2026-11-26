@@ -43,15 +43,22 @@ internal sealed class WorkspaceManager : IDisposable
     private readonly Dictionary<(string Monitor, int Index), nint> _lastFocused = new();
     private nint _lastForeground;
     private bool _disposed;
+    /// <summary>Where an app opens, or null to open it on the workspace you are on.</summary>
+    private readonly Func<DesktopWindow, int?> _homeFor;
+    /// <summary>Windows already open when Belie starts stay where they are.</summary>
+    private bool _seenOnce;
 
     public int Count { get; private set; }
     public event Action? Changed;
     public event Action<string, int>? Switched;
+    /// <summary>Raised just before a workspace is left, while its windows are still on screen.</summary>
+    public event Action<string, int>? Leaving;
 
     public WorkspaceManager(IWindowSystem system, HiddenWindowJournal journal, int count, Func<DateTime>? now = null,
-        IWorkspaceTransition? transition = null)
+        IWorkspaceTransition? transition = null, Func<DesktopWindow, int?>? homeFor = null)
     {
         _transition = transition;
+        _homeFor = homeFor ?? (_ => null);
         _system = system; _journal = journal; _now = now ?? (() => DateTime.UtcNow);
         Count = Math.Max(1, count);
         _journal.RestoreOrphans(system);
@@ -69,6 +76,14 @@ internal sealed class WorkspaceManager : IDisposable
 
     public bool Knows(nint window) => _entries.ContainsKey(window);
 
+    /// <summary>A window Belie keeps track of, or null.</summary>
+    public DesktopWindow? Find(nint window) => _entries.GetValueOrDefault(window)?.Window;
+
+    /// <summary>The titles of the app windows on a workspace.</summary>
+    public IReadOnlyList<string> Titles(string monitor, int index) => _entries.Values
+        .Where(entry => entry.Monitor == monitor && entry.Index == index && entry.Window.Root == entry.Window.Handle && entry.Window.Title.Length > 0)
+        .Select(entry => entry.Window.Title).ToArray();
+
     /// <summary>The window shortcuts act on: the focused app window, or the last one if the bar has focus.</summary>
     public nint ActiveWindow => _entries.TryGetValue(_lastForeground, out var entry) && !entry.Hidden ? _lastForeground : 0;
     public string? ActiveMonitor => ActiveWindow == 0 ? null : _entries[ActiveWindow].Monitor;
@@ -83,6 +98,7 @@ internal sealed class WorkspaceManager : IDisposable
         var now = _now();
         var hiddenChanged = false;
         var visible = _system.VisibleWindows().Where(window => monitors.Contains(window.Monitor)).ToDictionary(window => window.Handle);
+        (string Monitor, int Index, nint Window)? arrival = null;
         // Owners first, so dialogs can follow them.
         foreach (var window in visible.Values.OrderBy(window => window.Root != window.Handle))
         {
@@ -93,7 +109,12 @@ internal sealed class WorkspaceManager : IDisposable
                 entry = null;
             }
             if (entry?.Hidden == true && now < entry.SettlesAt) continue;
+            var opened = entry == null;
             if (entry == null) _entries.Add(window.Handle, entry = new Entry { Window = window, Monitor = window.Monitor });
+            // An app that opened just now goes to its own workspace, and that workspace opens with it.
+            if (opened && _seenOnce && arrival == null && window.Root == window.Handle && _homeFor(window) is int home
+                && home >= 1 && home <= Count && home != Active(window.Monitor))
+                arrival = (window.Monitor, home, window.Handle);
             hiddenChanged |= entry.Hidden;
             entry.Hidden = false;
             entry.Window = window;
@@ -110,6 +131,8 @@ internal sealed class WorkspaceManager : IDisposable
         var foreground = _system.Foreground();
         if (_entries.TryGetValue(foreground, out var focused) && !focused.Hidden) _lastForeground = foreground;
         if (hiddenChanged) SaveJournal(HiddenWindows());
+        _seenOnce = true;
+        if (arrival is { } found && Open(found.Monitor, found.Index, found.Window)) return;
         Changed?.Invoke();
     }
 
@@ -133,7 +156,16 @@ internal sealed class WorkspaceManager : IDisposable
     {
         if (_disposed || index < 1 || index > Count) return false;
         Sync();
+        return Open(monitor, index);
+    }
+
+    /// <param name="arriving">A window that just opened for this workspace, which comes along and gets focus.</param>
+    private bool Open(string monitor, int index, nint arriving = 0)
+    {
         if (!_active.TryGetValue(monitor, out var previous) || previous == index) return false;
+        if (_entries.TryGetValue(arriving, out var newcomer))
+            foreach (var entry in _entries.Values.Where(entry => entry == newcomer || entry.Window.Root == arriving)) entry.Index = index;
+        Leaving?.Invoke(monitor, previous);
         var hide = _entries.Values.Where(entry => entry.Monitor == monitor && entry.Index == previous && !entry.Hidden).ToArray();
         var show = _entries.Values.Where(entry => entry.Monitor == monitor && entry.Index == index && entry.Hidden).ToArray();
         // Nothing is hidden unless it can be found again after a crash.
@@ -145,7 +177,7 @@ internal sealed class WorkspaceManager : IDisposable
         var settles = _now() + Settle + duration;
         foreach (var entry in show) { entry.Hidden = false; entry.SettlesAt = settles; }
         foreach (var entry in hide) { entry.Hidden = true; entry.SettlesAt = settles; }
-        var focus = show.FirstOrDefault(entry => _lastFocused.TryGetValue((monitor, index), out var last) && entry.Window.Handle == last)
+        var focus = newcomer ?? show.FirstOrDefault(entry => _lastFocused.TryGetValue((monitor, index), out var last) && entry.Window.Handle == last)
             ?? show.FirstOrDefault(entry => entry.Window.Root == entry.Window.Handle);
         _lastForeground = focus?.Window.Handle ?? (hide.Length > 0 ? 0 : _lastForeground);
         // Anything may have changed by the time an animation gets here, so each step rechecks its windows.

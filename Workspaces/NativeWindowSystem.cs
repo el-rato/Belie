@@ -91,7 +91,7 @@ internal sealed class NativeWindowSystem : IWindowSystem
         var title = new StringBuilder(256);
         NativeMethods.GetWindowText(window, title, title.Capacity);
         var result = new DesktopWindow(new WindowIdentity(window, (int)processId, start, NativeMethods.ClassName(window)), root,
-            title.ToString(), MonitorOf(window));
+            title.ToString(), MonitorOf(window), name);
         return _only == null || _only(result) ? result : null;
     }
 

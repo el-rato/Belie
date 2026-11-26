@@ -196,6 +196,9 @@ internal sealed class TopBarWindow : Window
     /// <summary>What the stylesheet says that could not be understood.</summary>
     internal IReadOnlyList<string> StyleProblems => _sheet.Problems;
 
+    /// <summary>What a workspace's button shows when hovered: how it looked when it was left, and its windows.</summary>
+    internal Func<int, WorkspacePreview?>? Preview { get; set; }
+
     public TopBarWindow(string monitor)
     {
         Monitor = monitor;
@@ -783,6 +786,9 @@ internal sealed class TopBarWindow : Window
             };
             AutomationProperties.SetAutomationId(button, "Workspace" + index);
             button.Click += (_, _) => WorkspaceChosen?.Invoke(target);
+            button.ToolTip = new System.Windows.Controls.ToolTip();
+            button.ToolTipOpening += (_, _) => FillPreview(button, target);
+            ToolTipService.SetInitialShowDelay(button, 250);
             var menu = new ContextMenu();
             var send = new MenuItem { Header = $"Send current window to workspace {index}" };
             send.Click += (_, _) => WindowSent?.Invoke(target);
@@ -795,6 +801,28 @@ internal sealed class TopBarWindow : Window
         _rebuilt = true;
         UpdateWorkspaces(_states);
         UpdateSections();
+    }
+
+    private void FillPreview(Button button, int index)
+    {
+        if (button.ToolTip is not System.Windows.Controls.ToolTip tip) return;
+        var state = _states.FirstOrDefault(item => item.Index == index);
+        var name = _settings.WorkspaceName(index) is { Length: > 0 } given ? $"Workspace {index}, {given}" : $"Workspace {index}";
+        var preview = Preview?.Invoke(index);
+        var panel = new StackPanel { MaxWidth = 320 };
+        if (preview?.Picture is { } picture && state.WindowCount > 0)
+            panel.Children.Add(new Border
+            {
+                CornerRadius = new CornerRadius(6), ClipToBounds = true, Margin = new Thickness(0, 0, 0, 6),
+                Child = new System.Windows.Controls.Image { Source = picture, Width = 320, Stretch = Stretch.Uniform }
+            });
+        panel.Children.Add(new TextBlock { Text = name, FontWeight = FontWeights.SemiBold });
+        var titles = preview?.Titles ?? Array.Empty<string>();
+        if (titles.Count == 0) panel.Children.Add(new TextBlock { Text = state.IsActive ? "You are here" : "Empty", Opacity = .7 });
+        foreach (var title in titles.Take(6))
+            panel.Children.Add(new TextBlock { Text = title, TextTrimming = TextTrimming.CharacterEllipsis, Opacity = .85 });
+        if (titles.Count > 6) panel.Children.Add(new TextBlock { Text = $"and {titles.Count - 6} more", Opacity = .7 });
+        tip.Content = panel;
     }
 
     private static ControlTemplate PillTemplate(double side = 6)
@@ -838,7 +866,6 @@ internal sealed class TopBarWindow : Window
             button.Visibility = Show(!_settings.HideEmptyWorkspaces || state.IsActive || state.WindowCount > 0);
             var windows = state.WindowCount == 1 ? "1 window" : $"{state.WindowCount} windows";
             var name = _settings.WorkspaceName(state.Index) is { Length: > 0 } given ? $"Workspace {state.Index}, {given}" : $"Workspace {state.Index}";
-            button.ToolTip = $"{name}: {windows}";
             AutomationProperties.SetName(button, $"{name}, {windows}" + (state.IsActive ? ", open" : ""));
         }
         if (_settings.HideEmptyWorkspaces && _buttonRow.IsLoaded) _buttonRow.UpdateLayout(); // Otherwise the pill would aim at where a button used to be.
@@ -1051,3 +1078,6 @@ internal sealed class TopBarWindow : Window
         return brush;
     }
 }
+
+/// <param name="Picture">How the workspace looked when it was last left, or null.</param>
+internal sealed record WorkspacePreview(ImageSource? Picture, IReadOnlyList<string> Titles);

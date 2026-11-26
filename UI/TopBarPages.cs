@@ -36,6 +36,21 @@ internal abstract class BarSettingsPage : SettingsPage<TopBarSettings>
     }
 
     protected static List<string> Apps(string text) => text.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+
+    internal static string FormatAppWorkspaces(IReadOnlyDictionary<string, int> apps)
+        => string.Join(", ", apps.OrderBy(item => item.Value).ThenBy(item => item.Key, StringComparer.OrdinalIgnoreCase).Select(item => $"{item.Key}: {item.Value}"));
+
+    /// <summary>Reads "firefox: 2, spotify: 3". Entries without a workspace number are left out.</summary>
+    internal static Dictionary<string, int> ParseAppWorkspaces(string text)
+    {
+        var apps = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var part in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var split = part.LastIndexOfAny(new[] { ':', '=' });
+            if (split > 0 && int.TryParse(part[(split + 1)..].Trim(), out var index)) apps[part[..split].Trim()] = index;
+        }
+        return apps;
+    }
 }
 
 internal sealed partial class TopBarPage : BarSettingsPage
@@ -334,6 +349,9 @@ internal sealed class WorkspacesPage : BarSettingsPage
             .Select(profile => $"{profile.KeyboardShortcut} ({profile.Name})").ToArray();
         if (shared.Length > 0) Hint($"Also profile shortcuts: {string.Join(", ", shared)}. These open the workspace, then apply its profile below, or the shortcut's own if none is chosen.");
         Text("Apps that stay on every workspace", "TopBarPinnedApps", string.Join(", ", settings.PinnedApps), (to, value) => to.PinnedApps = Apps(value), "Spotify, Discord");
+        Switch("Remember which workspace each app opens on", "TopBarRememberApps", settings.RememberAppWorkspaces, (to, value) => to.RememberAppWorkspaces = value);
+        Hint("Send a window to a workspace with the shortcut or the bar, and its app opens there from then on, taking you along.");
+        Text("Apps and their workspaces", "TopBarAppWorkspaces", FormatAppWorkspaces(settings.AppWorkspaces), (to, value) => to.AppWorkspaces = ParseAppWorkspaces(value), "firefox: 2, spotify: 3");
         Switch("Keep popout players and calls on every workspace", "TopBarStickyPopouts", settings.StickyPopouts, (to, value) => to.StickyPopouts = value);
         Hint("Picture-in-picture videos and small always-on-top windows, such as mini players and call windows, stay visible when you switch workspaces.");
 

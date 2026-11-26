@@ -30,6 +30,19 @@ public sealed class PopoutTests
     }
 
     [Fact]
+    public void AppWorkspacesAreReadWrittenAndRepaired()
+    {
+        var apps = UI.BarSettingsPage.ParseAppWorkspaces("Firefox.exe: 2, spotify = 3, broken, discord: 99, : 4");
+        var settings = new TopBarSettings { AppWorkspaces = apps }.Normalize();
+        Assert.Equal(2, settings.AppWorkspaces["firefox"]);
+        Assert.Equal(3, settings.AppWorkspaces["SPOTIFY"]);
+        Assert.False(settings.AppWorkspaces.ContainsKey("discord"));
+        Assert.Equal(2, settings.AppWorkspaces.Count);
+        Assert.Equal("Firefox: 2, spotify: 3", UI.BarSettingsPage.FormatAppWorkspaces(settings.AppWorkspaces));
+        Assert.True(new TopBarSettings().Normalize().RememberAppWorkspaces);
+    }
+
+    [Fact]
     public void SettingsSavedWithTilingStillLoad()
     {
         var file = Path.Combine(Path.GetTempPath(), $"belie-tiling-{Guid.NewGuid():N}.json");

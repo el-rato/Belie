@@ -32,9 +32,9 @@ public sealed class WorkspaceTests : IDisposable
         public int HideCalls;
         public Action? Hiding;
 
-        public FakeWindow Add(nint handle, string monitor = Main, nint root = 0, long start = 1)
+        public FakeWindow Add(nint handle, string monitor = Main, nint root = 0, long start = 1, string app = "")
         {
-            var window = new FakeWindow { Window = new DesktopWindow(new WindowIdentity(handle, (int)handle, start, "App"), root == 0 ? handle : root, "Window " + handle, monitor) };
+            var window = new FakeWindow { Window = new DesktopWindow(new WindowIdentity(handle, (int)handle, start, "App"), root == 0 ? handle : root, "Window " + handle, monitor, app) };
             All[handle] = window;
             return window;
         }
@@ -58,6 +58,32 @@ public sealed class WorkspaceTests : IDisposable
     private WorkspaceManager Create(int count = 5) => new(_windows, Journal, count, () => _now);
     private void Settle() => _now += WorkspaceManager.Settle + TimeSpan.FromMilliseconds(1);
     private nint[] Visible => _windows.All.Where(w => w.Value.Visible).Select(w => w.Key).Order().ToArray();
+
+    [Fact]
+    public void AppsOpenOnTheWorkspaceTheyWereSentTo()
+    {
+        _windows.Add(1, app: "notepad"); _windows.Add(2, app: "spotify");
+        var left = new List<(string, int)>();
+        using var manager = new WorkspaceManager(_windows, Journal, 5, () => _now, homeFor: window => window.App == "spotify" ? 3 : null);
+        manager.Leaving += (monitor, index) => left.Add((monitor, index));
+        // Windows that were already open stay put.
+        manager.Sync();
+        Assert.Equal(1, manager.Active(Main));
+        Assert.Equal(new nint[] { 1, 2 }, Visible);
+        // A new Spotify window opens workspace 3 and comes along, with its dialog.
+        Settle(); _windows.Add(3, app: "spotify"); _windows.Add(4, root: 3, app: "spotify");
+        manager.Sync();
+        Assert.Equal(3, manager.Active(Main));
+        Assert.Equal(new nint[] { 3, 4 }, Visible);
+        Assert.Equal((nint)3, _windows.Focused);
+        Assert.Equal(new[] { (Main, 1) }, left);
+        Assert.Equal(new[] { "Window 3" }, manager.Titles(Main, 3));
+        Assert.Equal(new[] { "Window 1", "Window 2" }, manager.Titles(Main, 1).Order());
+        // Opened while already there, it just opens.
+        Settle(); _windows.Add(5, app: "spotify"); manager.Sync();
+        Assert.Equal(3, manager.Active(Main));
+        Assert.Contains((nint)5, Visible);
+    }
 
     [Fact]
     public void SwitchingHidesOneWorkspaceAndShowsTheOther()

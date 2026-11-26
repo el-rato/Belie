@@ -176,13 +176,14 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
         _read = read;
         _settings = settings;
         if (!_settings.Runs) { _exit(); return; }
-        if (!_settings.WorkspacesEnabled) { _workspaces?.Dispose(); _workspaces = null; }
+        if (!_settings.WorkspacesEnabled) { _workspaces?.Dispose(); _workspaces = null; _snapshots.Clear(); }
         else if (_workspaces == null)
         {
             _workspaces = new WorkspaceManager(_system, new HiddenWindowJournal(HiddenWindowJournal.PathFor(_store.FilePath)), _settings.WorkspaceCount,
-                transition: this);
+                transition: this, homeFor: window => _settings.AppWorkspaces.TryGetValue(window.App, out var home) ? home : null);
             _workspaces.Changed += UpdateWorkspaces;
             _workspaces.Switched += RequestProfile;
+            _workspaces.Leaving += Snapshot;
         }
         else _workspaces.SetCount(_settings.WorkspaceCount);
         _keys.Apply(_settings);
@@ -223,6 +224,7 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
             window.WorkspaceChosen += index => _workspaces?.Switch(name, index);
             window.WorkspaceScrolled += step => _workspaces?.Cycle(name, step);
             window.WindowSent += SendWindow;
+            window.Preview = index => Preview(name, index);
             window.VolumeScrolled += step => { _readings.ChangeVolume(step); UpdateReadings(); };
             window.MuteClicked += () => { _readings.ToggleMute(); UpdateReadings(); };
             window.MediaCommand += SendMedia;
@@ -411,7 +413,63 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
     private string TargetMonitor() => _workspaces?.ActiveMonitor
         ?? System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position).DeviceName;
 
-    private void SendWindow(int index) { if (_workspaces is { ActiveWindow: not 0 } workspaces) workspaces.Move(workspaces.ActiveWindow, index); }
+    private void SendWindow(int index)
+    {
+        if (_workspaces is not { ActiveWindow: not 0 } workspaces) return;
+        var window = workspaces.Find(workspaces.ActiveWindow);
+        if (!workspaces.Move(workspaces.ActiveWindow, index) || !_settings.RememberAppWorkspaces || window is not { App.Length: > 0 }) return;
+        RememberApp(window.App, index);
+    }
+
+    /// <summary>The app opens on this workspace from now on.</summary>
+    private void RememberApp(string app, int index)
+    {
+        if (_settings.AppWorkspaces.TryGetValue(app, out var known) && known == index) return;
+        try
+        {
+            var settings = _store.Load();
+            settings.AppWorkspaces[app] = index;
+            _store.Save(settings);
+            _settings.AppWorkspaces[app] = index;
+        }
+        catch (Exception ex) { Logger.Warn("Remembering an app's workspace failed: " + ex.Message); }
+    }
+
+    private readonly Dictionary<(string Monitor, int Index), System.Windows.Media.ImageSource> _snapshots = new();
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr handle);
+
+    /// <summary>A small picture of a workspace as it was left, shown when its button on the bar is hovered.</summary>
+    private void Snapshot(string monitor, int index)
+    {
+        try
+        {
+            if (System.Windows.Forms.Screen.AllScreens.FirstOrDefault(screen => screen.DeviceName == monitor) is not { } screen) return;
+            var bounds = screen.Bounds;
+            const int width = 320;
+            var height = Math.Max(1, bounds.Height * width / Math.Max(1, bounds.Width));
+            using var full = new System.Drawing.Bitmap(bounds.Width, bounds.Height);
+            using (var graphics = System.Drawing.Graphics.FromImage(full)) graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bounds.Size);
+            using var small = new System.Drawing.Bitmap(width, height);
+            using (var graphics = System.Drawing.Graphics.FromImage(small))
+            {
+                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
+                graphics.DrawImage(full, 0, 0, width, height);
+            }
+            var handle = small.GetHbitmap();
+            try
+            {
+                var source = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(handle, IntPtr.Zero, System.Windows.Int32Rect.Empty,
+                    System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+                source.Freeze();
+                _snapshots[(monitor, index)] = source;
+            }
+            finally { DeleteObject(handle); }
+        }
+        catch (Exception ex) { Logger.Warn("A workspace preview could not be taken: " + ex.Message); }
+    }
+
+    private WorkspacePreview? Preview(string monitor, int index) => _workspaces is not { } workspaces ? null
+        : new WorkspacePreview(workspaces.Active(monitor) == index ? null : _snapshots.GetValueOrDefault((monitor, index)), workspaces.Titles(monitor, index));
 
     private void RequestProfile(string monitor, int index)
     {

@@ -4,7 +4,8 @@ namespace WallpaperProfiles.Workspaces;
 internal sealed record WindowIdentity(long Handle, int ProcessId, long ProcessStart, string ClassName);
 
 /// <param name="Root">The owner a dialog follows, or the window itself.</param>
-internal sealed record DesktopWindow(WindowIdentity Identity, nint Root, string Title, string Monitor)
+/// <param name="App">The process name, such as firefox.</param>
+internal sealed record DesktopWindow(WindowIdentity Identity, nint Root, string Title, string Monitor, string App = "")
 {
     public nint Handle => (nint)Identity.Handle;
 }

@@ -11,6 +11,8 @@ internal enum ResolutionSource
     Fallback,
     Retained,
     Restored,
+    /// <summary>Opened with its workspace. Automatic rules still run and take over when what they want changes.</summary>
+    Workspace,
 }
 
 internal sealed record ManualSwitch(Guid ProfileId, DateTime AtLocal, DateTimeOffset? UntilUtc = null);

@@ -113,6 +113,31 @@ public sealed class ActivityAndSceneTests
     }
 
     [Fact]
+    public void WorkspaceProfiles_LeaveSchedulesAndTheDefaultRunning()
+    {
+        using var fixture = new CoordinatorFixture();
+        fixture.Coordinator.ShowForWorkspace(fixture.Temporary.Id);
+        var shown = fixture.Coordinator.GetActivitySnapshot();
+        Assert.Equal(fixture.Temporary.Id, shown.ActiveProfile?.Id);
+        Assert.Null(shown.ManualOverride);
+        Assert.False(fixture.Coordinator.Paused);
+        Assert.Contains("workspace", shown.Reason);
+        Assert.Equal(fixture.Default.Id.ToString(), fixture.SettingsStore.Load().PreferredProfileId);
+        // Nothing the rules want has changed yet, so the workspace's profile stays.
+        fixture.Clock.Advance(TimeSpan.FromMinutes(1));
+        fixture.Coordinator.CheckNow();
+        Assert.Equal(fixture.Temporary.Id, fixture.Coordinator.ActiveProfileId);
+        // The schedule starts and takes over, as it would have without the workspace.
+        fixture.Clock.Advance(TimeSpan.FromMinutes(65));
+        fixture.Coordinator.CheckNow();
+        Assert.Equal(fixture.Work.Id, fixture.Coordinator.ActiveProfileId);
+        // A choice the user made stays theirs.
+        fixture.Coordinator.SwitchManually(fixture.Default.Id);
+        fixture.Coordinator.ShowForWorkspace(fixture.Temporary.Id);
+        Assert.Equal(fixture.Default.Id, fixture.Coordinator.ActiveProfileId);
+    }
+
+    [Fact]
     public void Pause_BlocksAutomaticChanges_WhileAllowingManualChoices()
     {
         using var fixture = new CoordinatorFixture();

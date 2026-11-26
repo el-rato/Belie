@@ -167,6 +167,10 @@ internal sealed class TopBarSettings
     public List<string> PinnedApps { get; set; } = new();
     /// <summary>Profile applied when a workspace opens on the primary monitor.</summary>
     public Dictionary<int, Guid> WorkspaceProfiles { get; set; } = new();
+    /// <summary>Apps, by process name, and the workspace each one opens on.</summary>
+    public Dictionary<string, int> AppWorkspaces { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Sending a window to a workspace remembers its app there.</summary>
+    public bool RememberAppWorkspaces { get; set; } = true;
 
     /// <summary>Small always-on-top windows, such as picture-in-picture players and call windows, float and stay on every workspace.</summary>
     public bool StickyPopouts { get; set; } = true;
@@ -227,6 +231,10 @@ internal sealed class TopBarSettings
         ClockFormat ??= ""; DateFormat ??= ""; WeatherPlace ??= "";
         WorkspaceNames = (WorkspaceNames ?? new()).Take(MaxWorkspaces).Select(name => name ?? "").ToList();
         PinnedApps = Apps(PinnedApps);
+        AppWorkspaces = (AppWorkspaces ?? new()).Select(item => (Name: ProcessName(item.Key ?? ""), Index: item.Value))
+            .Where(item => item.Name.Length > 0 && item.Index >= 1 && item.Index <= MaxWorkspaces)
+            .GroupBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Last().Index, StringComparer.OrdinalIgnoreCase);
         WorkspaceProfiles = (WorkspaceProfiles ?? new())
             .Where(item => item.Key is >= 1 and <= MaxWorkspaces && item.Value != Guid.Empty).ToDictionary(item => item.Key, item => item.Value);
         NormalizeModules();

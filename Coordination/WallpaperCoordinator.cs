@@ -117,9 +117,29 @@ internal sealed class WallpaperCoordinator : IDisposable
         }
     }
 
+    /// <summary>
+    /// What automatic rules wanted when a workspace's profile was shown. The workspace's profile stays until they
+    /// want something else, so a schedule or trigger still takes over when it changes.
+    /// </summary>
+    private ProfileDecision? _workspaceHeld;
+
+    /// <summary>Shows a workspace's profile without stopping schedules and triggers or changing the default profile.</summary>
+    public void ShowForWorkspace(Guid profileId)
+    {
+        var profile = _profiles.FirstOrDefault(p => p.Id == profileId);
+        if (profile == null) return;
+        // A manual choice the user made is theirs; a workspace does not replace it.
+        if (_resolver.GetManualOverride(_profiles) != null) return;
+        _workspaceHeld = _resolver.Resolve(_timeProvider.GetLocalNow().DateTime, _profiles, SnapshotActiveEvents(), _fallbackProfileId);
+        if (profile.Id == _currentId) { _source = ResolutionSource.Workspace; UpdateSummary(); return; }
+        Logger.Info($"Workspace opened -> {DescribeProfile(profileId)}.");
+        Activate(profile, ResolutionSource.Workspace);
+    }
+
     public void SwitchManually(Guid profileId, TimeSpan? duration = null)
     {
         if (!_profiles.Any(p => p.Id == profileId)) return;
+        _workspaceHeld = null;
         _resolver.SetManual(profileId, duration);
         if (duration.HasValue)
         {
@@ -179,6 +199,7 @@ internal sealed class WallpaperCoordinator : IDisposable
     public void ResumeAutomatic()
     {
         _resolver.ClearManual();
+        _workspaceHeld = null;
         Paused = false;
         RecordActivity(DescribeProfile(_currentId), "Returned to automatic rules");
         Evaluate("returned to automation");
@@ -257,6 +278,12 @@ internal sealed class WallpaperCoordinator : IDisposable
         var decision = _resolver.Resolve(now, _profiles, SnapshotActiveEvents(), _fallbackProfileId);
         if (manualBefore != null && _resolver.GetManualOverride(_profiles) == null)
             RecordActivity(DescribeProfile(manualBefore.ProfileId), "Manual override ended");
+        if (_workspaceHeld is { } wanted)
+        {
+            // Nothing changed for the rules: the workspace's profile stays.
+            if (wanted == decision && !forceReapply) { UpdateSummary(); return; }
+            _workspaceHeld = null;
+        }
         // Pausing freezes automatic changes; an explicit manual switch still works.
         if (Paused && decision.Source != ResolutionSource.Manual)
         {
@@ -306,7 +333,8 @@ internal sealed class WallpaperCoordinator : IDisposable
         _source = source;
         _scene.Apply(profile);
         _applyWallpaper(profile);
-        var temporary = source == ResolutionSource.Manual && _resolver.GetManualOverride(_profiles)?.IsTimed == true;
+        // A workspace's profile is not where Belie should start next time.
+        var temporary = source == ResolutionSource.Workspace || source == ResolutionSource.Manual && _resolver.GetManualOverride(_profiles)?.IsTimed == true;
         if (!temporary) _settings.LastActiveProfileId = profile.Id.ToString();
         if (source == ResolutionSource.Manual && !temporary)
         {
@@ -382,6 +410,7 @@ internal sealed class WallpaperCoordinator : IDisposable
         ResolutionSource.Fallback => "Your default profile — no schedule or event is active",
         ResolutionSource.Retained => "No automatic rule matched — keeping the current wallpaper",
         ResolutionSource.Restored => "Restored your previous profile",
+        ResolutionSource.Workspace => "Opened with its workspace — schedules and triggers still run",
         _ => "Active schedule rule"
     };
 
@@ -413,6 +442,7 @@ internal sealed class WallpaperCoordinator : IDisposable
             ResolutionSource.Fallback => "default",
             ResolutionSource.Retained => "unchanged",
             ResolutionSource.Restored => "restored",
+            ResolutionSource.Workspace => "workspace",
             _ => "schedule",
         };
         var next = ProfileResolver.NextBoundary(_timeProvider.GetLocalNow().DateTime, _profiles);

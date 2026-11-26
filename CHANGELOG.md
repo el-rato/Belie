@@ -5,10 +5,16 @@
 ### Added
 
 - **The top bar draws over windows and gets out of their way.** Windows now get the whole screen. The bar slides away while a window is under it and stays on an empty desktop. Rest the pointer at the top edge for a moment to bring it back; a quick click there, such as on a browser tab, still reaches the app. Turn off **Draw over windows and hide while one is under the bar** under **Top bar → Style** to give the bar its own strip again.
+- **Apps remember their workspace.** Send a window to a workspace with **Alt + Shift + number** or the bar, and its app opens there from then on, taking you along. See or change the list under **Workspaces → Apps and their workspaces**, or turn it off with **Remember which workspace each app opens on**.
+- **Workspace previews.** Hover a workspace on the bar to see how it looked when you left it and which windows are on it.
 
 ### Changed
 
 - Picture-in-picture videos, mini players and call windows stay visible when you switch workspaces. Turn this off with **Keep popout players and calls on every workspace** under **Workspaces**.
+
+### Fixed
+
+- Opening a workspace that has a profile no longer stops your schedules and triggers. Its wallpaper shows until the next schedule or trigger takes over, and your default profile stays the same.
 
 ### Removed
 

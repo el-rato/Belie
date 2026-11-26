@@ -319,8 +319,9 @@ internal partial class App : System.Windows.Application
             if (request == null || _coordinator == null) return;
             if (request.Shortcut.Length > 0 && _profileShortcuts?.OwnerOf(request.Shortcut) is { } owner)
                 _coordinator.SwitchManually(request.ProfileId == Guid.Empty ? owner : request.ProfileId);
-            else if (!request.OnlyWithShortcut && request.ProfileId != Guid.Empty && _coordinator.ActiveProfileId != request.ProfileId)
-                _coordinator.SwitchManually(request.ProfileId);
+            // Opening a workspace is not a choice to stop schedules and triggers.
+            else if (!request.OnlyWithShortcut && request.ProfileId != Guid.Empty)
+                _coordinator.ShowForWorkspace(request.ProfileId);
         }
         catch (Exception ex) { Logger.Error("Applying a workspace profile failed.", ex); }
     }
