@@ -1,5 +1,15 @@
 {
   "name": "Belie critters",
+  "colors": {
+    "Leaf": "#7CCB6F",
+    "Ember": "#F08A4B",
+    "Tide": "#64AAF0",
+    "Spark": "#F5D547",
+    "Bug": "#B5C04A",
+    "Shade": "#9A6ED2",
+    "Air": "#B8A8F0",
+    "Stone": "#A0A0AA"
+  },
   "creatures": [
     {
       "id": "mossbun",

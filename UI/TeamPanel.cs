@@ -82,6 +82,7 @@ internal sealed class TeamPanel : System.Windows.Controls.UserControl
     private readonly Brush _text, _faint, _line, _accent;
     private readonly StackPanel _body = new();
     private string _status = "";
+    private IReadOnlyDictionary<string, string> _packColors = new Dictionary<string, string>();
 
     public TeamPanel(Brush text, Brush accent)
     {
@@ -106,6 +107,7 @@ internal sealed class TeamPanel : System.Windows.Controls.UserControl
     {
         _body.Children.Clear();
         var creatures = CreaturePack.Installed();
+        _packColors = CreaturePack.InstalledColors();
         var state = CreaturePack.LoadState();
         if (creatures.Count == 0)
         {
@@ -173,7 +175,7 @@ internal sealed class TeamPanel : System.Windows.Controls.UserControl
         foreach (var type in creature.Types)
         {
             if (types.Children.Count > 0) types.Children.Add(Words("·", 13, _faint, new Thickness(6, 0, 6, 0)));
-            types.Children.Add(Words(type, 13, new SolidColorBrush(ColorOf(type))));
+            types.Children.Add(Words(type, 13, new SolidColorBrush(ColorOf(type, _packColors))));
         }
         names.Children.Add(types);
         Grid.SetColumn(names, 1); grid.Children.Add(names);
@@ -182,7 +184,7 @@ internal sealed class TeamPanel : System.Windows.Controls.UserControl
         Grid.SetColumn(level, 2); grid.Children.Add(level);
 
         var track = new Border { Height = 8, CornerRadius = new CornerRadius(4), VerticalAlignment = VerticalAlignment.Center, Background = _line };
-        var colors = creature.Types.Select(ColorOf).DefaultIfEmpty(Mint).ToArray();
+        var colors = creature.Types.Select(type => ColorOf(type, _packColors)).DefaultIfEmpty(Mint).ToArray();
         var fill = new Border { CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Left,
             Background = colors.Length > 1 ? new LinearGradientBrush(colors[0], colors[1], 0) : new SolidColorBrush(colors[0]) };
         var into = Math.Clamp(TeamProgress.Into(member.Xp), .02, 1);
@@ -196,10 +198,13 @@ internal sealed class TeamPanel : System.Windows.Controls.UserControl
         return grid;
     }
 
-    internal static Color ColorOf(string type)
+    /// <summary>The pack's own color for a type, else Belie's, else one made from the name that stays the same every time.</summary>
+    internal static Color ColorOf(string type, IReadOnlyDictionary<string, string> pack)
     {
+        if (pack.TryGetValue(type, out var named) && System.Windows.Media.ColorConverter.ConvertFromString(named) is Color chosen) return chosen;
         if (TypeColors.TryGetValue(type, out var known)) return known;
-        var hash = (uint)type.ToLowerInvariant().GetHashCode();
+        var hash = 2166136261u;
+        foreach (var letter in type.ToLowerInvariant()) hash = (hash ^ letter) * 16777619u;
         return Color.FromRgb((byte)(120 + hash % 120), (byte)(120 + hash / 7 % 120), (byte)(120 + hash / 49 % 120));
     }
 

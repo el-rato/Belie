@@ -184,9 +184,14 @@ def save(grid, path):
     image.save(path, optimize=True)
 
 
+# Each type's color on the Team panel; a pack may name its own types and colors.
+COLORS = {"Leaf": "#7CCB6F", "Ember": "#F08A4B", "Tide": "#64AAF0", "Spark": "#F5D547",
+          "Bug": "#B5C04A", "Shade": "#9A6ED2", "Air": "#B8A8F0", "Stone": "#A0A0AA"}
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
-    pack = {"name": "Belie critters", "creatures": []}
+    pack = {"name": "Belie critters", "colors": COLORS, "creatures": []}
     for key, name, types, draw in CREATURES:
         frames = []
         for frame in (0, 1):
