@@ -1,5 +1,17 @@
 # Belie patch notes
 
+## [4.2.2] - 2026-11-27 - Creature packs bring their own colors
+
+### Changed
+
+- **Packs can color their types.** A creature pack can now give each of its types a color, and the team on the top bar shows them. Types without one get a color that stays the same every time, rather than one that could change when Belie restarts.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained, and so is your team.
+
 ## [4.2.1] - 2026-11-27 - The team moves to the top bar
 
 ### Changed
