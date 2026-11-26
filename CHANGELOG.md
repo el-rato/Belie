@@ -1,6 +1,6 @@
 # Belie patch notes
 
-## [Unreleased] - A bar that gets out of the way
+## [4.1.0] - 2026-11-27 - A bar that gets out of the way
 
 ### Added
 

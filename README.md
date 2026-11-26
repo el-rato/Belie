@@ -26,7 +26,7 @@ Wallpaper profiles, a top bar you can restyle with CSS, workspaces and desktop w
   <a href="CHANGELOG.md">Patch notes</a>
 </p>
 
-> **New in 4.0:** the top bar, workspaces, the wallpaper switcher, wallpaper transitions and many more widgets. [Read the patch notes](CHANGELOG.md).
+> **New in 4.1:** the top bar draws over your windows and slides out of their way, apps remember which workspace they open on, and hovering a workspace shows a preview of it. [Read the patch notes](CHANGELOG.md).
 
 ## A bar you can rice
 
@@ -34,6 +34,7 @@ Pick one of eight looks and make it yours. Every module, part and workspace dot 
 
 <img src="docs/images/bar-looks.png" alt="Eight bar looks: Island, Notch, Mocha pills, Blocks, Glass, Terminal, Minimal and Neon" width="100%">
 
+- **Out of the way when you work.** The bar draws over your windows and slides away while one is under it, so they get the whole screen. Rest the pointer at the top edge to bring it back; a quick click there, such as on a browser tab, still reaches the app. It can also keep its own strip, like the taskbar.
 - **An island that grows** to show a new track, the volume or the workspace.
 - **20 kinds of module:** workspaces, window title, clock, date, media, visualizer, CPU, memory, disk, network, volume, battery, uptime, weather, launchers, your own text, your own scripts and more.
 - **A stylesheet** in the part of CSS that Waybar users know. The bar follows as you type, or as you save the file in any editor.
@@ -69,7 +70,10 @@ Every monitor gets its own set of workspaces. Windows on the others are hidden a
 | `Alt` + `1`–`9` | Open a workspace |
 | `Alt` + `Shift` + `1`–`9` | Send the window there |
 
-A workspace can also have a **profile**, so opening it changes the wallpaper with it.
+- **Apps remember their workspace.** Send a window to a workspace once, and its app opens there from then on and takes you along.
+- **Previews.** Hover a workspace on the bar to see how you left it and which windows are on it.
+- **Popouts stay with you.** Picture-in-picture videos, mini players and calls stay visible on every workspace.
+- **A profile per workspace.** Opening a workspace can change the wallpaper with it, while your schedules and triggers keep running.
 
 ## Wallpaper switcher
 
