@@ -30,7 +30,7 @@ internal sealed class DesktopHosts : IDisposable
         _exit = exit;
         _createCanvas = createCanvas ?? ((file, stopped) => new DesktopCanvasHost(file, exit: stopped));
         _createBar = createBar ?? ((file, stopped) => new TopBarHost(file, stopped));
-        _attach = new EventWaitHandle(false, EventResetMode.AutoReset, EventName(_canvasFile, _barFile), out var first);
+        _attach = LocalIpc.Event(EventResetMode.AutoReset, EventName(_canvasFile, _barFile), out var first);
         var dispatcher = Dispatcher.CurrentDispatcher;
         _attachWait = ThreadPool.RegisterWaitForSingleObject(_attach, (_, _) =>
         {

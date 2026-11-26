@@ -211,11 +211,29 @@ internal static partial class WallpaperEngineWorkshop
     }
 
     /// <summary>
+    /// The Wallpaper Engine command line for <paramref name="projectJsonPath"/>. Each argument goes in
+    /// <see cref="ProcessStartInfo.ArgumentList"/>, so .NET quotes and escapes it and a path can never
+    /// add <c>-control</c> switches of its own.
+    /// </summary>
+    internal static ProcessStartInfo OpenWallpaperStartInfo(string exe, string projectJsonPath)
+    {
+        var psi = new ProcessStartInfo { FileName = exe, UseShellExecute = false };
+        foreach (var argument in new[] { "-control", "openWallpaper", "-file", projectJsonPath })
+            psi.ArgumentList.Add(argument);
+        return psi;
+    }
+
+    /// <summary>
     /// Asks the Wallpaper Engine app to show a wallpaper this app cannot render itself
     /// (scene/web/application content). Requires Wallpaper Engine to be installed.
     /// </summary>
     public static bool TryOpenViaWallpaperEngine(string projectJsonPath)
     {
+        if (string.IsNullOrWhiteSpace(projectJsonPath) || projectJsonPath.IndexOfAny(['"', '\0', '\r', '\n']) >= 0)
+        {
+            Logger.Warn("Refusing to pass an unusual path to Wallpaper Engine.");
+            return false;
+        }
         var exe = FindWallpaperEngineExe();
         if (exe == null)
         {
@@ -224,13 +242,7 @@ internal static partial class WallpaperEngineWorkshop
         }
         try
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = exe,
-                Arguments = $"-control openWallpaper -file \"{projectJsonPath}\"",
-                UseShellExecute = false,
-            };
-            Process.Start(psi);
+            Process.Start(OpenWallpaperStartInfo(exe, projectJsonPath));
             Logger.Info($"Asked Wallpaper Engine to open '{projectJsonPath}'.");
             return true;
         }

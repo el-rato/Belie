@@ -110,8 +110,8 @@ internal partial class App : System.Windows.Application
                 return;
             }
 
-            _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName, out var eventIsNew);
-            _mutex = new Mutex(true, MutexName, out var isFirst);
+            _activateEvent = LocalIpc.Event(EventResetMode.AutoReset, ActivateEventName, out var eventIsNew);
+            _mutex = LocalIpc.Mutex(true, MutexName, out var isFirst);
             if (!isFirst)
             {
                 // Focus the running instance's window instead of nagging with a dialog.
@@ -135,11 +135,11 @@ internal partial class App : System.Windows.Application
 
             var settingsStore = new SettingsStore(AppPaths.SettingsFile);
             ConfigureRendering(liveWallpaper: false, interactiveShell: true);
-            _exitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Exit");
-            _canvasActivateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Belie.Canvas.Open");
-            _barSettingsEvent = new EventWaitHandle(false, EventResetMode.AutoReset, TopBarProcess.SettingsEventName);
-            _barProfileEvent = new EventWaitHandle(false, EventResetMode.AutoReset, TopBarProcess.ProfileEventName);
-            _wallpaperEvents = Enum.GetValues<WallpaperAction>().Select(action => new EventWaitHandle(false, EventResetMode.AutoReset, TopBarProcess.WallpaperEventName(action))).ToArray();
+            _exitEvent = LocalIpc.Event(EventResetMode.AutoReset, @"Local\Belie.Exit");
+            _canvasActivateEvent = LocalIpc.Event(EventResetMode.AutoReset, @"Local\Belie.Canvas.Open");
+            _barSettingsEvent = LocalIpc.Event(EventResetMode.AutoReset, TopBarProcess.SettingsEventName);
+            _barProfileEvent = LocalIpc.Event(EventResetMode.AutoReset, TopBarProcess.ProfileEventName);
+            _wallpaperEvents = Enum.GetValues<WallpaperAction>().Select(action => LocalIpc.Event(EventResetMode.AutoReset, TopBarProcess.WallpaperEventName(action))).ToArray();
             var settings = settingsStore.Load();
             UiAppearance.Apply(settings.UiTheme);
             var profileStore = new ProfileStore(AppPaths.ProfilesDir);
@@ -578,7 +578,7 @@ internal partial class App : System.Windows.Application
                 return;
             }
             // Create the stop event before anything else so the main app can always signal it.
-            using var stopEvent = new EventWaitHandle(false, EventResetMode.AutoReset, LiveHostProcess.StopEventName);
+            using var stopEvent = LocalIpc.Event(EventResetMode.AutoReset, LiveHostProcess.StopEventName);
             var surface = new LiveWallpaperSurface(mediaPath, fitMode, muted, onClosed: null);
             if (!surface.Show())
             {

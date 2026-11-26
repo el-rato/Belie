@@ -69,13 +69,13 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
             direction => WithTile((tiling, window) => { if (tiling.Neighbor(window, direction) is var next && next != 0) _system!.Focus(next); }),
             direction => WithTile((tiling, window) => tiling.Swap(window, direction)),
             () => WithTile((tiling, window) => tiling.ToggleFloating(window)), () => WithTile((tiling, window) => tiling.ToggleSplit(window)));
-        _mutex = new Mutex(true, TopBarProcess.MutexName(file), out var first);
+        _mutex = LocalIpc.Mutex(true, TopBarProcess.MutexName(file), out var first);
         if (!first) { _mutex.Dispose(); throw new InvalidOperationException("The top bar is already running."); }
-        _stop = new EventWaitHandle(false, EventResetMode.AutoReset, TopBarProcess.MutexName(file) + ".Stop");
-        _changed = new EventWaitHandle(false, EventResetMode.AutoReset, TopBarProcess.MutexName(file) + ".Changed");
-        _command = new EventWaitHandle(false, EventResetMode.AutoReset, TopBarProcess.MutexName(file) + ".Command");
+        _stop = LocalIpc.Event(EventResetMode.AutoReset, TopBarProcess.MutexName(file) + ".Stop");
+        _changed = LocalIpc.Event(EventResetMode.AutoReset, TopBarProcess.MutexName(file) + ".Changed");
+        _command = LocalIpc.Event(EventResetMode.AutoReset, TopBarProcess.MutexName(file) + ".Command");
         // Reset in case the guard of an earlier bar still holds it open.
-        _closed = new EventWaitHandle(false, EventResetMode.ManualReset, TopBarProcess.ClosedEventName(file));
+        _closed = LocalIpc.Event(EventResetMode.ManualReset, TopBarProcess.ClosedEventName(file));
         _closed.Reset();
         _settings = _store.Load();
         _tileSystem = new NativeTileSystem(() => _settings.FloatingApps);

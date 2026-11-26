@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
+using WallpaperProfiles.Infrastructure;
 
 namespace WallpaperProfiles.Persistence;
 
@@ -22,23 +23,39 @@ internal static class AtomicJsonFile
         return true;
     });
 
+    /// <summary>How long a save or read waits for another Belie thread or process before going ahead anyway.</summary>
+    internal static readonly TimeSpan LockTimeout = TimeSpan.FromSeconds(2);
+
+    internal static string LockName(string path) => @"Local\Belie.Json." + Convert.ToHexString(
+        SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToUpperInvariant())));
+
     internal static T WithLock<T>(string path, Func<T> action)
     {
-        path = Path.GetFullPath(path);
         // Coordinate readers and publishers across store instances and processes. Windows
         // can reject a replacement while another thread still has the destination open.
-        var name = @"Local\Belie.Json." + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(path.ToUpperInvariant())));
-        using var mutex = new Mutex(false, name);
-        var acquired = false;
-        try
+        // The lock only smooths that contention: every save is still a complete file published
+        // by an atomic rename (with retries), so when the lock cannot be had, because some other
+        // process holds the name or created it with an ACL that shuts Belie out, go ahead
+        // without it rather than letting that process block every save.
+        Mutex mutex;
+        try { mutex = LocalIpc.Mutex(false, LockName(path), out _); }
+        catch (Exception error) when (error is UnauthorizedAccessException or WaitHandleCannotBeOpenedException or IOException)
         {
-            try { acquired = mutex.WaitOne(TimeSpan.FromSeconds(5)); }
-            catch (AbandonedMutexException) { acquired = true; }
-            if (!acquired) throw new IOException("The file is busy. Try saving again.");
+            Logger.Warn("The save lock for a settings file could not be opened; saving without it. " + error.GetType().Name);
             return action();
         }
-        finally { if (acquired) mutex.ReleaseMutex(); }
+        using (mutex)
+        {
+            var acquired = false;
+            try
+            {
+                try { acquired = mutex.WaitOne(LockTimeout); }
+                catch (AbandonedMutexException) { acquired = true; }
+                if (!acquired) Logger.Warn("The save lock for a settings file stayed busy; saving without it.");
+                return action();
+            }
+            finally { if (acquired) mutex.ReleaseMutex(); }
+        }
     }
 
     private static void WriteCore<T>(string path, T value)
