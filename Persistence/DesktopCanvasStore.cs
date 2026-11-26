@@ -120,7 +120,7 @@ internal sealed class DesktopCanvasStore
 
     private void WithWriteLock(Action action)
     {
-        using var mutex = new Mutex(false, WallpaperProfiles.Engine.DesktopCanvasProcess.MutexName(FilePath) + ".Store");
+        using var mutex = WallpaperProfiles.Infrastructure.LocalIpc.Mutex(false, WallpaperProfiles.Engine.DesktopCanvasProcess.MutexName(FilePath) + ".Store", out _);
         var acquired = false;
         try
         {

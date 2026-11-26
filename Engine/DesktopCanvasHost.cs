@@ -26,11 +26,11 @@ internal sealed class DesktopCanvasHost : IDisposable
     {
         _exit = exit ?? System.Windows.Application.Current.Shutdown;
         _store = new DesktopCanvasStore(file);
-        _mutex = new Mutex(true, DesktopCanvasProcess.MutexName(file), out var first);
+        _mutex = LocalIpc.Mutex(true, DesktopCanvasProcess.MutexName(file), out var first);
         if (!first) { _mutex.Dispose(); throw new InvalidOperationException("The desktop canvas is already running."); }
-        _stop = new EventWaitHandle(false, EventResetMode.AutoReset, DesktopCanvasProcess.MutexName(file) + ".Stop");
+        _stop = LocalIpc.Event(EventResetMode.AutoReset, DesktopCanvasProcess.MutexName(file) + ".Stop");
         _createWindow = createWindow ?? (widget => new DesktopWidgetWindow(widget, _store));
-        _changed = new EventWaitHandle(false, EventResetMode.AutoReset, DesktopCanvasProcess.MutexName(file) + ".Changed");
+        _changed = LocalIpc.Event(EventResetMode.AutoReset, DesktopCanvasProcess.MutexName(file) + ".Changed");
         var dispatcher = System.Windows.Application.Current.Dispatcher;
         _changeWait = ThreadPool.RegisterWaitForSingleObject(_changed, (_, _) =>
         {
