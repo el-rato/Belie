@@ -1,5 +1,19 @@
 # Belie patch notes
 
+## [4.0.5] - 2026-11-26 - Tighter local security
+
+### Fixed
+
+- Belie's background signals, such as switching the wallpaper, applying a profile or closing the app, now accept only your own Windows account. Before, other processes in the same sign-in could send them too.
+- Another program can no longer stop Belie from saving by holding on to its save lock. Belie waits a moment, then saves anyway, and the file is still written safely in one step.
+- Opening a Wallpaper Engine wallpaper passes its folder path safely, and a path with quotes or line breaks in it is refused instead of being sent on.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained.
+
 ## [4.0.4] - 2026-11-26 - Top bar stays put
 
 ### Fixed
