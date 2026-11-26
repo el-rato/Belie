@@ -28,6 +28,7 @@ internal sealed class BarRice
         next.HideEmptyWorkspaces = current.HideEmptyWorkspaces; next.Shortcuts = current.Shortcuts; next.PinnedApps = current.PinnedApps; next.WorkspaceProfiles = current.WorkspaceProfiles;
         next.TilingEnabled = current.TilingEnabled; next.TileGap = current.TileGap; next.TileMargin = current.TileMargin; next.SmartGaps = current.SmartGaps;
         next.SplitRatio = current.SplitRatio; next.FloatingApps = current.FloatingApps;
+        next.TileLayout = current.TileLayout; next.TileFixedSize = current.TileFixedSize; next.StickyPopouts = current.StickyPopouts;
         next.AnimationsEnabled = current.AnimationsEnabled; next.AnimationSpeed = current.AnimationSpeed; next.Motion = current.Motion;
         return next.Normalize();
     }

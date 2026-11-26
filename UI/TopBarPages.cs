@@ -361,13 +361,24 @@ internal sealed class WorkspacesPage : BarSettingsPage
 
         Tab("Tiling");
         Switch("Tile windows automatically", "TopBarTiling", settings.TilingEnabled, (to, value) => to.TilingEnabled = value);
+        Pick("Layout", "TopBarTileLayout", new[]
+        {
+            new Choice<TileLayout>(TileLayout.Dwindle, "Dwindle: each window splits the one beside it"), new(TileLayout.Grid, "Grid: even tiles, for many windows"),
+            new(TileLayout.Columns, "Columns: side by side"), new(TileLayout.MainAndStack, "Main window and a stack")
+        }, settings.TileLayout, (to, value) => to.TileLayout = value);
+        Hint("There is no limit on how many windows tile. Every layout fills the screen and turns with it, so columns become rows on a portrait monitor.");
         Slide("Gap between windows", "TopBarTileGap", 0, 64, 1, settings.TileGap, " px", (to, value) => to.TileGap = (int)Math.Round(value));
         Slide("Gap at screen edges", "TopBarTileMargin", 0, 64, 1, settings.TileMargin, " px", (to, value) => to.TileMargin = (int)Math.Round(value));
         Switch("No gaps around a window that is alone", "TopBarSmartGaps", settings.SmartGaps, (to, value) => to.SmartGaps = value);
         Slide("First window's share", "TopBarSplitRatio", 20, 80, 5, Math.Round(settings.SplitRatio * 100), "%", (to, value) => to.SplitRatio = value / 100);
+        Hint("In Dwindle, the share a window keeps when another opens beside it. In Main window and a stack, the main window's share.");
+        Switch("Stretch fixed-size windows too", "TopBarTileFixedSize", settings.TileFixedSize, (to, value) => to.TileFixedSize = value);
+        Hint("Windows that can't be resized by their edges are sized to their tile anyway. One that stays smaller is centered in its tile, and one that can't get smaller gets more room.");
+        Switch("Keep popout players and calls floating on every workspace", "TopBarStickyPopouts", settings.StickyPopouts, (to, value) => to.StickyPopouts = value);
+        Hint("Picture-in-picture videos and small always-on-top windows, such as mini players and call windows, are never tiled or stretched. With this on, they also stay visible when you switch workspaces.");
         Text("Apps that always float", "TopBarFloatingApps", string.Join(", ", settings.FloatingApps), (to, value) => to.FloatingApps = Apps(value), "Calculator, obs64");
         Heading("Keys");
-        Hint("Ctrl + Alt + arrows move focus. Add Shift to swap windows. Ctrl + Alt + F floats a window, and Ctrl + Alt + J turns its split. Drag a window onto another to swap them, or drag an edge to resize.");
+        Hint("Ctrl + Alt + arrows move focus. Add Shift to swap windows. Ctrl + Alt + F floats a window, and Ctrl + Alt + J turns its split in Dwindle. Drag a window onto another to swap them, or drag an edge to resize.");
 
         Tab("Animation");
         Switch("Animate workspaces and windows", "TopBarAnimations", settings.AnimationsEnabled, (to, value) => to.AnimationsEnabled = value);

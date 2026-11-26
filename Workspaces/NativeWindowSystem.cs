@@ -20,13 +20,17 @@ internal sealed class NativeWindowSystem : IWindowSystem
     private readonly Func<IReadOnlyCollection<string>> _pinnedApps;
     private readonly Func<bool> _primaryOnly;
     private readonly Func<DesktopWindow, bool>? _only;
+    private readonly Func<bool> _stickyPopouts;
 
     /// <param name="only">Limits which windows may ever be touched; used when trying workspaces on test windows.</param>
-    public NativeWindowSystem(Func<IReadOnlyCollection<string>>? pinnedApps = null, Func<bool>? primaryOnly = null, Func<DesktopWindow, bool>? only = null)
+    /// <param name="stickyPopouts">Picture-in-picture players and call windows stay on every workspace.</param>
+    public NativeWindowSystem(Func<IReadOnlyCollection<string>>? pinnedApps = null, Func<bool>? primaryOnly = null, Func<DesktopWindow, bool>? only = null,
+        Func<bool>? stickyPopouts = null)
     {
         _pinnedApps = pinnedApps ?? (() => Array.Empty<string>());
         _primaryOnly = primaryOnly ?? (() => false);
         _only = only;
+        _stickyPopouts = stickyPopouts ?? (() => false);
     }
 
     public IReadOnlyList<DesktopWindow> VisibleWindows()
@@ -82,6 +86,8 @@ internal sealed class NativeWindowSystem : IWindowSystem
         if (processId == 0 || processId == (uint)Environment.ProcessId) return null;
         var (start, name) = NativeMethods.ProcessInfo(processId);
         if (ShellProcesses.Contains(name) || pinned.Contains(name)) return null;
+        // Like a pinned app, a popout player or call is left out of workspaces, so switching never hides it.
+        if (_stickyPopouts() && Popouts.Is(window)) return null;
         var title = new StringBuilder(256);
         NativeMethods.GetWindowText(window, title, title.Capacity);
         var result = new DesktopWindow(new WindowIdentity(window, (int)processId, start, NativeMethods.ClassName(window)), root,
@@ -122,6 +128,36 @@ internal sealed class NativeWindowSystem : IWindowSystem
         if (!NativeMethods.IsIconic(window)) NativeMethods.SetForegroundWindow(window);
     }
     public void FocusDesktop() => NativeMethods.SetForegroundWindow(NativeMethods.GetShellWindow());
+}
+
+/// <summary>
+/// Picture-in-picture players, mini players and call windows: small windows kept above the others, or named as
+/// picture-in-picture. They are watched while other windows are used, so they are never tiled or resized.
+/// </summary>
+internal static class Popouts
+{
+    private const int WsExTopmost = 0x8;
+    private static readonly string[] Titles = { "picture in picture", "picture-in-picture" };
+
+    public static bool Is(nint window)
+    {
+        if (NativeMethods.IsIconic(window) || !NativeMethods.GetWindowRect(window, out var rect)) return false;
+        var title = new StringBuilder(128);
+        NativeMethods.GetWindowText(window, title, title.Capacity);
+        var topmost = (NativeMethods.GetWindowLong(window, NativeMethods.GWL_EXSTYLE) & WsExTopmost) != 0;
+        var info = new NativeMethods.MONITORINFOEX { Size = Marshal.SizeOf<NativeMethods.MONITORINFOEX>(), Device = "" };
+        if (!NativeMethods.GetMonitorInfo(NativeMethods.MonitorFromWindow(window, NativeMethods.MONITOR_DEFAULTTONEAREST), ref info)) return false;
+        var work = System.Drawing.Rectangle.FromLTRB(info.Work.Left, info.Work.Top, info.Work.Right, info.Work.Bottom);
+        return IsPopout(title.ToString(), topmost, System.Drawing.Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom), work);
+    }
+
+    /// <summary>A large always-on-top window, such as Task Manager kept on top, is still an ordinary window.</summary>
+    internal static bool IsPopout(string title, bool topmost, System.Drawing.Rectangle bounds, System.Drawing.Rectangle work)
+    {
+        if (bounds.Width <= 0 || bounds.Height <= 0) return false;
+        if (Titles.Any(name => title.Contains(name, StringComparison.OrdinalIgnoreCase))) return true;
+        return topmost && work.Width > 0 && work.Height > 0 && (long)bounds.Width * bounds.Height * 2 <= (long)work.Width * work.Height;
+    }
 }
 
 /// <summary>Reports window activity as it happens, on the thread that created it.</summary>

@@ -79,7 +79,7 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
         _closed.Reset();
         _settings = _store.Load();
         _tileSystem = new NativeTileSystem(() => _settings.FloatingApps);
-        _system = new NativeWindowSystem(() => _settings.PinnedApps, () => _settings.PrimaryMonitorOnly, only);
+        _system = new NativeWindowSystem(() => _settings.PinnedApps, () => _settings.PrimaryMonitorOnly, only, () => _settings.StickyPopouts);
         // Also covers a crash followed by turning workspaces off.
         new HiddenWindowJournal(HiddenWindowJournal.PathFor(_store.FilePath)).RestoreOrphans(_system);
         // The guard must be watching before the first window can be hidden.
@@ -251,6 +251,7 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
             _tiling ??= new TilingEngine(_tileSystem);
             _tiling.Gap = _settings.TileGap; _tiling.Margin = _settings.TileMargin;
             _tiling.SmartGaps = _settings.SmartGaps; _tiling.SplitRatio = _settings.SplitRatio;
+            _tiling.Layout = _settings.TileLayout; _tiling.TileFixedSize = _settings.TileFixedSize;
         }
         _keys.Apply(_settings);
         _colorsKey = "";

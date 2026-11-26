@@ -1,5 +1,26 @@
 # Belie patch notes
 
+## [Unreleased] - Tiling that fits
+
+### Added
+
+- **Tiling layouts.** Choose **Grid**, **Columns** or **Main window and a stack** alongside **Dwindle** under **Workspaces → Tiling → Layout**. Grid keeps tiles evenly sized however many windows you open, so a workspace can hold many more usable tiles.
+- **Stretch fixed-size windows too**, on by default. Windows that can't be resized by their edges now tile like the rest. One that stays smaller than its tile is centered in it, and one that can't get smaller gets more room, instead of breaking the layout.
+
+### Changed
+
+- Tiling adapts as you go. Splits turn to fit their space when windows close, and every layout turns with the monitor, so columns become rows on a portrait screen.
+
+### Fixed
+
+- Picture-in-picture videos, mini players and call windows are no longer tiled or stretched. They keep their own size and place, and stay visible when you switch workspaces. Turn that last part off with **Keep popout players and calls floating on every workspace**.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained. Your tiling keeps the Dwindle layout until you choose another.
+
 ## [4.0.6] - 2026-11-26 - Steadier update checks
 
 ### Fixed

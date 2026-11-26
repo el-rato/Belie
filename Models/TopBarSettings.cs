@@ -8,6 +8,8 @@ internal enum TopBarColors { Custom, Wallpaper }
 internal enum WorkspaceLabelStyle { Numbers, Dots, Roman, Names, Pills }
 internal enum WorkspaceShortcutModifier { None, Alt, CtrlAlt }
 internal enum WorkspaceMotion { Horizontal, Vertical, Fade }
+/// <summary>How tiled windows share a workspace.</summary>
+internal enum TileLayout { Dwindle, Grid, Columns, MainAndStack }
 internal enum BarMediaStyle { Text, Cover, Controls, CoverOnly }
 internal enum BarMediaClick { Player, PlayPause }
 internal enum BarModuleKind
@@ -174,6 +176,11 @@ internal sealed class TopBarSettings
     public bool SmartGaps { get; set; }
     /// <summary>The share of the space that the first of two windows gets.</summary>
     public double SplitRatio { get; set; } = .5;
+    public TileLayout TileLayout { get; set; }
+    /// <summary>Windows that cannot be resized by their edges are tiled and stretched too, and centered in their tile if they stay smaller.</summary>
+    public bool TileFixedSize { get; set; } = true;
+    /// <summary>Small always-on-top windows, such as picture-in-picture players and call windows, float and stay on every workspace.</summary>
+    public bool StickyPopouts { get; set; } = true;
     /// <summary>Process names whose windows are never tiled.</summary>
     public List<string> FloatingApps { get; set; } = new();
     public bool AnimationsEnabled { get; set; } = true;
@@ -229,6 +236,7 @@ internal sealed class TopBarSettings
         if (!Enum.IsDefined(PlayerLayout)) PlayerLayout = NowPlayingLayout.Cover;
         if (!Enum.IsDefined(VisualizerSkin)) VisualizerSkin = SpectrumSkin.Bars;
         if (!Enum.IsDefined(Motion)) Motion = WorkspaceMotion.Horizontal;
+        if (!Enum.IsDefined(TileLayout)) TileLayout = TileLayout.Dwindle;
         if (!Enum.IsDefined(WorkspaceLabels)) WorkspaceLabels = WorkspaceLabelStyle.Numbers;
         if (!Enum.IsDefined(Shortcuts)) Shortcuts = WorkspaceShortcutModifier.Alt;
         BackgroundColor ??= "#111613"; TextColor ??= "#F3F5EC"; AccentColor ??= "#DDF79D"; BorderColor ??= "#364239";

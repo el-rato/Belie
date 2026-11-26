@@ -1,11 +1,13 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
 using WallpaperProfiles.Infrastructure;
+using WallpaperProfiles.Models;
 
 namespace WallpaperProfiles.Workspaces;
 
 /// <param name="Frame">The visible edges, without Windows' invisible resize borders.</param>
-internal readonly record struct TileWindow(bool CanTile, bool Minimized, bool Maximized, Rectangle Frame, bool Floats = false);
+/// <param name="FixedSize">It has no edges to resize it by. Belie sizes it anyway when <see cref="TilingEngine.TileFixedSize"/> is on.</param>
+internal readonly record struct TileWindow(bool CanTile, bool Minimized, bool Maximized, Rectangle Frame, bool Floats = false, bool FixedSize = false);
 internal readonly record struct TileMove(nint Window, string Monitor, bool Hidden, bool IsNew, bool IsCorrection, Rectangle From, Rectangle To);
 
 internal interface ITileSystem
@@ -31,6 +33,8 @@ internal sealed class TilingEngine
     private readonly Dictionary<nint, long> _placedAt = new();
     private readonly Dictionary<nint, int> _corrections = new();
     private readonly Dictionary<nint, (Size Size, long Asked, long Wait)> _minimums = new();
+    /// <summary>Sizes a window would not grow past, learned by watching it; 0 is no limit. It is centered in a larger tile.</summary>
+    private readonly Dictionary<nint, Size> _maximums = new();
     private readonly HashSet<nint> _restore = new();
     private readonly Func<long> _now;
     private readonly Dictionary<(string Monitor, int Index), nint> _lastFocused = new();
@@ -43,6 +47,9 @@ internal sealed class TilingEngine
     /// <summary>A window that is alone on its workspace fills it, without gaps.</summary>
     public bool SmartGaps { get; set; }
     public double SplitRatio { get; set; } = .5;
+    public TileLayout Layout { get; set; }
+    /// <summary>Windows that cannot be resized by their edges are tiled too.</summary>
+    public bool TileFixedSize { get; set; } = true;
 
     public TilingEngine(ITileSystem system, Func<long>? now = null) { _system = system; _now = now ?? (() => Environment.TickCount64); }
 
@@ -74,7 +81,7 @@ internal sealed class TilingEngine
         foreach (var tree in _trees.Values)
             foreach (var gone in tree.Windows.Where(window => !known.ContainsKey(window)).ToArray()) tree.Remove(gone);
         foreach (var set in new[] { _floating, _refused }) set.RemoveWhere(window => !known.ContainsKey(window));
-        foreach (var gone in _originals.Keys.Where(window => !known.ContainsKey(window)).ToArray()) { _originals.Remove(gone); Forget(gone); _minimums.Remove(gone); _restore.Remove(gone); }
+        foreach (var gone in _originals.Keys.Where(window => !known.ContainsKey(window)).ToArray()) { _originals.Remove(gone); Forget(gone); _minimums.Remove(gone); _maximums.Remove(gone); _restore.Remove(gone); }
         // A window that just opened already has focus, so it splits the tile that had it before.
         foreach (var (key, tree) in _trees) if (tree.Contains(focused)) _lastFocused[key] = focused;
 
@@ -85,21 +92,21 @@ internal sealed class TilingEngine
             var key = (window.Monitor, window.Index);
             var current = TreeOf(window.Handle);
             var state = _system.Describe(window.Handle);
-            var belongs = !state.Minimized && !state.Floats && !_floating.Contains(window.Handle) && !_refused.Contains(window.Handle)
+            var belongs = !state.Minimized && !state.Floats && (TileFixedSize || !state.FixedSize) && !_floating.Contains(window.Handle) && !_refused.Contains(window.Handle)
                 && (current != null || state.CanTile && !window.Hidden);
             if (current != null && (!belongs || current != _trees.GetValueOrDefault(key))) { current.Remove(window.Handle); Forget(window.Handle); current = null; }
             if (!belongs) continue;
             if (current == null)
             {
                 if (!_trees.TryGetValue(key, out var tree)) _trees[key] = tree = new DwindleTree();
-                tree.SplitRatio = SplitRatio;
+                tree.SplitRatio = SplitRatio; tree.Mode = Layout;
                 if (_originals.TryAdd(window.Handle, new Original(state.Frame, state.Maximized)))
                 {
                     added.Add(window.Handle);
                     if (state.Maximized) _restore.Add(window.Handle);
                 }
                 else if (state.Maximized) maximized.Add(window.Handle);
-                tree.Insert(window.Handle, _lastFocused.GetValueOrDefault(key), Area(window.Monitor), Gap, Minimum);
+                tree.Insert(window.Handle, _lastFocused.GetValueOrDefault(key));
             }
             // A window maximized later stays that way, and keeps its place for when it is restored.
             else if (state.Maximized && !_restore.Contains(window.Handle)) maximized.Add(window.Handle);
@@ -122,15 +129,20 @@ internal sealed class TilingEngine
                     if (known[window].Hidden || Near(frame, target)) continue;
                     // Windows are moved in the background, so a busy app may simply not have got there yet.
                     if (_now() - _placedAt.GetValueOrDefault(window) < 250) continue;
-                    // It went where it was told but is larger: that is as small as it gets.
+                    // It went where it was told but is larger: that is as small as it gets. Smaller: as large as it gets.
                     var least = Minimum(window);
-                    if (Math.Abs(frame.X - target.X) <= 2 && Math.Abs(frame.Y - target.Y) <= 2
-                        && (frame.Width > Math.Max(target.Width, least.Width) + 2 || frame.Height > Math.Max(target.Height, least.Height) + 2))
+                    if (Math.Abs(frame.X - target.X) <= 2 && Math.Abs(frame.Y - target.Y) <= 2)
                     {
-                        _minimums[window] = (new Size(frame.Width > target.Width + 2 ? frame.Width : least.Width,
-                            frame.Height > target.Height + 2 ? frame.Height : least.Height), _now(), 2000);
-                        learned = true;
-                        continue;
+                        bool wider = frame.Width > Math.Max(target.Width, least.Width) + 2, taller = frame.Height > Math.Max(target.Height, least.Height) + 2;
+                        bool narrower = frame.Width < target.Width - 2, shorter = frame.Height < target.Height - 2;
+                        if (wider || taller)
+                            _minimums[window] = (new Size(wider ? frame.Width : least.Width, taller ? frame.Height : least.Height), _now(), 2000);
+                        if (narrower || shorter)
+                        {
+                            var most = _maximums.GetValueOrDefault(window);
+                            _maximums[window] = new Size(narrower ? frame.Width : most.Width, shorter ? frame.Height : most.Height);
+                        }
+                        if (wider || taller || narrower || shorter) { learned = true; continue; }
                     }
                     var tries = _corrections.GetValueOrDefault(window);
                     if (tries >= 3) continue;
@@ -144,15 +156,25 @@ internal sealed class TilingEngine
     private IEnumerable<(nint Window, Rectangle Target)> Targets(string monitor, DwindleTree tree)
     {
         var area = Area(monitor, tree.Windows.Count == 1);
-        foreach (var (window, bounds) in tree.Layout(area, Gap, Minimum))
+        tree.Mode = Layout; tree.SplitRatio = SplitRatio;
+        foreach (var (window, bounds) in tree.Layout(area, Gap, Minimum)) yield return (window, Fit(bounds, area, Minimum(window), _maximums.GetValueOrDefault(window)));
+    }
+
+    /// <summary>
+    /// Where a window goes in its tile. One that will not shrink to the tile overlaps its neighbors rather than leave the
+    /// screen; one that will not grow to fill it is centered in it.
+    /// </summary>
+    internal static Rectangle Fit(Rectangle tile, Rectangle area, Size least, Size most)
+    {
+        static int Length(int tile, int least, int most, int room)
         {
-            // When there is no room for everything, overlapping is better than leaving the screen.
-            var least = Minimum(window);
-            var width = Math.Max(bounds.Width, Math.Min(least.Width, area.Width));
-            var height = Math.Max(bounds.Height, Math.Min(least.Height, area.Height));
-            yield return (window, new Rectangle(Math.Max(area.X, Math.Min(bounds.X, area.Right - width)),
-                Math.Max(area.Y, Math.Min(bounds.Y, area.Bottom - height)), width, height));
+            var length = Math.Max(tile, Math.Min(least, room));
+            return most > 0 && most < length ? Math.Max(most, Math.Min(least, room)) : length;
         }
+        var width = Length(tile.Width, least.Width, most.Width, area.Width);
+        var height = Length(tile.Height, least.Height, most.Height, area.Height);
+        int x = tile.X + Math.Max(0, tile.Width - width) / 2, y = tile.Y + Math.Max(0, tile.Height - height) / 2;
+        return new Rectangle(Math.Max(area.X, Math.Min(x, area.Right - width)), Math.Max(area.Y, Math.Min(y, area.Bottom - height)), width, height);
     }
 
     private void Forget(nint window) { _placed.Remove(window); _placedAt.Remove(window); _corrections.Remove(window); }
@@ -202,7 +224,7 @@ internal sealed class TilingEngine
     {
         if (TreeOf(window) is not { } tree || !_placed.Remove(window, out var placed)) return;
         var frame = _system.Describe(window).Frame;
-        if (Math.Abs(frame.Width - placed.Width) > 8 || Math.Abs(frame.Height - placed.Height) > 8) tree.Resize(window, frame);
+        if (Math.Abs(frame.Width - placed.Width) > 8 || Math.Abs(frame.Height - placed.Height) > 8) { _maximums.Remove(window); tree.Resize(window, frame); }
         else if (tree.At(cursor, window) is var other && other != 0) tree.Swap(window, other);
     }
 
@@ -229,13 +251,13 @@ internal sealed class TilingEngine
             _system.Place(window, original.Frame);
             if (original.Maximized) _system.Maximize(window);
         }
-        _trees.Clear(); _placed.Clear(); _placedAt.Clear(); _corrections.Clear(); _minimums.Clear(); _restore.Clear(); _lastFocused.Clear(); _originals.Clear(); _floating.Clear(); _refused.Clear();
+        _trees.Clear(); _placed.Clear(); _placedAt.Clear(); _corrections.Clear(); _minimums.Clear(); _maximums.Clear(); _restore.Clear(); _lastFocused.Clear(); _originals.Clear(); _floating.Clear(); _refused.Clear();
     }
 }
 
 internal sealed class NativeTileSystem : ITileSystem
 {
-    private const int WsThickFrame = 0x40000, WsExTopmost = 0x8, WsMaximize = 0x1000000;
+    private const int WsThickFrame = 0x40000, WsCaption = 0xC00000, WsExTopmost = 0x8, WsMaximize = 0x1000000;
     private const uint SwpAsync = 0x4000;
     private readonly Func<IReadOnlyCollection<string>> _floatingApps;
 
@@ -263,9 +285,12 @@ internal sealed class NativeTileSystem : ITileSystem
         var maximized = (style & WsMaximize) != 0;
         // Dialogs and panels belong to another window, often a hidden one, and float unless they have their own taskbar button.
         var standsAlone = NativeMethods.GetWindow(window, NativeMethods.GW_OWNER) == IntPtr.Zero || (extended & NativeMethods.WS_EX_APPWINDOW) != 0;
-        // A fullscreen window is left alone just like one the user maximized.
-        return new TileWindow(standsAlone && (style & WsThickFrame) != 0 && (extended & WsExTopmost) == 0 && (maximized || !fullscreen),
-            NativeMethods.IsIconic(window), maximized || fullscreen, frame, Floats(window));
+        // A fullscreen window is left alone just like one the user maximized. Without a title bar, a window with no
+        // resizable edges is a splash screen or a panel, not an app window. Picture-in-picture players and call
+        // windows keep their own size and place.
+        var resizable = (style & WsThickFrame) != 0;
+        return new TileWindow(standsAlone && (resizable || (style & WsCaption) == WsCaption) && (extended & WsExTopmost) == 0 && (maximized || !fullscreen),
+            NativeMethods.IsIconic(window), maximized || fullscreen, frame, Floats(window) || Popouts.Is(window), !resizable);
     }
 
     private bool Floats(nint window)

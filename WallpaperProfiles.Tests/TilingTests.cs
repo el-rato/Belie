@@ -21,8 +21,10 @@ public sealed class TilingTests
         public readonly HashSet<nint> Denied = new();
         public readonly List<nint> Placed = new(), Restored = new(), Maximized = new();
         public nint MinimumWidthWindow;
-        public void Add(nint window, bool canTile = true, bool maximized = false)
-            => All[window] = new TileWindow(canTile, false, maximized, new Rectangle(100, 100, 500 + (int)window, 400));
+        /// <summary>Sizes a window will not grow past, without saying so.</summary>
+        public readonly Dictionary<nint, Size> Largest = new();
+        public void Add(nint window, bool canTile = true, bool maximized = false, bool fixedSize = false)
+            => All[window] = new TileWindow(canTile, false, maximized, new Rectangle(100, 100, 500 + (int)window, 400), FixedSize: fixedSize);
         public TileWindow Describe(nint window) => All.GetValueOrDefault(window);
         public readonly Dictionary<nint, Size> Minimums = new();
         public int Asked;
@@ -33,6 +35,7 @@ public sealed class TilingTests
             if (Denied.Contains(window)) return false;
             Placed.Add(window);
             if (window == MinimumWidthWindow) frame.Width = Math.Max(frame.Width, 1500);
+            if (Largest.TryGetValue(window, out var largest)) frame.Size = new Size(Math.Min(frame.Width, largest.Width), Math.Min(frame.Height, largest.Height));
             All[window] = All[window] with { Frame = frame };
             return true;
         }
@@ -56,7 +59,7 @@ public sealed class TilingTests
         for (var count = 1; count <= 8; count++)
         {
             var tree = new DwindleTree();
-            for (nint window = 1; window <= count; window++) tree.Insert(window, window - 1, Screen, 6);
+            for (nint window = 1; window <= count; window++) tree.Insert(window, window - 1);
             var tiles = tree.Layout(Screen, 6).Values.ToArray();
             Assert.Equal(count, tiles.Length);
             Assert.All(tiles, tile => Assert.True(Screen.Contains(tile)));
@@ -69,7 +72,7 @@ public sealed class TilingTests
     public void NewWindowsSplitTheTileBesideThemAndClosedOnesGiveTheirSpaceBack()
     {
         var tree = new DwindleTree();
-        tree.Insert(1, 0, Screen, 0); tree.Insert(2, 1, Screen, 0); tree.Insert(3, 1, Screen, 0);
+        tree.Insert(1, 0); tree.Insert(2, 1); tree.Insert(3, 1);
         var tiles = tree.Layout(Screen, 0);
         Assert.Equal(new Rectangle(0, 40, 960, 500), tiles[1]);
         Assert.Equal(new Rectangle(0, 540, 960, 500), tiles[3]);
@@ -79,7 +82,10 @@ public sealed class TilingTests
         Assert.Equal((nint)0, tree.Neighbor(1, TileDirection.Left));
         Assert.True(tree.Swap(1, 2));
         Assert.Equal(new Rectangle(960, 40, 960, 1000), tree.Layout(Screen, 0)[1]);
+        // The two left behind get the whole wide screen, so they turn side by side.
         Assert.True(tree.Remove(1));
+        Assert.Equal(new Rectangle(0, 40, 960, 1000), tree.Layout(Screen, 0)[2]);
+        Assert.True(tree.ToggleSplit(2));
         Assert.Equal(new Rectangle(0, 40, 1920, 500), tree.Layout(Screen, 0)[2]);
         Assert.True(tree.ToggleSplit(2));
         Assert.Equal(new Rectangle(0, 40, 960, 1000), tree.Layout(Screen, 0)[2]);
@@ -92,7 +98,7 @@ public sealed class TilingTests
     public void DraggingAnEdgeMovesTheNeighbor()
     {
         var tree = new DwindleTree();
-        tree.Insert(1, 0, Screen, 0); tree.Insert(2, 1, Screen, 0);
+        tree.Insert(1, 0); tree.Insert(2, 1);
         tree.Layout(Screen, 0);
         Assert.True(tree.Resize(1, new Rectangle(0, 40, 1200, 1000)));
         Assert.Equal(new Rectangle(1200, 40, 720, 1000), tree.Layout(Screen, 0)[2]);
