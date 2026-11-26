@@ -288,7 +288,12 @@ internal partial class App : System.Windows.Application
         try
         {
             var shortcut = _coordinator.Profiles.FirstOrDefault(profile => profile.Id == id)?.KeyboardShortcut ?? "";
-            id = TopBarProcess.ForwardShortcut(TopBarProcess.DefaultFile, shortcut, id) ?? id;
+            // The keys also open a workspace: show the profile with it, without stopping schedules and triggers.
+            if (TopBarProcess.ForwardShortcut(TopBarProcess.DefaultFile, shortcut, id) is { } workspaceProfile)
+            {
+                _coordinator.ShowForWorkspace(workspaceProfile);
+                return;
+            }
         }
         catch (Exception ex) { Logger.Error("Opening a workspace from a profile shortcut failed.", ex); }
         _coordinator.SwitchManually(id);
@@ -317,8 +322,14 @@ internal partial class App : System.Windows.Application
         {
             var request = AtomicJsonFile.Read<WorkspaceProfileRequest>(TopBarProcess.ProfileRequestFile(TopBarProcess.DefaultFile));
             if (request == null || _coordinator == null) return;
+            // Keys that are both a workspace's and a profile's: opening the workspace shows the profile without stopping
+            // schedules and triggers. When no workspace opened, they were pressed for the profile.
             if (request.Shortcut.Length > 0 && _profileShortcuts?.OwnerOf(request.Shortcut) is { } owner)
-                _coordinator.SwitchManually(request.ProfileId == Guid.Empty ? owner : request.ProfileId);
+            {
+                var profile = request.ProfileId == Guid.Empty ? owner : request.ProfileId;
+                if (request.OnlyWithShortcut) _coordinator.SwitchManually(profile);
+                else _coordinator.ShowForWorkspace(profile);
+            }
             // Opening a workspace is not a choice to stop schedules and triggers.
             else if (!request.OnlyWithShortcut && request.ProfileId != Guid.Empty)
                 _coordinator.ShowForWorkspace(request.ProfileId);

@@ -131,10 +131,13 @@ public sealed class ActivityAndSceneTests
         fixture.Clock.Advance(TimeSpan.FromMinutes(65));
         fixture.Coordinator.CheckNow();
         Assert.Equal(fixture.Work.Id, fixture.Coordinator.ActiveProfileId);
-        // A choice the user made stays theirs.
+        // After a manual choice a workspace still shows its profile, and the manual choice is still the one kept.
         fixture.Coordinator.SwitchManually(fixture.Default.Id);
         fixture.Coordinator.ShowForWorkspace(fixture.Temporary.Id);
-        Assert.Equal(fixture.Default.Id, fixture.Coordinator.ActiveProfileId);
+        Assert.Equal(fixture.Temporary.Id, fixture.Coordinator.ActiveProfileId);
+        fixture.Coordinator.CheckNow();
+        Assert.Equal(fixture.Temporary.Id, fixture.Coordinator.ActiveProfileId);
+        Assert.Equal(fixture.Default.Id.ToString(), fixture.SettingsStore.Load().PreferredProfileId);
     }
 
     [Fact]

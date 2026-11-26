@@ -128,8 +128,6 @@ internal sealed class WallpaperCoordinator : IDisposable
     {
         var profile = _profiles.FirstOrDefault(p => p.Id == profileId);
         if (profile == null) return;
-        // A manual choice the user made is theirs; a workspace does not replace it.
-        if (_resolver.GetManualOverride(_profiles) != null) return;
         _workspaceHeld = _resolver.Resolve(_timeProvider.GetLocalNow().DateTime, _profiles, SnapshotActiveEvents(), _fallbackProfileId);
         if (profile.Id == _currentId) { _source = ResolutionSource.Workspace; UpdateSummary(); return; }
         Logger.Info($"Workspace opened -> {DescribeProfile(profileId)}.");

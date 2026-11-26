@@ -86,6 +86,35 @@ public sealed class WorkspaceTests : IDisposable
     }
 
     [Fact]
+    public void AnAppOpenedAgainFromTheTrayTakesYouToItsWorkspace()
+    {
+        _windows.Add(1, app: "notepad"); _windows.Add(2, app: "spotify");
+        using var manager = Create();
+        manager.Sync();
+        Assert.True(manager.Move(2, 3));
+        Settle(); manager.Sync();
+        // Closing Spotify only hides its window; opening it again shows the same one.
+        _windows.All[2].Visible = true;
+        manager.Sync();
+        Assert.Equal(3, manager.Active(Main));
+        Assert.Equal(new nint[] { 2 }, Visible);
+        Assert.Equal((nint)2, _windows.Focused);
+        Assert.Equal(1, manager.States(Main)[2].WindowCount);
+    }
+
+    [Fact]
+    public void AWindowThatWillNotHideDoesNotPullYouBack()
+    {
+        _windows.Add(1); _windows.Add(2);
+        _windows.All[2].Refuses = true;
+        using var manager = Create();
+        manager.Sync();
+        Assert.True(manager.Move(2, 3));
+        Settle(); manager.Sync();
+        Assert.Equal(1, manager.Active(Main));
+    }
+
+    [Fact]
     public void SwitchingHidesOneWorkspaceAndShowsTheOther()
     {
         _windows.Add(1); _windows.Add(2);
@@ -186,15 +215,17 @@ public sealed class WorkspaceTests : IDisposable
     }
 
     [Fact]
-    public void AWindowThatCannotBeHiddenOrShowsItselfJoinsTheOpenWorkspace()
+    public void AWindowThatCannotBeHiddenJoinsTheOpenWorkspaceAndOneThatShowsItselfTakesYouBack()
     {
         _windows.Add(1).Refuses = true; var app = _windows.Add(2);
         using var manager = Create();
         manager.Switch(Main, 2); Settle(); manager.Sync();
         Assert.Equal(new[] { 1, 1 }, manager.States(Main).Take(2).Select(s => s.WindowCount));
+        // Shown again by its app, it opens its own workspace instead of joining this one.
         app.Visible = true; manager.Sync();
-        Assert.Equal(new[] { 0, 2 }, manager.States(Main).Take(2).Select(s => s.WindowCount));
-        Assert.Empty(Journal.Load());
+        Assert.Equal(1, manager.Active(Main));
+        Assert.Contains((nint)2, Visible);
+        Assert.Equal((nint)2, _windows.Focused);
     }
 
     [Fact]

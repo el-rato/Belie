@@ -351,7 +351,10 @@ internal sealed class WorkspacesPage : BarSettingsPage
         Text("Apps that stay on every workspace", "TopBarPinnedApps", string.Join(", ", settings.PinnedApps), (to, value) => to.PinnedApps = Apps(value), "Spotify, Discord");
         Switch("Remember which workspace each app opens on", "TopBarRememberApps", settings.RememberAppWorkspaces, (to, value) => to.RememberAppWorkspaces = value);
         Hint("Send a window to a workspace with the shortcut or the bar, and its app opens there from then on, taking you along.");
-        Text("Apps and their workspaces", "TopBarAppWorkspaces", FormatAppWorkspaces(settings.AppWorkspaces), (to, value) => to.AppWorkspaces = ParseAppWorkspaces(value), "firefox: 2, spotify: 3");
+        // The bar adds to this list while the page is open, so it is only written when edited here.
+        var appWorkspaces = FormatAppWorkspaces(settings.AppWorkspaces);
+        Text("Apps and their workspaces", "TopBarAppWorkspaces", appWorkspaces,
+            (to, value) => { if (value != appWorkspaces) to.AppWorkspaces = ParseAppWorkspaces(value); }, "firefox: 2, spotify: 3");
         Switch("Keep popout players and calls on every workspace", "TopBarStickyPopouts", settings.StickyPopouts, (to, value) => to.StickyPopouts = value);
         Hint("Picture-in-picture videos and small always-on-top windows, such as mini players and call windows, stay visible when you switch workspaces.");
 

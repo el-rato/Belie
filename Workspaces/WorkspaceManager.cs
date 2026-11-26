@@ -31,6 +31,8 @@ internal sealed class WorkspaceManager : IDisposable
         public required string Monitor;
         public int Index;
         public bool Hidden;
+        /// <summary>Hidden, and seen gone from the screen since, so showing up again means the app was opened again.</summary>
+        public bool Gone;
         public DateTime SettlesAt;
     }
 
@@ -110,13 +112,18 @@ internal sealed class WorkspaceManager : IDisposable
             }
             if (entry?.Hidden == true && now < entry.SettlesAt) continue;
             var opened = entry == null;
+            // Apps that live in the tray, such as Spotify, show the same window again when they are opened again.
+            var reopened = entry is { Hidden: true, Gone: true };
             if (entry == null) _entries.Add(window.Handle, entry = new Entry { Window = window, Monitor = window.Monitor });
-            // An app that opened just now goes to its own workspace, and that workspace opens with it.
-            if (opened && _seenOnce && arrival == null && window.Root == window.Handle && _homeFor(window) is int home
-                && home >= 1 && home <= Count && home != Active(window.Monitor))
-                arrival = (window.Monitor, home, window.Handle);
+            // An app opened just now goes to its own workspace, or back to the one it was left on, and that workspace opens with it.
+            if ((opened || reopened) && _seenOnce && arrival == null && window.Root == window.Handle
+                && (_homeFor(window) ?? (reopened ? entry.Index : null)) is int home && home >= 1 && home <= Count)
+            {
+                var monitor = reopened ? entry.Monitor : window.Monitor;
+                if (home != Active(monitor)) arrival = (monitor, home, window.Handle);
+            }
             hiddenChanged |= entry.Hidden;
-            entry.Hidden = false;
+            entry.Hidden = false; entry.Gone = false;
             entry.Window = window;
             entry.Monitor = window.Root != window.Handle && _entries.TryGetValue(window.Root, out var owner) ? owner.Monitor : window.Monitor;
             entry.Index = Active(entry.Monitor);
@@ -124,6 +131,7 @@ internal sealed class WorkspaceManager : IDisposable
         foreach (var (handle, entry) in _entries.ToArray())
         {
             if (visible.ContainsKey(handle)) continue;
+            if (entry.Hidden && now >= entry.SettlesAt) entry.Gone = true;
             if (entry.Hidden ? _system.Exists(entry.Window.Identity) : now < entry.SettlesAt) continue;
             hiddenChanged |= entry.Hidden;
             _entries.Remove(handle);
