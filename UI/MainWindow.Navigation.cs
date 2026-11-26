@@ -85,9 +85,16 @@ internal partial class MainWindow
     {
         if (!TryLeaveWidgetDraft()) return;
         var page = TransitionsPane.Content as TransitionsPage;
-        if (page == null) TransitionsPane.Content = new TransitionsPage(_settingsStore, _settings, PreviewPictures);
+        if (page == null) TransitionsPane.Content = new TransitionsPage(_settingsStore, _settings, PreviewPictures, () => _coordinator.Profiles.SelectMany(WallpaperEngine.GetProfileMedia).ToArray());
         else page.Reload();
         ShowPane(TransitionsPane, TransitionsNavButton, "/  Transitions");
+    }
+
+    private void ShowTeam_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryLeaveWidgetDraft()) return;
+        TeamPane.Content ??= new TeamPage();
+        ShowPane(TeamPane, TeamNavButton, "/  Team");
     }
 
     internal Action OpenSwitcher { get; init; } = () => { };
@@ -126,7 +133,7 @@ internal partial class MainWindow
 
     private void ShowPane(FrameworkElement selectedPane, System.Windows.Controls.Button selectedButton, string title)
     {
-        foreach (var pane in new FrameworkElement[] { ProfilePane, LibraryPane, DashboardPane, CanvasPane, TopBarPane, WorkspacesPane, TransitionsPane, SwitcherPane })
+        foreach (var pane in new FrameworkElement[] { ProfilePane, LibraryPane, DashboardPane, CanvasPane, TopBarPane, WorkspacesPane, TransitionsPane, TeamPane, SwitcherPane })
             pane.Visibility = pane == selectedPane ? Visibility.Visible : Visibility.Collapsed;
         foreach (var button in NavigationButtons)
         {
@@ -147,7 +154,7 @@ internal partial class MainWindow
     }
 
     private System.Windows.Controls.Button[] NavigationButtons => new[]
-    { DashboardNavButton, CanvasNavButton, ProfilesNavButton, LibraryNavButton, TopBarNavButton, WorkspacesNavButton, TransitionsNavButton, SwitcherNavButton };
+    { DashboardNavButton, CanvasNavButton, ProfilesNavButton, LibraryNavButton, TopBarNavButton, WorkspacesNavButton, TransitionsNavButton, TeamNavButton, SwitcherNavButton };
 
     private bool? _shellCompact;
 

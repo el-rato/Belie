@@ -41,12 +41,16 @@ internal sealed class TransitionsPage : SettingsPage<AppSettings>
     private WallpaperTransitionStyle _style;
     private TextBlock? _about;
     private Func<TransitionOptions>? _options;
+    private readonly Func<IEnumerable<string>> _wallpapers;
+    private static CancellationTokenSource? _downloading;
 
     /// <param name="pictures">Two pictures to show in the preview; fewer are made up.</param>
-    public TransitionsPage(SettingsStore store, AppSettings settings, Func<IEnumerable<string>> pictures)
+    /// <param name="wallpapers">Every wallpaper, to cut out once the model arrives.</param>
+    public TransitionsPage(SettingsStore store, AppSettings settings, Func<IEnumerable<string>> pictures, Func<IEnumerable<string>>? wallpapers = null)
         : base("Transitions", "How one wallpaper gives way to the next, in slideshows and when profiles change.")
     {
         _store = store; _settings = settings;
+        _wallpapers = wallpapers ?? Array.Empty<string>;
         _preview = new TransitionPreview(pictures);
         Reload();
     }
@@ -71,6 +75,7 @@ internal sealed class TransitionsPage : SettingsPage<AppSettings>
         Add(styles);
         _about = Hint("");
         OnSave(to => to.WallpaperTransition = _style);
+        BuildModel();
 
         Tab("Options");
         var seconds = Slide("Length", "TransitionSeconds", .3, 6, .1, settings.TransitionSeconds, " s", (to, value) => to.TransitionSeconds = Math.Round(value, 1));
@@ -88,6 +93,54 @@ internal sealed class TransitionsPage : SettingsPage<AppSettings>
         _options = () => new TransitionOptions(_style, seconds.Value, (int)cell.Value, glow.IsChecked == true, color.Text.Trim(), length.Value / 100, angle.Value, dim.Value / 100);
         _preview.Options = () => _options();
         ShowStyle();
+    }
+
+    /// <summary>The optional BiRefNet model that finds subjects on busy pictures too.</summary>
+    private void BuildModel()
+    {
+        Heading("Finding the subject");
+        var state = Hint("");
+        var bar = new System.Windows.Controls.ProgressBar { Height = 4, Maximum = 1, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 8), MaxWidth = 420, HorizontalAlignment = System.Windows.HorizontalAlignment.Left };
+        Add(bar);
+        var buttons = new WrapPanel();
+        Button? get = null, remove = null;
+        void Show()
+        {
+            var pending = SubjectModel.Pending;
+            state.Text = _downloading != null ? "Downloading the model…"
+                : SubjectModel.IsInstalled ? "BiRefNet is installed. Each wallpaper is cut out once, in the background, the first time it is coming up; until then it gets the simple outline or colonies." + (pending > 0 ? $" {pending} waiting." : "")
+                : $"Automatic only finds subjects on plain backgrounds. BiRefNet, a model that runs on this computer, finds them in busy pictures too. It is a {SubjectModel.ModelBytes / 1_000_000} MB download from rembg's releases on GitHub; nothing is sent anywhere.";
+            get!.Visibility = SubjectModel.IsInstalled ? Visibility.Collapsed : Visibility.Visible;
+            get.Content = _downloading != null ? "Cancel" : "Download BiRefNet";
+            remove!.Visibility = SubjectModel.IsInstalled ? Visibility.Visible : Visibility.Collapsed;
+        }
+        get = Press("Download BiRefNet", "SubjectModelDownload", async () =>
+        {
+            if (_downloading != null) { _downloading.Cancel(); return; }
+            using var cancel = _downloading = new CancellationTokenSource();
+            bar.Visibility = Visibility.Visible; bar.Value = 0;
+            Show();
+            try
+            {
+                await SubjectModel.DownloadAsync(new Progress<double>(done => bar.Value = done), cancel.Token);
+                SubjectModel.Warm(_wallpapers());
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Logger.Error("Downloading the subject model failed.", ex); Status = "The model could not be downloaded: " + ex.Message; }
+            finally { _downloading = null; bar.Visibility = Visibility.Collapsed; Show(); }
+        });
+        remove = Press("Remove the model", "SubjectModelRemove", () =>
+        {
+            try { SubjectModel.Remove(); }
+            catch (Exception ex) { Status = "The model could not be removed: " + ex.Message; }
+            Show();
+        });
+        buttons.Children.Add(get); buttons.Children.Add(remove);
+        Add(buttons);
+        void Moved(int _) => Dispatcher.BeginInvoke(Show);
+        SubjectModel.Progress += Moved;
+        Unloaded += (_, _) => SubjectModel.Progress -= Moved;
+        Show();
     }
 
     private void Choose(WallpaperTransitionStyle style)
@@ -117,9 +170,10 @@ internal sealed class TransitionPreview : Grid
     private readonly Stopwatch _clock = new();
     private TransitionPainter? _painter;
     private Bitmap[]? _pictures;
+    private (byte[], System.Drawing.RectangleF)?[] _cutouts = Array.Empty<(byte[], System.Drawing.RectangleF)?>();
     private int _current;
     private double _length;
-    private Task<Bitmap[]>? _reading;
+    private Task<(Bitmap[], (byte[], System.Drawing.RectangleF)?[])>? _reading;
 
     public Func<TransitionOptions> Options { get; set; } = () => WallpaperTransitionStyle.Automatic;
     public bool IsPlaying => _clock.IsRunning;
@@ -152,13 +206,14 @@ internal sealed class TransitionPreview : Grid
         var reading = _reading;
         try { await reading; }
         catch { if (_reading == reading) _reading = null; throw; }
-        if (_reading == reading) { _reading = null; _pictures = reading.Result; }
+        if (_reading == reading) { _reading = null; (_pictures, _cutouts) = reading.Result; }
         return _pictures != null;
     }
 
-    private static Bitmap[] Read(IEnumerable<string> paths)
+    private static (Bitmap[], (byte[], System.Drawing.RectangleF)?[]) Read(IEnumerable<string> paths)
     {
         var pictures = new List<Bitmap>();
+        var cutouts = new List<(byte[], System.Drawing.RectangleF)?>();
         foreach (var path in paths)
         {
             if (pictures.Count == 2) break;
@@ -170,6 +225,8 @@ internal sealed class TransitionPreview : Grid
                 var picture = new Bitmap(Width_, Height_, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
                 using (var graphics = System.Drawing.Graphics.FromImage(picture)) { graphics.InterpolationMode = InterpolationMode.HighQualityBicubic; graphics.DrawImage(image, place); }
                 pictures.Add(picture);
+                cutouts.Add(SubjectModel.Cached(path) is { } map
+                    ? (map, new System.Drawing.RectangleF(place.X / (float)Width_, place.Y / (float)Height_, place.Width / (float)Width_, place.Height / (float)Height_)) : null);
             }
             catch (Exception ex) { Logger.Warn("A picture could not be used for the transition preview: " + ex.Message); }
         }
@@ -182,8 +239,9 @@ internal sealed class TransitionPreview : Grid
             using (var brush = new System.Drawing.Drawing2D.LinearGradientBrush(new System.Drawing.Rectangle(0, 0, Width_, Height_), System.Drawing.Color.FromArgb(255 << 24 | from), System.Drawing.Color.FromArgb(255 << 24 | to), 60f))
                 graphics.FillRectangle(brush, 0, 0, Width_, Height_);
             pictures.Add(picture);
+            cutouts.Add(null);
         }
-        return pictures.ToArray();
+        return (pictures.ToArray(), cutouts.ToArray());
     }
 
     private void Paint(Bitmap picture)
@@ -206,7 +264,7 @@ internal sealed class TransitionPreview : Grid
             if (options.Style == WallpaperTransitionStyle.None) { Paint(next); return; }
             // The squares keep their proportion to the screen.
             options = options with { Style = TransitionField.Resolve(options.Style, Random.Shared), Cell = Math.Max(1, (int)Math.Round(options.Cell * Width_ / SystemParameters.PrimaryScreenWidth)) };
-            var plan = WallpaperTransition.Plan(next, options, Random.Shared);
+            var plan = WallpaperTransition.Plan(next, options, Random.Shared, _cutouts.ElementAtOrDefault(_current));
             _length = options.Seconds * (plan.Field?.Lines.Count > 0 ? 1100 : 1000);
             _painter = new TransitionPainter(_shown.BackBuffer, Width_, Height_);
             _painter.Begin(next, plan.Field, plan.Glow, plan.Line, plan.Options);

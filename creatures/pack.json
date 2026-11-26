@@ -1,0 +1,73 @@
+{
+  "name": "Belie critters",
+  "creatures": [
+    {
+      "id": "mossbun",
+      "name": "Mossbun",
+      "types": [
+        "Leaf"
+      ],
+      "frames": [
+        "mossbun-0.png",
+        "mossbun-1.png"
+      ]
+    },
+    {
+      "id": "cindrel",
+      "name": "Cindrel",
+      "types": [
+        "Ember"
+      ],
+      "frames": [
+        "cindrel-0.png",
+        "cindrel-1.png"
+      ]
+    },
+    {
+      "id": "driplet",
+      "name": "Driplet",
+      "types": [
+        "Tide"
+      ],
+      "frames": [
+        "driplet-0.png",
+        "driplet-1.png"
+      ]
+    },
+    {
+      "id": "voltmite",
+      "name": "Voltmite",
+      "types": [
+        "Spark",
+        "Bug"
+      ],
+      "frames": [
+        "voltmite-0.png",
+        "voltmite-1.png"
+      ]
+    },
+    {
+      "id": "gloomoth",
+      "name": "Gloomoth",
+      "types": [
+        "Shade",
+        "Air"
+      ],
+      "frames": [
+        "gloomoth-0.png",
+        "gloomoth-1.png"
+      ]
+    },
+    {
+      "id": "pebblet",
+      "name": "Pebblet",
+      "types": [
+        "Stone"
+      ],
+      "frames": [
+        "pebblet-0.png",
+        "pebblet-1.png"
+      ]
+    }
+  ]
+}

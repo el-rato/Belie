@@ -147,6 +147,9 @@ internal partial class App : System.Windows.Application
             _coordinator = new WallpaperCoordinator(profileStore, settingsStore, settings);
             _coordinator.WallpaperChanged += (active, wallpaper) =>
             {
+                // Pictures this profile may show next get their subject cut out ahead of time.
+                if (SubjectModel.IsInstalled && _coordinator.Profiles.FirstOrDefault(profile => profile.Id == active) is { } shown)
+                    Task.Run(() => SubjectModel.Warm(WallpaperEngine.GetProfileMedia(shown)));
                 try
                 {
                     var canvasStore = new DesktopCanvasStore(DesktopCanvasProcess.DefaultFile);
@@ -170,6 +173,7 @@ internal partial class App : System.Windows.Application
             try { DesktopCanvasProcess.Start(DesktopCanvasProcess.DefaultFile); }
             catch (Exception ex) { Logger.Error("Restoring desktop widgets failed.", ex); }
             StartTopBar();
+            StartTeam();
             var started = Environment.TickCount64;
             _barTimer.Tick += (_, _) =>
             {
@@ -274,6 +278,27 @@ internal partial class App : System.Windows.Application
         _barState = state;
         _barSettings = state.Item1 ? store.Load() : null;
         return true;
+    }
+
+    private readonly System.Windows.Threading.DispatcherTimer _teamTimer = new() { Interval = TimeSpan.FromHours(1) };
+
+    /// <summary>Puts the leader on the desktop, and counts contributions now and then so the team grows on its own.</summary>
+    private void StartTeam()
+    {
+        try
+        {
+            if (CreaturePack.Installed().Count == 0) return;
+            DesktopWalker.Apply(CreaturePack.LoadState());
+            async void Count()
+            {
+                try { await TeamService.RefreshAsync(TimeSpan.FromMinutes(50)); }
+                catch (Exception ex) { Logger.Warn("Counting contributions failed: " + ex.Message); }
+            }
+            _teamTimer.Tick += (_, _) => Count();
+            _teamTimer.Start();
+            Count();
+        }
+        catch (Exception ex) { Logger.Error("Starting the team failed.", ex); }
     }
 
     private static void StartTopBar()

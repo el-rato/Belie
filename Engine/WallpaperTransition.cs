@@ -116,10 +116,19 @@ internal sealed class WallpaperTransition : IDisposable
             options = options with { Style = TransitionField.Resolve(options.Style, Random.Shared) };
             var screens = System.Windows.Forms.Screen.AllScreens.Select(screen => screen.Bounds).ToArray();
             var all = screens.Aggregate(Rectangle.Union);
+            var map = fit == FitMode.Tile ? null : SubjectModel.Cached(path);
+            if (map == null) SubjectModel.Warm(new[] { path }); // Ready for the next time.
             foreach (var screen in screens)
             {
                 var next = Render(image, fit, screen, all);
-                var (field, glow, line, sized) = Plan(next, options, Random.Shared);
+                (byte[], RectangleF)? cutout = null;
+                if (map != null)
+                {
+                    var place = Place(image.Size, fit, screen, all);
+                    cutout = (map, new RectangleF((place.X - screen.X) / (float)screen.Width, (place.Y - screen.Y) / (float)screen.Height,
+                        place.Width / (float)screen.Width, place.Height / (float)screen.Height));
+                }
+                var (field, glow, line, sized) = Plan(next, options, Random.Shared, cutout);
                 scenes.Add(new Scene { Bounds = screen, New = next, Old = Render(old, current.Fit, screen, all), Field = field, Glow = glow, Line = line, Options = sized });
             }
             return scenes;
@@ -128,13 +137,16 @@ internal sealed class WallpaperTransition : IDisposable
     }
 
     /// <summary>What a transition to a picture will look like.</summary>
-    internal static (TransitionField? Field, Color Glow, Color Line, TransitionOptions Options) Plan(Bitmap next, TransitionOptions options, Random random)
+    /// <param name="cutout">The picture's saved cut-out, and where the whole picture lands as fractions of <paramref name="next"/>.</param>
+    internal static (TransitionField? Field, Color Glow, Color Line, TransitionOptions Options) Plan(Bitmap next, TransitionOptions options, Random random,
+        (byte[] Map, RectangleF Place)? cutout = null)
     {
         // Tiny squares on a huge screen would take longer to plan than to play.
         var cell = Math.Max(Math.Max(1, options.Cell), (int)Math.Ceiling(Math.Sqrt(next.Width * (double)next.Height / 1_000_000)));
         int columns = (next.Width + cell - 1) / cell, rows = (next.Height + cell - 1) / cell;
         var (small, width, height) = Sample(next);
-        var field = TransitionField.For(options, columns, rows, () => SubjectFinder.Find(small, width, height) is { } mask
+        var field = TransitionField.For(options, columns, rows, () =>
+            ((cutout is { } cut ? SubjectFinder.FromCutout(cut.Map, cut.Place, width, height) : null) ?? SubjectFinder.Find(small, width, height)) is { } mask
             ? SubjectFinder.Scale(mask, width, height, columns, rows) : null, random);
         var glow = SceneController.TryParseAccent(options.GlowColor, out var chosen) ? Color.FromArgb(chosen.R, chosen.G, chosen.B) : Vivid(small);
         return (field, glow, Lightest(small), options with { Cell = cell });

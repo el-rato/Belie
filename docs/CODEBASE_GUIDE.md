@@ -49,6 +49,9 @@ Use your editor's **Go to definition** on each called method. **Find all referen
 | Bar island, script modules | `UI/BarIsland.cs`, `Engine/BarScripts.cs` |
 | Wallpaper switcher and its keys | `UI/WallpaperSwitcher.cs`, `UI/SwitcherDeck.cs`, `UI/SwitcherPage.cs`, `Engine/WallpaperKeys.cs` |
 | Transitions page and its preview | `UI/TransitionsPage.cs` |
+| Subject cut-out with BiRefNet (optional download, one cut-out per picture, cached) | `Engine/SubjectModel.cs`, laid over the screen by `SubjectFinder.FromCutout` |
+| Creature team: contributions, levels, the downloaded sprite pack | `Engine/CreatureTeam.cs`, `Models/TeamState.cs`, `UI/TeamPage.cs`; Belie's own pack is drawn by `scripts/make_creatures.py` into `creatures/` |
+| The leader walking on windows | `UI/DesktopWalker.cs` |
 | Bar readings: system, weather, colors of the wallpaper | `Engine/SystemReadings.cs`, `Engine/WeatherSource.cs`, `Engine/WallpaperColors.cs` |
 | Workspace keys, shared with profile shortcuts | `Engine/WorkspaceKeys.cs`, `Infrastructure/ProfileShortcutManager.cs` |
 | Workspace rules | `Workspaces/WorkspaceManager.cs` |
