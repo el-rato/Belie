@@ -249,6 +249,52 @@ public sealed class TileLayoutTests
         Assert.All(tiles.All.Values, tile => Assert.Equal(1000, tile.Frame.Width));
     }
 
+    [Fact]
+    public void DraggingNeverTurnsASplit()
+    {
+        // A 45% first window leaves the other half just wider than tall, so a drag can push it either way.
+        foreach (var distance in new[] { 40, 150, 300, -150, -300 })
+        {
+            var tiles = new FakeTiles();
+            var windows = new List<WorkspaceWindow>();
+            var engine = new TilingEngine(tiles) { Gap = 2, Margin = 6, SplitRatio = .45 };
+            for (nint window = 1; window <= 3; window++)
+            {
+                tiles.Add(window); windows.Add(new(window, Main, 1, false));
+                engine.Apply(engine.Update(windows, window - 1));
+            }
+            Rectangle two = tiles.All[2].Frame, three = tiles.All[3].Frame;
+            var sideBySide = two.Y == three.Y;
+            var first = tiles.All[1].Frame;
+            var dragTo = first with { Width = first.Width + distance };
+            for (var step = 1; step <= 10; step++)
+            {
+                tiles.All[1] = tiles.All[1] with { Frame = first with { Width = first.Width + distance * step / 10 } };
+                engine.UserResizing(1);
+                Assert.Equal(sideBySide, tiles.All[2].Frame.Y == tiles.All[3].Frame.Y);
+            }
+            engine.UserMoved(1, new Point(dragTo.Right, 300));
+            engine.Apply(engine.Update(windows, 1));
+            Assert.Equal(dragTo.Right, tiles.All[1].Frame.Right);
+            Assert.Equal(sideBySide, tiles.All[2].Frame.Y == tiles.All[3].Frame.Y);
+            Assert.Equal(dragTo.Right + 2, Math.Min(tiles.All[2].Frame.X, tiles.All[3].Frame.X));
+        }
+        // Opening or closing a window still lets the splits suit their new shape.
+        var tree = Tree(TileLayout.Dwindle, 3);
+        tree.Layout(Wide, 0);
+        Assert.True(tree.Remove(1));
+        Assert.Equal(960, tree.Layout(Wide, 0)[2].Width);
+    }
+
+    [Fact]
+    public void AWindowThatNeedsTheWholeScreenDoesNotStopTiling()
+    {
+        var tree = Tree(TileLayout.Dwindle, 2);
+        var tiles = tree.Layout(Wide, 10, window => window == 2 ? new Size(1910, 0) : Size.Empty);
+        Assert.Equal(2, tiles.Count);
+        Assert.All(tiles.Values, tile => Assert.True(Wide.Contains(tile)));
+    }
+
     /// <summary>Drags every edge between two tiles in every layout, as the user would with the mouse.</summary>
     [Theory]
     [InlineData("Dwindle", 3)]

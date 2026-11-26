@@ -17,6 +17,8 @@ internal sealed class DwindleTree
     {
         public nint Window;
         public Node? Parent, First, Second;
+        /// <summary>The way its shape suggested when it was last decided: when windows opened or closed, or the screen changed.</summary>
+        public bool SideBySide, Oriented;
         /// <summary>The user turned this split, so it goes the other way from what its shape suggests.</summary>
         public bool Flipped;
         /// <summary>The direction it was given; windows with a minimum size can force the other one.</summary>
@@ -48,6 +50,12 @@ internal sealed class DwindleTree
     public double SplitRatio { get; set; } = .5;
     public TileLayout Mode { get; set; }
     private Func<nint, Size> _minimum = _ => Size.Empty;
+    /// <summary>
+    /// Splits choose their direction again only when windows open or close or the screen changes. Dragging an edge
+    /// must never turn a split, or the tiles would jump away from the pointer.
+    /// </summary>
+    private bool _reorient = true;
+    private Rectangle _lastArea;
 
     public IReadOnlyCollection<nint> Windows => _leaves.Keys;
     public bool Contains(nint window) => _leaves.ContainsKey(window);
@@ -64,6 +72,7 @@ internal sealed class DwindleTree
             Replace(target, split);
             target.Parent = split; leaf.Parent = split;
         }
+        _reorient = true;
         var after = _leaves.TryGetValue(beside, out var next) ? _order.IndexOf(next) + 1 : _order.Count;
         _order.Insert(after, leaf);
         _leaves[window] = leaf;
@@ -73,6 +82,7 @@ internal sealed class DwindleTree
     {
         if (!_leaves.Remove(window, out var leaf)) return false;
         _order.Remove(leaf);
+        _reorient = true;
         if (leaf.Parent is not { } parent) { _root = null; return true; }
         var sibling = parent.First == leaf ? parent.Second! : parent.First!;
         Replace(parent, sibling);
@@ -105,7 +115,7 @@ internal sealed class DwindleTree
     {
         if (Mode != TileLayout.Dwindle || !_leaves.TryGetValue(window, out var leaf) || leaf.Parent is not { } parent) return false;
         // Turn it from the way it is now, which minimum sizes may have decided.
-        parent.Flipped = !parent.Placed != Wide(parent.Bounds);
+        parent.Flipped = !parent.Placed != parent.SideBySide;
         return true;
     }
 
@@ -115,11 +125,13 @@ internal sealed class DwindleTree
     {
         _gap = gap;
         _minimum = minimum ?? (_ => Size.Empty);
+        if (area != _lastArea) { _reorient = true; _lastArea = area; }
         if (_root != null)
         {
             Measure(_root, area);
             if (Mode == TileLayout.Dwindle) Arrange(_root, area);
             else ArrangeInOrder(area);
+            _reorient = false;
         }
         return _leaves.ToDictionary(item => item.Key, item => item.Value.Bounds);
     }
@@ -128,7 +140,8 @@ internal sealed class DwindleTree
     {
         if (node.IsLeaf) { node.Minimum = _minimum(node.Window); return; }
         // The minimum follows the way the split is likely to go in roughly the space it will get; Arrange turns it if it cannot.
-        var across = Wide(area) != node.Flipped;
+        if (_reorient || !node.Oriented) { node.SideBySide = Wide(area); node.Oriented = true; }
+        var across = node.SideBySide != node.Flipped;
         var first = (int)Math.Round((across ? area.Width : area.Height) * node.Ratio);
         Measure(node.First!, across ? area with { Width = first } : area with { Height = first });
         Measure(node.Second!, across ? area with { Width = area.Width - first } : area with { Height = area.Height - first });
@@ -147,13 +160,15 @@ internal sealed class DwindleTree
         node.Bounds = area;
         if (node.IsLeaf) return;
         Size a = node.First!.Minimum, b = node.Second!.Minimum;
-        var across = Wide(area) != node.Flipped;
+        var across = node.SideBySide != node.Flipped;
         if (!Fits(across, a, b, area) && Fits(!across, a, b, area)) across = !across;
         node.Placed = across;
         var length = Math.Max(2, (across ? area.Width : area.Height) - _gap);
         var first = Math.Clamp((int)Math.Round(length * node.Ratio), 1, length - 1);
         int least = across ? a.Width : a.Height, rest = across ? b.Width : b.Height;
-        if (least + rest <= length) first = Math.Clamp(first, Math.Max(1, least), Math.Min(length - 1, length - rest));
+        // A window can need the whole length, which leaves no room to clamp into.
+        int low = Math.Max(1, least), high = Math.Min(length - 1, length - rest);
+        if (least + rest <= length && low <= high) first = Math.Clamp(first, low, high);
         Arrange(node.First!, across ? area with { Width = first } : area with { Height = first });
         Arrange(node.Second!, across
             ? new Rectangle(area.X + first + _gap, area.Y, length - first, area.Height)
