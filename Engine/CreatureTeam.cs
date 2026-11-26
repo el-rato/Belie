@@ -195,6 +195,31 @@ internal static class CreaturePack
 
     public static string FramePath(string frame) => Path.Combine(Folder, frame);
 
+    /// <summary>The installed pack's colors for its types, such as "Fire": "#F08030". Empty when it names none.</summary>
+    public static IReadOnlyDictionary<string, string> InstalledColors()
+    {
+        try
+        {
+            var file = Path.Combine(Folder, "pack.json");
+            return File.Exists(file) ? ParseColors(File.ReadAllText(file)) : new Dictionary<string, string>();
+        }
+        catch (Exception ex) { Logger.Warn("The creature pack's colors could not be read: " + ex.Message); return new Dictionary<string, string>(); }
+    }
+
+    /// <summary>Only "#RRGGBB" values for type names a creature could have; anything else is left out.</summary>
+    internal static Dictionary<string, string> ParseColors(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var colors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!document.RootElement.TryGetProperty("colors", out var list) || list.ValueKind != JsonValueKind.Object) return colors;
+        foreach (var entry in list.EnumerateObject().Take(64))
+            if (entry.Name.Length is > 0 and <= 16 && entry.Value.ValueKind == JsonValueKind.String && entry.Value.GetString() is { } color && HexColor.IsMatch(color))
+                colors[entry.Name] = color;
+        return colors;
+    }
+
+    private static readonly Regex HexColor = new("\\A#[0-9A-Fa-f]{6}\\z");
+
     internal static Creature[] Parse(string json)
     {
         using var document = JsonDocument.Parse(json);

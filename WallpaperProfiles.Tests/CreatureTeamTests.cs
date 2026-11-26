@@ -67,6 +67,20 @@ public class CreatureTeamTests
     }
 
     [Fact]
+    public void PackColorsKeepOnlyPlainHexColors()
+    {
+        var colors = CreaturePack.ParseColors("""
+            {"colors": {"Fire": "#EE8130", "ghost": "#735797", "Bad": "red", "Short": "#FFF", "Script": "#123456;x",
+                        "Number": 5, "": "#000000", "AVeryLongTypeNameIndeed": "#111111"}, "creatures": []}
+            """);
+        Assert.Equal(2, colors.Count);
+        Assert.Equal("#EE8130", colors["fire"]);
+        Assert.Equal("#735797", colors["Ghost"]);
+        Assert.Empty(CreaturePack.ParseColors("""{"creatures": []}"""));
+        Assert.Empty(CreaturePack.ParseColors("""{"colors": ["#EE8130"]}"""));
+    }
+
+    [Fact]
     public void ContributionsAreReadFromTheGraphQlAnswer()
     {
         var count = GitHubContributions.Parse("""
