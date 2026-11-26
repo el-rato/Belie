@@ -1,5 +1,18 @@
 # Belie patch notes
 
+## [4.0.6] - 2026-11-26 - Steadier update checks
+
+### Fixed
+
+- **Check for updates** no longer fails with “Couldn’t check for updates” when GitHub is limiting requests from your network. Belie now reads the newest release directly instead of going through GitHub’s request-limited service, and each check is a single small download.
+- If you are more than one version behind, Belie downloads the complete update instead of a chain of small ones, which is also more reliable.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained.
+
 ## [4.0.5] - 2026-11-26 - Tighter local security
 
 ### Fixed
