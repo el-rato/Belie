@@ -83,6 +83,13 @@ public sealed class AppUpdaterTests
     }
 
     [Fact]
+    public void UpdateFeed_UsesTheLatestReleaseDownloads_NotTheRateLimitedApi()
+    {
+        Assert.Equal("https://github.com/el-rato/Belie/releases/latest/download/", AppUpdater.FeedUrl);
+        Assert.DoesNotContain("api.github.com", AppUpdater.FeedUrl);
+    }
+
+    [Fact]
     public void DevelopmentBuild_IsNotTreatedAsAVelopackInstallation()
     {
         VelopackApp.Build().SetArgs(Array.Empty<string>()).SetAutoApplyOnStartup(false).Run();

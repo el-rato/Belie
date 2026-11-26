@@ -13,8 +13,9 @@ internal interface IAppUpdateClient
 
 internal sealed class VelopackUpdateClient : IAppUpdateClient
 {
-    private readonly UpdateManager _manager = new(
-        new GithubSource($"https://github.com/{AppUpdater.Repository}", accessToken: null, prerelease: false));
+    // Reads the newest release's feed through github.com's download redirect rather than the GitHub API,
+    // which allows only 60 unauthenticated requests an hour per network and needs several per check.
+    private readonly UpdateManager _manager = new(new SimpleWebSource(AppUpdater.FeedUrl));
 
     public bool IsInstalled => _manager.IsInstalled;
     public Task<UpdateInfo?> CheckAsync() => _manager.CheckForUpdatesAsync();
@@ -27,6 +28,8 @@ internal sealed class VelopackUpdateClient : IAppUpdateClient
 internal sealed class AppUpdater
 {
     internal const string Repository = "el-rato/Belie";
+    /// <summary>Serves releases.win.json and the packages of the newest published release.</summary>
+    internal const string FeedUrl = "https://github.com/" + Repository + "/releases/latest/download/";
     internal static readonly TimeSpan CheckInterval = TimeSpan.FromHours(6);
     /// <summary>The network is often not up yet when Belie starts with Windows.</summary>
     internal static readonly TimeSpan RetryInterval = TimeSpan.FromMinutes(5);
