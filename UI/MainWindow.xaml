@@ -76,6 +76,9 @@
                     <Button x:Name="TransitionsNavButton" AutomationProperties.Name="Transitions" Style="{StaticResource NavigationButton}" Click="ShowTransitions_Click">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8AB;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Transitions"/></StackPanel>
                     </Button>
+                    <Button x:Name="TeamNavButton" AutomationProperties.Name="Team" Style="{StaticResource NavigationButton}" Click="ShowTeam_Click">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE716;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Team"/></StackPanel>
+                    </Button>
                     <Button x:Name="SwitcherNavButton" AutomationProperties.Name="Wallpaper switcher" Style="{StaticResource NavigationButton}" Click="ShowSwitcher_Click" Margin="0,0,0,22">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8EE;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Switcher"/></StackPanel>
                     </Button>
@@ -498,6 +501,7 @@
         <ContentControl x:Name="CanvasPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
         <ContentControl x:Name="TopBarPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
         <ContentControl x:Name="WorkspacesPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+        <ContentControl x:Name="TeamPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
         <ContentControl x:Name="TransitionsPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
         <ContentControl x:Name="SwitcherPane" Grid.Column="1" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
 

@@ -309,6 +309,44 @@ internal static class SubjectFinder
         return boundary > 11 * Math.Sqrt(area * mask.Length) ? null : mask; // Too ragged to be one thing.
     }
 
+    /// <summary>
+    /// The subject from a saved cut-out, laid over the screen as the picture is.
+    /// <paramref name="place"/> is where the whole picture lands, as fractions of the screen.
+    /// </summary>
+    public static bool[]? FromCutout(byte[] map, RectangleF place, int width, int height)
+    {
+        if (map.Length != SubjectModel.MapSize * SubjectModel.MapSize || place.Width <= 0 || place.Height <= 0) return null;
+        const int side = SubjectModel.MapSize;
+        var mask = new bool[width * height];
+        for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+            {
+                float u = ((x + .5f) / width - place.X) / place.Width, v = ((y + .5f) / height - place.Y) / place.Height;
+                if (u is < 0 or >= 1 || v is < 0 or >= 1) continue;
+                mask[y * width + x] = map[(int)(v * side) * side + (int)(u * side)] >= 128;
+            }
+        mask = Grow(Grow(mask, width, height, false), width, height, true); // Drops specks and threads.
+        mask = Largest(mask, width, height);
+        FillHoles(mask, width, height);
+        var area = mask.Count(inside => inside) / (float)mask.Length;
+        // The model calls a whole poster "foreground" now and then, or finds only a crumb.
+        if (area < .02f || area > .6f) return null;
+        // A subject may run off one side, as a car in the corner does; something spread along two is scenery.
+        double Share(Func<int, int, bool> band)
+        {
+            int inside = 0, all = 0;
+            for (var y = 0; y < height * 4 / 5; y++)
+                for (var x = 0; x < width; x++)
+                    if (band(x, y)) { all++; if (mask[y * width + x]) inside++; }
+            return all == 0 ? 0 : inside / (double)all;
+        }
+        var sides = new[]
+        {
+            Share((x, y) => y < height / 14), Share((x, y) => x < width / 20), Share((x, y) => x >= width - width / 20)
+        }.Count(share => share > .4);
+        return sides >= 2 ? null : mask;
+    }
+
     public static bool[] Scale(bool[] mask, int width, int height, int columns, int rows)
     {
         var result = new bool[columns * rows];
