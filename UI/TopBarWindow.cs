@@ -274,7 +274,7 @@ internal sealed class TopBarWindow : Window
         _atEdgeSince = atEdge ? _atEdgeSince ?? now : null;
         var busy = bar.Contains(point) && !_tucked || _popup.IsOpen || ContextMenu?.IsOpen == true;
         if (busy || !Underneath(bar) || _atEdgeSince is { } since && now - since >= RevealDelay) _lastWanted = now;
-        Tuck(now - _lastWanted >= (_tucked ? 0 : HideDelay));
+        Tuck(now - _lastWanted > (_tucked ? 0 : HideDelay));
     }
 
     /// <summary>Whether the window in front reaches under the bar on this monitor.</summary>
