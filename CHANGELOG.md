@@ -1,5 +1,21 @@
 # Belie patch notes
 
+## [4.2.0] - 2026-11-27 - Subjects that stand out, and a team of critters
+
+### Added
+
+- **Automatic finds the subject in busy pictures too.** Under **Transitions → Style → Finding the subject**, choose **Download BiRefNet** to add a model that runs on this computer and picks out people, animals and things even when the background is not plain. It is a 224 MB download from rembg's releases on GitHub, checked before it is kept, and nothing is sent anywhere. Each wallpaper is cut out once, in the background, before it comes up; until then it gets the simple outline or colonies. **Remove the model** takes it away again.
+- **A team of six critters.** The new **Team** page shows Mossbun, Cindrel, Driplet, Voltmite, Gloomoth and Pebblet, who level up with your GitHub contributions. A streak of days multiplies what they earn, badges fill as your total grows, and **Exp. Share** decides whether everyone shares or the leader takes it all. Click a creature to make it the leader.
+- **The leader walks on your windows.** It strolls along the top of the window in front, hops onto a higher one, and walks on the taskbar when a window is maximized. Clicks go through it. Turn it off with **Walks the desktop**.
+- **Count any GitHub account.** Leave **GitHub account** empty to count whoever is signed in to the GitHub CLI (`gh`), or type a name to count that account's public contributions, with or without the CLI. Changing the account starts the levels over.
+- **Creature packs.** The critters are a small pack of sprites downloaded once with **Download creatures**, not part of the app. Paste another pack's address to use different creatures.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained. The model and the creatures are only downloaded when you ask for them.
+
 ## [4.1.0] - 2026-11-27 - A bar that gets out of the way
 
 ### Added
