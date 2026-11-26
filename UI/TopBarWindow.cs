@@ -630,6 +630,12 @@ internal sealed class TopBarWindow : Window
                 frame.ToolTip = "Show the calendar";
                 frame.MouseLeftButtonUp += (_, _) => OpenCalendar(frame);
                 break;
+            case BarModuleKind.Team:
+                frame.Cursor = Cursors.Hand;
+                frame.ToolTip = "Your team";
+                content = BuildTeam(text);
+                frame.MouseLeftButtonUp += (_, _) => TogglePopup(frame, () => new TeamPanel(_text, _accent), TeamPanel.PanelWidth, TeamPanel.PanelHeight);
+                break;
             case BarModuleKind.Weather:
                 frame.Cursor = Cursors.Hand;
                 frame.MouseLeftButtonUp += (_, _) =>
@@ -649,9 +655,48 @@ internal sealed class TopBarWindow : Window
     {
         "-" => "",
         { Length: > 0 } own => own,
-        _ when module.Kind is BarModuleKind.Island or BarModuleKind.Workspaces or BarModuleKind.Separator or BarModuleKind.Visualizer => "",
+        _ when module.Kind is BarModuleKind.Island or BarModuleKind.Workspaces or BarModuleKind.Separator or BarModuleKind.Visualizer or BarModuleKind.Team => "",
         _ => _settings.ShowIcons || module.Kind == BarModuleKind.Wallpaper ? Glyph(module.Kind) : ""
     };
+
+    private readonly System.Windows.Controls.Image _teamSprite = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+    private FileSystemWatcher? _teamWatch;
+
+    /// <summary>The leader's sprite and level. It follows the team file, which the panel and the app both change.</summary>
+    private FrameworkElement BuildTeam(TextBlock text)
+    {
+        RenderOptions.SetBitmapScalingMode(_teamSprite, BitmapScalingMode.NearestNeighbor);
+        _teamSprite.Width = _teamSprite.Height = Math.Max(16, _settings.Height - 10);
+        if (_teamSprite.Parent is System.Windows.Controls.Panel before) before.Children.Remove(_teamSprite);
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(_teamSprite); row.Children.Add(text);
+        if (_teamWatch == null && !IsPreview)
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(CreaturePack.StateFile)!);
+                _teamWatch = new FileSystemWatcher(Path.GetDirectoryName(CreaturePack.StateFile)!, Path.GetFileName(CreaturePack.StateFile))
+                    { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName, EnableRaisingEvents = true };
+                FileSystemEventHandler changed = (_, _) => Dispatcher.BeginInvoke(ShowTeam);
+                _teamWatch.Changed += changed; _teamWatch.Created += changed; _teamWatch.Renamed += (_, _) => Dispatcher.BeginInvoke(ShowTeam);
+                Closed += (_, _) => _teamWatch?.Dispose();
+            }
+            catch (Exception ex) { Logger.Warn("The team file cannot be watched: " + ex.Message); }
+        Dispatcher.BeginInvoke(ShowTeam);
+        return row;
+    }
+
+    private void ShowTeam()
+    {
+        var view = _views.FirstOrDefault(item => item.Module.Kind == BarModuleKind.Team);
+        if (view == null) return;
+        var state = CreaturePack.LoadState();
+        var creatures = CreaturePack.Installed();
+        var leader = state.Members.ElementAtOrDefault(state.Leader) is { } member ? creatures.FirstOrDefault(creature => creature.Id == member.Id) : null;
+        _teamSprite.Source = leader != null ? TeamService.Sprite(leader) : null;
+        _teamSprite.Visibility = Show(leader != null);
+        if (view.Text != null) view.Text.Text = leader == null ? "Team" : "Lv " + TeamProgress.Level(state.Members[state.Leader].Xp);
+        AutomationProperties.SetName(view.Frame, leader == null ? "Team" : $"Team, {leader.Name} level {TeamProgress.Level(state.Members[state.Leader].Xp)}");
+    }
 
     private void OpenCalendar(FrameworkElement target) => TogglePopup(target, () => new CalendarWidgetView(PopupWidget(DesktopWidgetKind.Calendar, 260, 270)), 260, 270);
 

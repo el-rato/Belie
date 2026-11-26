@@ -281,16 +281,23 @@ internal partial class App : System.Windows.Application
     }
 
     private readonly System.Windows.Threading.DispatcherTimer _teamTimer = new() { Interval = TimeSpan.FromHours(1) };
+    private FileSystemWatcher? _teamWatch;
 
     /// <summary>Puts the leader on the desktop, and counts contributions now and then so the team grows on its own.</summary>
     private void StartTeam()
     {
         try
         {
-            if (CreaturePack.Installed().Count == 0) return;
+            // The bar's Team panel changes the leader and walking from its own process; the walker follows the file.
+            var folder = Path.GetDirectoryName(CreaturePack.StateFile)!;
+            Directory.CreateDirectory(folder);
+            _teamWatch = new FileSystemWatcher(folder, Path.GetFileName(CreaturePack.StateFile)) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName, EnableRaisingEvents = true };
+            void Follow() => Dispatcher.BeginInvoke(() => DesktopWalker.Apply(CreaturePack.LoadState()));
+            _teamWatch.Changed += (_, _) => Follow(); _teamWatch.Created += (_, _) => Follow(); _teamWatch.Renamed += (_, _) => Follow();
             DesktopWalker.Apply(CreaturePack.LoadState());
             async void Count()
             {
+                if (CreaturePack.Installed().Count == 0) return;
                 try { await TeamService.RefreshAsync(TimeSpan.FromMinutes(50)); }
                 catch (Exception ex) { Logger.Warn("Counting contributions failed: " + ex.Message); }
             }

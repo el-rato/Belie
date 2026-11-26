@@ -13,7 +13,7 @@ internal enum BarMediaClick { Player, PlayPause }
 internal enum BarModuleKind
 {
     Workspaces, Title, Clock, Date, Media, Visualizer, Cpu, Memory, Disk, Network, Volume, Battery, Uptime, Weather, Text, Launcher,
-    Island, Wallpaper, Script, Separator
+    Island, Wallpaper, Script, Separator, Team
 }
 
 /// <summary>

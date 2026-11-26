@@ -66,7 +66,8 @@ internal sealed partial class TopBarPage : BarSettingsPage
         (BarModuleKind.Uptime, "Uptime", "Time since Windows started"), (BarModuleKind.Weather, "Weather", "Now; click for the forecast"),
         (BarModuleKind.Island, "Island", "Clock and music that grow when something happens"), (BarModuleKind.Wallpaper, "Wallpaper", "Opens the switcher; scroll to go through wallpapers"),
         (BarModuleKind.Text, "Text", "Your own words or symbol"), (BarModuleKind.Launcher, "Launcher", "Opens an app, file or address"),
-        (BarModuleKind.Script, "Script", "Shows what a command of yours writes"), (BarModuleKind.Separator, "Separator", "A line or symbol between modules")
+        (BarModuleKind.Script, "Script", "Shows what a command of yours writes"), (BarModuleKind.Separator, "Separator", "A line or symbol between modules"),
+        (BarModuleKind.Team, "Team", "Your creature team's leader; click for the team")
     };
 
     private static readonly (string Name, string Left, string Center, string Right)[] Sets =
