@@ -128,10 +128,9 @@ public sealed class TileLayoutTests
         Assert.Equal(new Rectangle(0, 40, 1152, 1000), tiles[1]);
         Assert.All(new nint[] { 2, 3, 4 }, window => { Assert.Equal(768, tiles[window].Width); Assert.InRange(tiles[window].Height, 333, 334); });
         Assert.Equal(1000, new nint[] { 2, 3, 4 }.Sum(window => tiles[window].Height));
-        // Dragging the edge between them moves it; other layouts have no edges to drag.
+        // Dragging the edge between them moves it.
         Assert.True(tree.Resize(2, new Rectangle(1000, 40, 920, 333)));
         Assert.Equal(1000, tree.Layout(Wide, 0)[1].Width);
-        Assert.False(Tree(TileLayout.Grid, 4).Resize(1, new Rectangle(0, 40, 1500, 500)));
         Assert.False(Tree(TileLayout.Grid, 4).ToggleSplit(1));
     }
 
@@ -198,6 +197,9 @@ public sealed class TileLayoutTests
         Assert.True(engine.IsTiled(2));
         Assert.Equal(new Rectangle(960, 40, 400, 300), tiles.All[2].Frame); // It was asked to fill the tile.
         time += 300;
+        Assert.True(Assert.Single(engine.Update(windows, 0)).IsCorrection); // It may still be catching up, so it is asked again.
+        engine.Apply(engine.Update(windows, 0));
+        time += 300;
         engine.Apply(engine.Update(windows, 0));
         Assert.Equal(new Rectangle(960 + 280, 40 + 350, 400, 300), tiles.All[2].Frame);
         Assert.Equal(new Rectangle(0, 40, 960, 1000), tiles.All[1].Frame); // Its neighbor is not disturbed.
@@ -245,6 +247,52 @@ public sealed class TileLayoutTests
         engine.Layout = TileLayout.Columns;
         engine.Apply(engine.Update(windows, 0));
         Assert.All(tiles.All.Values, tile => Assert.Equal(1000, tile.Frame.Width));
+    }
+
+    /// <summary>Drags every edge between two tiles in every layout, as the user would with the mouse.</summary>
+    [Theory]
+    [InlineData("Dwindle", 3)]
+    [InlineData("Dwindle", 5)]
+    [InlineData("Grid", 3)]
+    [InlineData("Grid", 6)]
+    [InlineData("Columns", 4)]
+    [InlineData("MainAndStack", 4)]
+    public void EveryInnerEdgeCanBeDraggedWithManyWindows(string layout, int count)
+    {
+        var mode = Enum.Parse<TileLayout>(layout);
+        for (nint dragged = 1; dragged <= count; dragged++)
+            for (var side = 0; side < 4; side++)
+            {
+                var tiles = new FakeTiles();
+                var windows = new List<WorkspaceWindow>();
+                for (nint window = 1; window <= count; window++) { tiles.Add(window); windows.Add(new(window, Main, 1, false)); }
+                long time = 0;
+                var engine = new TilingEngine(tiles, () => time) { Gap = 6, Margin = 0, Layout = mode };
+                for (nint window = 1; window <= count; window++) engine.Apply(engine.Update(windows.Take((int)window).ToList(), window - 1));
+                var tile = tiles.All[dragged].Frame;
+                // Only edges with a neighbor behind them can move; the screen's edges cannot.
+                if (side switch { 0 => tile.Left <= Wide.Left, 1 => tile.Right >= Wide.Right, 2 => tile.Top <= Wide.Top, _ => tile.Bottom >= Wide.Bottom }) continue;
+                var dragTo = side switch
+                {
+                    0 => Rectangle.FromLTRB(tile.Left + 40, tile.Top, tile.Right, tile.Bottom), 1 => Rectangle.FromLTRB(tile.Left, tile.Top, tile.Right - 40, tile.Bottom),
+                    2 => Rectangle.FromLTRB(tile.Left, tile.Top + 40, tile.Right, tile.Bottom), _ => Rectangle.FromLTRB(tile.Left, tile.Top, tile.Right, tile.Bottom - 40)
+                };
+                tiles.All[dragged] = tiles.All[dragged] with { Frame = dragTo };
+                engine.UserResizing(dragged);
+                // A neighbor followed the edge while it was dragged.
+                Assert.Contains(tiles.All.Where(item => item.Key != dragged).Select(item => item.Value.Frame), other => side switch
+                {
+                    0 => other.Right == dragTo.Left - 6, 1 => other.Left == dragTo.Right + 6, 2 => other.Bottom == dragTo.Top - 6, _ => other.Top == dragTo.Bottom + 6
+                });
+                engine.UserMoved(dragged, new Point(dragTo.X + 5, dragTo.Y + 5));
+                for (var i = 0; i < 4; i++) { engine.Apply(engine.Update(windows, dragged)); time += 300; }
+                var final = tiles.All[dragged].Frame;
+                Assert.True(Math.Abs((side switch { 0 => final.Left - dragTo.Left, 1 => final.Right - dragTo.Right, 2 => final.Top - dragTo.Top, _ => final.Bottom - dragTo.Bottom })) <= 2,
+                    $"{layout} with {count}: window {dragged}, side {side} ended at {final}, dragged to {dragTo}");
+                var all = tiles.All.Values.Select(value => value.Frame).ToArray();
+                Assert.All(all, frame => Assert.True(Wide.Contains(frame)));
+                for (var i = 0; i < all.Length; i++) for (var j = i + 1; j < all.Length; j++) Assert.False(all[i].IntersectsWith(all[j]), $"{layout}: {all[i]} overlaps {all[j]}");
+            }
     }
 
     [Theory]

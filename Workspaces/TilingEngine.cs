@@ -131,20 +131,21 @@ internal sealed class TilingEngine
                     if (_now() - _placedAt.GetValueOrDefault(window) < 250) continue;
                     // It went where it was told but is larger: that is as small as it gets. Smaller: as large as it gets.
                     var least = Minimum(window);
+                    var tries = _corrections.GetValueOrDefault(window);
                     if (Math.Abs(frame.X - target.X) <= 2 && Math.Abs(frame.Y - target.Y) <= 2)
                     {
                         bool wider = frame.Width > Math.Max(target.Width, least.Width) + 2, taller = frame.Height > Math.Max(target.Height, least.Height) + 2;
-                        bool narrower = frame.Width < target.Width - 2, shorter = frame.Height < target.Height - 2;
+                        // A window still catching up after a drag also looks too small, so it is asked once more first.
+                        bool narrower = frame.Width < target.Width - 2, shorter = frame.Height < target.Height - 2, refused = (narrower || shorter) && tries >= 1;
                         if (wider || taller)
                             _minimums[window] = (new Size(wider ? frame.Width : least.Width, taller ? frame.Height : least.Height), _now(), 2000);
-                        if (narrower || shorter)
+                        if (refused)
                         {
                             var most = _maximums.GetValueOrDefault(window);
                             _maximums[window] = new Size(narrower ? frame.Width : most.Width, shorter ? frame.Height : most.Height);
                         }
-                        if (wider || taller || narrower || shorter) { learned = true; continue; }
+                        if (wider || taller || refused) { learned = true; continue; }
                     }
-                    var tries = _corrections.GetValueOrDefault(window);
                     if (tries >= 3) continue;
                     _corrections[window] = tries + 1;
                 }
