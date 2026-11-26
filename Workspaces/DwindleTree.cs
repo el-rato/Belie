@@ -49,6 +49,9 @@ internal sealed class DwindleTree
     /// <summary>The share a window keeps when another opens beside it, and the main window's share.</summary>
     public double SplitRatio { get; set; } = .5;
     public TileLayout Mode { get; set; }
+    private TileLayout _arranged;
+    /// <summary>Trying every trade gets slow past this many windows.</summary>
+    private const int MostToBalance = 10;
     private Func<nint, Size> _minimum = _ => Size.Empty;
     /// <summary>
     /// Splits choose their direction again only when windows open or close or the screen changes. Dragging an edge
@@ -126,15 +129,67 @@ internal sealed class DwindleTree
         _gap = gap;
         _minimum = minimum ?? (_ => Size.Empty);
         if (area != _lastArea) { _reorient = true; _lastArea = area; }
+        if (Mode != _arranged) { _reorient = true; _arranged = Mode; }
         if (_root != null)
         {
-            Measure(_root, area);
-            if (Mode == TileLayout.Dwindle) Arrange(_root, area);
-            else ArrangeInOrder(area);
-            _reorient = false;
+            if (_reorient && _leaves.Count is > 1 and <= MostToBalance && _leaves.Keys.Any(window => !_minimum(window).IsEmpty)) Balance(area);
+            Place(area, _reorient);
         }
         return _leaves.ToDictionary(item => item.Key, item => item.Value.Bounds);
     }
+
+    /// <summary>Asks for the splits to be chosen again, as when a window learns it cannot be smaller.</summary>
+    public void Rebalance() => _reorient = true;
+
+    private void Place(Rectangle area, bool reorient)
+    {
+        _reorient = reorient;
+        Measure(_root!, area);
+        if (Mode != TileLayout.Dwindle) ArrangeInOrder(area);
+        else
+        {
+            Arrange(_root!, area);
+            // The first pass guessed each split's space; now each knows the space it really has.
+            if (reorient) { Settle(_root!); _reorient = false; Measure(_root!, area); Arrange(_root!, area); }
+        }
+        _reorient = false;
+    }
+
+    private static void Settle(Node node)
+    {
+        if (node.IsLeaf) return;
+        node.SideBySide = Wide(node.Bounds);
+        Settle(node.First!); Settle(node.Second!);
+    }
+
+    /// <summary>
+    /// Apps with a minimum size can leave no room for the others where they happen to be. This trades windows
+    /// between tiles while that lets more of them fit, or gives the most squeezed one clearly more room.
+    /// </summary>
+    private void Balance(Rectangle area)
+    {
+        Place(area, true);
+        var best = Score();
+        for (var improved = true; improved;)
+        {
+            improved = false;
+            for (var i = 0; i < _order.Count; i++)
+                for (var j = i + 1; j < _order.Count; j++)
+                {
+                    nint a = _order[i].Window, b = _order[j].Window;
+                    Swap(a, b);
+                    Place(area, true);
+                    var score = Score();
+                    if (score.Fit > best.Fit || score.Fit == best.Fit && score.Side >= best.Side * 1.25 + 1) { best = score; improved = true; }
+                    else Swap(a, b);
+                }
+        }
+    }
+
+    /// <summary>How many windows get at least their minimum, then the shortest side of any tile.</summary>
+    private (int Fit, int Side) Score() => (
+        _order.Count(node => node.Bounds.Width >= node.Minimum.Width && node.Bounds.Height >= node.Minimum.Height),
+        _order.Min(node => Math.Min(node.Bounds.Width, node.Bounds.Height)));
 
     private void Measure(Node node, Rectangle area)
     {

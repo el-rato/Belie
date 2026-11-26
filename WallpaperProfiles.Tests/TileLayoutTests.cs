@@ -257,6 +257,40 @@ public sealed class TileLayoutTests
     public void AppsThatDrawTheirOwnFrameAreStillTiled(int style, bool tiles, bool fixedSize)
         => Assert.Equal((tiles, fixedSize), NativeTileSystem.Shape(style));
 
+    /// <summary>Firefox with no minimum, then Claude and Spotify, which cannot be smaller than these.</summary>
+    [Theory]
+    [InlineData("Dwindle")]
+    [InlineData("Grid")]
+    [InlineData("Columns")]
+    [InlineData("MainAndStack")]
+    public void WindowsTradeTilesSoLargeMinimumsDoNotCrushTheOthers(string layout)
+    {
+        var minimums = new Dictionary<nint, Size> { [1] = Size.Empty, [2] = new(768, 509), [3] = new(1000, 750) };
+        var tiles = new FakeTiles { Work = new Rectangle(6, 54, 1908, 960) };
+        var windows = new List<WorkspaceWindow>();
+        var engine = new TilingEngine(new MinimumTiles(tiles, minimums)) { Gap = 2, Margin = 0, SplitRatio = .45, Layout = Enum.Parse<TileLayout>(layout) };
+        for (nint window = 1; window <= 3; window++)
+        {
+            tiles.Add(window); windows.Add(new(window, Main, 1, false));
+            engine.Apply(engine.Update(windows, window - 1));
+        }
+        var frames = tiles.All.ToDictionary(item => item.Key, item => item.Value.Frame);
+        Assert.All(frames, item => Assert.True(item.Value.Width >= minimums[item.Key].Width && item.Value.Height >= minimums[item.Key].Height, $"{layout}: {item.Key} got {item.Value}"));
+        for (nint i = 1; i <= 3; i++) for (nint j = (nint)(i + 1); j <= 3; j++) Assert.False(frames[i].IntersectsWith(frames[j]), $"{layout}: {frames[i]} overlaps {frames[j]}");
+        // The window with no minimum is not left a strip, except in Columns, where it can only have what is left.
+        Assert.True(Math.Min(frames[1].Width, frames[1].Height) >= (layout == "Columns" ? 136 : 400), $"{layout}: Firefox got {frames[1]}");
+    }
+
+    private sealed class MinimumTiles(FakeTiles inner, IReadOnlyDictionary<nint, Size> minimums) : ITileSystem
+    {
+        public TileWindow Describe(nint window) => inner.Describe(window);
+        public Rectangle WorkArea(string monitor) => inner.WorkArea(monitor);
+        public Size MinimumSize(nint window) => minimums.GetValueOrDefault(window);
+        public bool Place(nint window, Rectangle frame) => inner.Place(window, frame);
+        public void Restore(nint window) => inner.Restore(window);
+        public void Maximize(nint window) => inner.Maximize(window);
+    }
+
     [Fact]
     public void DraggingNeverTurnsASplit()
     {

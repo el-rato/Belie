@@ -144,7 +144,7 @@ internal sealed class TilingEngine
                             var most = _maximums.GetValueOrDefault(window);
                             _maximums[window] = new Size(narrower ? frame.Width : most.Width, shorter ? frame.Height : most.Height);
                         }
-                        if (wider || taller || refused) { learned = true; continue; }
+                        if (wider || taller || refused) { learned = true; tree.Rebalance(); continue; }
                     }
                     if (tries >= 3) continue;
                     _corrections[window] = tries + 1;
