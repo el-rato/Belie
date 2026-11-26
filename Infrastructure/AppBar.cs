@@ -20,6 +20,7 @@ internal sealed class AppBar : IDisposable
     private bool _bottom;
     private bool _docking;
     private int _overhang;
+    private bool _reserve = true, _reserved;
     private bool _disposed;
 
     /// <summary>Raised when an app on this desktop enters (true) or leaves (false) full screen.</summary>
@@ -46,9 +47,19 @@ internal sealed class AppBar : IDisposable
     }
 
     /// <param name="overhang">How far the window reaches past the space it reserves, to draw over other windows.</param>
-    public void Dock(System.Drawing.Rectangle monitor, int height, bool bottom = false, int overhang = 0)
+    /// <param name="reserve">False to draw over windows instead of keeping them clear, for a bar that hides itself.</param>
+    public void Dock(System.Drawing.Rectangle monitor, int height, bool bottom = false, int overhang = 0, bool reserve = true)
     {
         _overhang = overhang;
+        if (!reserve && _reserved)
+        {
+            // Registering again gives the space back while still hearing about full-screen apps.
+            var data = Data();
+            NativeMethods.SHAppBarMessage(Remove, ref data);
+            _reserved = false;
+            Register();
+        }
+        _reserve = reserve;
         if (bottom != _bottom)
         {
             // Windows keeps the old edge's space unless the bar registers again.
@@ -67,6 +78,14 @@ internal sealed class AppBar : IDisposable
         _docking = true;
         try
         {
+            if (!_reserve)
+            {
+                Bounds = _bottom ? System.Drawing.Rectangle.FromLTRB(_monitor.Left, _monitor.Bottom - _height, _monitor.Right, _monitor.Bottom)
+                    : System.Drawing.Rectangle.FromLTRB(_monitor.Left, _monitor.Top, _monitor.Right, _monitor.Top + _height);
+                NativeMethods.SetWindowPos(_window, IntPtr.Zero, Bounds.X, _bottom ? Bounds.Y - _overhang : Bounds.Y, Bounds.Width, Bounds.Height + _overhang,
+                    NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_NOZORDER);
+                return;
+            }
             var data = Data();
             data.Bounds = _bottom
                 ? new NativeMethods.RECT { Left = _monitor.Left, Top = _monitor.Bottom - _height, Right = _monitor.Right, Bottom = _monitor.Bottom }
@@ -76,6 +95,7 @@ internal sealed class AppBar : IDisposable
             if (_bottom) data.Bounds.Top = data.Bounds.Bottom - _height;
             else data.Bounds.Bottom = data.Bounds.Top + _height;
             NativeMethods.SHAppBarMessage(SetPos, ref data);
+            _reserved = true;
             Bounds = System.Drawing.Rectangle.FromLTRB(data.Bounds.Left, data.Bounds.Top, data.Bounds.Right, data.Bounds.Bottom);
             NativeMethods.SetWindowPos(_window, IntPtr.Zero, Bounds.X, _bottom ? Bounds.Y - _overhang : Bounds.Y, Bounds.Width, Bounds.Height + _overhang,
                 NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_NOZORDER);

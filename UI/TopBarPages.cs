@@ -113,6 +113,8 @@ internal sealed partial class TopBarPage : BarSettingsPage
 
         Tab("Style");
         Pick("Position", "TopBarEdge", new[] { new Choice<TopBarEdge>(TopBarEdge.Top, "Top"), new(TopBarEdge.Bottom, "Bottom") }, settings.Edge, (to, value) => to.Edge = value);
+        Switch("Draw over windows and hide while one is under the bar", "TopBarAutoHide", settings.AutoHide, (to, value) => to.AutoHide = value);
+        Hint("Windows get the whole screen. Rest the pointer at the edge for a moment to bring the bar back, so a quick click on a browser tab still reaches the browser. Off, the bar keeps its own strip like the taskbar.");
         Pick("Style", "TopBarStyle", new[] { new Choice<TopBarStyle>(TopBarStyle.Islands, "Floating islands"), new(TopBarStyle.Pills, "Separate pills"), new(TopBarStyle.Solid, "Solid bar") },
             settings.Style, (to, value) => to.Style = value);
         Slide("Height", "TopBarHeight", 24, 64, 1, settings.Height, " px", (to, value) => to.Height = value);
@@ -363,15 +365,14 @@ internal sealed class WorkspacesPage : BarSettingsPage
         Switch("Tile windows automatically", "TopBarTiling", settings.TilingEnabled, (to, value) => to.TilingEnabled = value);
         Pick("Layout", "TopBarTileLayout", new[]
         {
-            new Choice<TileLayout>(TileLayout.Dwindle, "Dwindle: each window splits the one beside it"), new(TileLayout.Grid, "Grid: even tiles, for many windows"),
-            new(TileLayout.Columns, "Columns: side by side"), new(TileLayout.MainAndStack, "Main window and a stack")
+            new Choice<TileLayout>(TileLayout.Dwindle, "Dwindle: each window splits the one beside it"), new(TileLayout.MainAndStack, "Master: a main window and a stack")
         }, settings.TileLayout, (to, value) => to.TileLayout = value);
-        Hint("There is no limit on how many windows tile. Every layout fills the screen and turns with it, so columns become rows on a portrait monitor.");
+        Hint("These work like Hyprland's layouts. There is no limit on how many windows tile, and both turn with the screen on a portrait monitor.");
         Slide("Gap between windows", "TopBarTileGap", 0, 64, 1, settings.TileGap, " px", (to, value) => to.TileGap = (int)Math.Round(value));
         Slide("Gap at screen edges", "TopBarTileMargin", 0, 64, 1, settings.TileMargin, " px", (to, value) => to.TileMargin = (int)Math.Round(value));
         Switch("No gaps around a window that is alone", "TopBarSmartGaps", settings.SmartGaps, (to, value) => to.SmartGaps = value);
         Slide("First window's share", "TopBarSplitRatio", 20, 80, 5, Math.Round(settings.SplitRatio * 100), "%", (to, value) => to.SplitRatio = value / 100);
-        Hint("In Dwindle, the share a window keeps when another opens beside it. In Main window and a stack, the main window's share.");
+        Hint("In Dwindle, the share a window keeps when another opens beside it. In Master, the main window's share.");
         Switch("Stretch fixed-size windows too", "TopBarTileFixedSize", settings.TileFixedSize, (to, value) => to.TileFixedSize = value);
         Hint("Windows that can't be resized by their edges are sized to their tile anyway. One that stays smaller is centered in its tile, and one that can't get smaller gets more room.");
         Switch("Keep popout players and calls floating on every workspace", "TopBarStickyPopouts", settings.StickyPopouts, (to, value) => to.StickyPopouts = value);

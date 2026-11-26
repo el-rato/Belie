@@ -49,8 +49,6 @@ public sealed class TileLayoutTests
 
     [Theory]
     [InlineData("Dwindle")]
-    [InlineData("Grid")]
-    [InlineData("Columns")]
     [InlineData("MainAndStack")]
     public void EveryLayoutFillsWideAndTallScreensWithAnyNumberOfWindows(string layout)
     {
@@ -81,35 +79,6 @@ public sealed class TileLayoutTests
     }
 
     [Fact]
-    public void TheGridKeepsTilesInAComfortableShape()
-    {
-        Assert.Equal(1, DwindleTree.GridColumns(1, Wide));
-        Assert.Equal(2, DwindleTree.GridColumns(4, Wide));
-        Assert.Equal(3, DwindleTree.GridColumns(6, Wide));
-        Assert.Equal(3, DwindleTree.GridColumns(9, Wide));
-        Assert.Equal(4, DwindleTree.GridColumns(12, Wide));
-        Assert.Equal(new[] { new Rectangle(0, 40, 960, 500), new(0, 540, 960, 500), new(960, 40, 960, 500), new(960, 540, 960, 500) },
-            Tree(TileLayout.Grid, 4).Layout(Wide, 0).OrderBy(item => item.Key).Select(item => item.Value));
-        // An odd window goes to the last column, so the first one opened keeps a larger tile.
-        var five = Tree(TileLayout.Grid, 5).Layout(Wide, 0);
-        Assert.Equal(new Rectangle(0, 40, 960, 500), five[1]);
-        Assert.Equal(new Rectangle(960, 40, 960, 333), five[3]);
-        // A turned monitor gets rows instead of columns.
-        var tall = Tree(TileLayout.Grid, 2).Layout(Tall, 0);
-        Assert.Equal(new Rectangle(0, 40, 1000, 960), tall[1]);
-        Assert.Equal(new Rectangle(0, 1000, 1000, 960), tall[2]);
-    }
-
-    [Fact]
-    public void ColumnsBecomeRowsOnATallScreen()
-    {
-        var tree = Tree(TileLayout.Columns, 3);
-        Assert.All(tree.Layout(Wide, 0).Values, tile => Assert.Equal(640, tile.Width));
-        Assert.All(tree.Layout(Tall, 0).Values, tile => Assert.Equal(1000, tile.Width));
-        Assert.Equal(1920, tree.Layout(Tall, 0).Values.Sum(tile => tile.Height));
-    }
-
-    [Fact]
     public void DwindleSplitsFollowTheScreenWhenItTurns()
     {
         var tree = Tree(TileLayout.Dwindle, 2);
@@ -131,21 +100,21 @@ public sealed class TileLayoutTests
         // Dragging the edge between them moves it.
         Assert.True(tree.Resize(2, new Rectangle(1000, 40, 920, 333)));
         Assert.Equal(1000, tree.Layout(Wide, 0)[1].Width);
-        Assert.False(Tree(TileLayout.Grid, 4).ToggleSplit(1));
+        Assert.False(tree.ToggleSplit(1));
     }
 
     [Fact]
     public void NewWindowsOpenBesideTheFocusedOneAndSwapsTradePlaces()
     {
-        var tree = Tree(TileLayout.Columns, 3);
-        tree.Insert(4, 1); // Beside the first.
-        Assert.Equal(480, tree.Layout(Wide, 0)[4].X);
+        var tree = Tree(TileLayout.MainAndStack, 3);
+        tree.Insert(4, 1); // Beside the first, so at the top of the stack.
+        Assert.Equal(new Rectangle(960, 40, 960, 333), tree.Layout(Wide, 0)[4]);
         Assert.True(tree.Swap(4, 3));
         var tiles = tree.Layout(Wide, 0);
-        Assert.Equal(480, tiles[3].X); Assert.Equal(1440, tiles[4].X);
+        Assert.Equal(40, tiles[3].Y); Assert.Equal(707, tiles[4].Y);
         Assert.Equal((nint)1, tree.Neighbor(3, TileDirection.Left));
         Assert.True(tree.Remove(3));
-        Assert.Equal(640, tree.Layout(Wide, 0)[2].X);
+        Assert.Equal(new Rectangle(960, 40, 960, 500), tree.Layout(Wide, 0)[2]);
     }
 
     [Fact]
@@ -160,16 +129,6 @@ public sealed class TileLayoutTests
         Assert.Equal(new[] { 600, 400 }, DwindleTree.Split(1000, 0, new[] { 0, 400 }, new[] { .7, .3 }).Lengths);
         // No room for everything: shared out evenly and the windows overlap later.
         Assert.Equal(new[] { 500, 500 }, DwindleTree.Split(1000, 0, new[] { 900, 900 }).Lengths);
-    }
-
-    [Fact]
-    public void MinimumSizesStillDecideTheGrid()
-    {
-        var tree = Tree(TileLayout.Grid, 4);
-        var tiles = tree.Layout(Wide, 0, window => window == 1 ? new Size(1300, 0) : Size.Empty);
-        Assert.Equal(1300, tiles[1].Width);
-        Assert.Equal(620, tiles[3].Width);
-        AssertFills(Wide, tiles.Values.ToArray());
     }
 
     [Fact]
@@ -233,20 +192,20 @@ public sealed class TileLayoutTests
         var tiles = new FakeTiles();
         var windows = new List<WorkspaceWindow>();
         for (nint window = 1; window <= 12; window++) { tiles.Add(window); windows.Add(new(window, Main, 1, false)); }
-        var engine = new TilingEngine(tiles) { Gap = 0, Margin = 0, Layout = TileLayout.Grid };
+        var engine = new TilingEngine(tiles) { Gap = 0, Margin = 0 };
         engine.Apply(engine.Update(windows, 0));
         Assert.All(windows, window => Assert.True(engine.IsTiled(window.Handle)));
         AssertFills(Wide, tiles.All.Values.Select(tile => tile.Frame).ToArray());
-        Assert.All(tiles.All.Values, tile => Assert.Equal(480, tile.Frame.Width));
 
         tiles.Work = Tall;
         engine.Apply(engine.Update(windows, 0));
         AssertFills(Tall, tiles.All.Values.Select(tile => tile.Frame).ToArray());
-        Assert.All(tiles.All.Values, tile => Assert.Equal(480, tile.Frame.Height));
 
-        engine.Layout = TileLayout.Columns;
+        // Master on a turned screen: the main window on top, the rest in a row below.
+        engine.Layout = TileLayout.MainAndStack;
         engine.Apply(engine.Update(windows, 0));
-        Assert.All(tiles.All.Values, tile => Assert.Equal(1000, tile.Frame.Width));
+        AssertFills(Tall, tiles.All.Values.Select(tile => tile.Frame).ToArray());
+        Assert.Equal(1000, tiles.All.Values.Max(tile => tile.Frame.Width));
     }
 
     [Theory]
@@ -257,13 +216,13 @@ public sealed class TileLayoutTests
     public void AppsThatDrawTheirOwnFrameAreStillTiled(int style, bool tiles, bool fixedSize)
         => Assert.Equal((tiles, fixedSize), NativeTileSystem.Shape(style));
 
-    /// <summary>Firefox with no minimum, then Claude and Spotify, which cannot be smaller than these.</summary>
+    /// <summary>
+    /// Firefox with no minimum, then Claude and Spotify, which cannot be smaller than these. In master the two would
+    /// share the stack, which is too short for both, so like Hyprland they overlap there.
+    /// </summary>
     [Theory]
     [InlineData("Dwindle")]
-    [InlineData("Grid")]
-    [InlineData("Columns")]
-    [InlineData("MainAndStack")]
-    public void WindowsTradeTilesSoLargeMinimumsDoNotCrushTheOthers(string layout)
+    public void LargeMinimumsDoNotCrushTheOthers(string layout)
     {
         var minimums = new Dictionary<nint, Size> { [1] = Size.Empty, [2] = new(768, 509), [3] = new(1000, 750) };
         var tiles = new FakeTiles { Work = new Rectangle(6, 54, 1908, 960) };
@@ -277,8 +236,8 @@ public sealed class TileLayoutTests
         var frames = tiles.All.ToDictionary(item => item.Key, item => item.Value.Frame);
         Assert.All(frames, item => Assert.True(item.Value.Width >= minimums[item.Key].Width && item.Value.Height >= minimums[item.Key].Height, $"{layout}: {item.Key} got {item.Value}"));
         for (nint i = 1; i <= 3; i++) for (nint j = (nint)(i + 1); j <= 3; j++) Assert.False(frames[i].IntersectsWith(frames[j]), $"{layout}: {frames[i]} overlaps {frames[j]}");
-        // The window with no minimum is not left a strip, except in Columns, where it can only have what is left.
-        Assert.True(Math.Min(frames[1].Width, frames[1].Height) >= (layout == "Columns" ? 136 : 400), $"{layout}: Firefox got {frames[1]}");
+        // The window with no minimum still gets a usable tile.
+        Assert.True(Math.Min(frames[1].Width, frames[1].Height) >= 100, $"{layout}: Firefox got {frames[1]}");
     }
 
     private sealed class MinimumTiles(FakeTiles inner, IReadOnlyDictionary<nint, Size> minimums) : ITileSystem
@@ -341,9 +300,6 @@ public sealed class TileLayoutTests
     [Theory]
     [InlineData("Dwindle", 3)]
     [InlineData("Dwindle", 5)]
-    [InlineData("Grid", 3)]
-    [InlineData("Grid", 6)]
-    [InlineData("Columns", 4)]
     [InlineData("MainAndStack", 4)]
     public void EveryInnerEdgeCanBeDraggedWithManyWindows(string layout, int count)
     {
@@ -400,6 +356,7 @@ public sealed class TileLayoutTests
         Assert.Equal(TileLayout.Dwindle, new TopBarSettings { TileLayout = (TileLayout)42 }.Normalize().TileLayout);
         var settings = new TopBarSettings().Normalize();
         Assert.True(settings.TileFixedSize); Assert.True(settings.StickyPopouts);
-        Assert.Equal(TileLayout.Grid, new TopBarSettings { TileLayout = TileLayout.Grid }.Normalize().TileLayout);
+        Assert.True(settings.AutoHide);
+        Assert.Equal(TileLayout.MainAndStack, new TopBarSettings { TileLayout = TileLayout.MainAndStack }.Normalize().TileLayout);
     }
 }

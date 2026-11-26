@@ -9,7 +9,7 @@ internal enum WorkspaceLabelStyle { Numbers, Dots, Roman, Names, Pills }
 internal enum WorkspaceShortcutModifier { None, Alt, CtrlAlt }
 internal enum WorkspaceMotion { Horizontal, Vertical, Fade }
 /// <summary>How tiled windows share a workspace.</summary>
-internal enum TileLayout { Dwindle, Grid, Columns, MainAndStack }
+internal enum TileLayout { Dwindle, MainAndStack }
 internal enum BarMediaStyle { Text, Cover, Controls, CoverOnly }
 internal enum BarMediaClick { Player, PlayPause }
 internal enum BarModuleKind
@@ -96,6 +96,8 @@ internal sealed class TopBarSettings
     public bool Enabled { get; set; }
     public bool PrimaryMonitorOnly { get; set; }
     public TopBarEdge Edge { get; set; }
+    /// <summary>The bar draws over windows and slides away while one is under it, coming back when the pointer rests at the edge.</summary>
+    public bool AutoHide { get; set; } = true;
     public TopBarStyle Style { get; set; } = TopBarStyle.Islands;
     public double Height { get; set; } = 36;
     /// <summary>Space between the bar and the screen edges.</summary>

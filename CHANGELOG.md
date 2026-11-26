@@ -1,18 +1,22 @@
 # Belie patch notes
 
-## [Unreleased] - Tiling that fits
+## [Unreleased] - Tiling like Hyprland
 
 ### Added
 
-- **Tiling layouts.** Choose **Grid**, **Columns** or **Main window and a stack** alongside **Dwindle** under **Workspaces → Tiling → Layout**. Grid keeps tiles evenly sized however many windows you open, so a workspace can hold many more usable tiles.
-- **Stretch fixed-size windows too**, on by default. Windows that can't be resized by their edges now tile like the rest. One that stays smaller than its tile is centered in it, and one that can't get smaller gets more room, instead of breaking the layout.
+- **Master layout.** Choose it under **Workspaces → Tiling → Layout**: one main window on one side and the rest stacked on the other, as in Hyprland. **Dwindle** stays the default.
+- **The top bar draws over windows and gets out of their way.** Windows now get the whole screen. The bar slides away while a window is under it and stays on an empty desktop. Rest the pointer at the top edge for a moment to bring it back; a quick click there, such as on a browser tab, still reaches the app. Turn off **Draw over windows and hide while one is under the bar** under **Top bar → Style** to give the bar its own strip again.
+- **Stretch fixed-size windows too**, on by default. Windows that can't be resized by their edges now tile like the rest. One that stays smaller than its tile is centered in it.
 
 ### Changed
 
-- Tiling adapts as you go. Splits turn to fit their space when windows close, and every layout turns with the monitor, so columns become rows on a portrait screen.
+- Dwindle works like Hyprland's. Each new window splits the focused tile the way that tile is shaped, and splits suit their space again when windows open or close or the monitor turns. Splits no longer turn while you drag an edge.
+- Every edge between tiles can be dragged, however many windows are open.
 
 ### Fixed
 
+- Apps that draw their own title bar, such as Firefox, are tiled again.
+- Apps that can't be made smaller than a certain size, such as Spotify, no longer overlap their neighbors in Dwindle. The split turns or moves to give them room.
 - Picture-in-picture videos, mini players and call windows are no longer tiled or stretched. They keep their own size and place, and stay visible when you switch workspaces. Turn that last part off with **Keep popout players and calls floating on every workspace**.
 
 ### Updating

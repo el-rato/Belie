@@ -212,6 +212,8 @@ internal sealed class TopBarWindow : Window
         _right.Child = _rightRow; _right.HorizontalAlignment = HorizontalAlignment.Right;
         _bar.Child = new BarSections((_left, _leftRow), (_center, _centerRow), (_right, _rightRow)); Content = _bar;
         _bar.VerticalAlignment = VerticalAlignment.Top;
+        _bar.RenderTransform = _slide;
+        _autoHide.Tick += (_, _) => CheckAutoHide();
 
         _popupClose.Tick += (_, _) =>
         {
@@ -238,10 +240,75 @@ internal sealed class TopBarWindow : Window
             Place(_screen);
         };
         DpiChanged += (_, _) => Dispatcher.BeginInvoke(() => Place(_screen));
-        Closed += (_, _) => { ClosePopup(); CompositionTarget.Rendering -= DrawPill; _dock?.Dispose(); };
+        Closed += (_, _) => { _autoHide.Stop(); ClosePopup(); CompositionTarget.Rendering -= DrawPill; _dock?.Dispose(); };
     }
 
     private bool _shellFullscreen, _covered;
+
+    // Auto-hide: the bar draws over windows and slides out of their way.
+    private readonly DispatcherTimer _autoHide = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    private readonly System.Windows.Media.TranslateTransform _slide = new();
+    private bool _tucked;
+    private long? _atEdgeSince;
+    private long _lastWanted;
+    /// <summary>How long the pointer rests at the edge before the bar comes back, so a quick click on a tab there still reaches the app.</summary>
+    private const int RevealDelay = 350;
+    /// <summary>How long the bar stays after the pointer leaves it.</summary>
+    private const int HideDelay = 400;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out CursorPoint point);
+    private struct CursorPoint { public int X, Y; }
+
+    private void CheckAutoHide()
+    {
+        if (_screen.IsEmpty || _handle == IntPtr.Zero || !GetCursorPos(out var cursor)) return;
+        var scale = VisualTreeHelper.GetDpi(this).DpiScaleY;
+        var strip = (int)Math.Round(FullHeight * scale);
+        var bottom = _settings.Edge == TopBarEdge.Bottom;
+        var bar = bottom ? System.Drawing.Rectangle.FromLTRB(_screen.Left, _screen.Bottom - strip, _screen.Right, _screen.Bottom)
+            : new System.Drawing.Rectangle(_screen.X, _screen.Y, _screen.Width, strip);
+        var point = new System.Drawing.Point(cursor.X, cursor.Y);
+        var now = Environment.TickCount64;
+        var atEdge = point.X >= _screen.Left && point.X < _screen.Right && (bottom ? point.Y >= _screen.Bottom - 2 : point.Y <= _screen.Top + 1);
+        _atEdgeSince = atEdge ? _atEdgeSince ?? now : null;
+        var busy = bar.Contains(point) && !_tucked || _popup.IsOpen || ContextMenu?.IsOpen == true;
+        if (busy || !Underneath(bar) || _atEdgeSince is { } since && now - since >= RevealDelay) _lastWanted = now;
+        Tuck(now - _lastWanted >= (_tucked ? 0 : HideDelay));
+    }
+
+    /// <summary>Whether the window in front reaches under the bar on this monitor.</summary>
+    private bool Underneath(System.Drawing.Rectangle bar)
+    {
+        var front = NativeMethods.GetForegroundWindow();
+        if (front == IntPtr.Zero || front == _handle || front == NativeMethods.GetShellWindow() || !NativeMethods.IsWindowVisible(front) || NativeMethods.IsIconic(front)) return false;
+        if (ShellClasses.Contains(NativeMethods.ClassName(front)) || !NativeMethods.GetWindowRect(front, out var rect)) return false;
+        return System.Drawing.Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom).IntersectsWith(bar);
+    }
+
+    /// <summary>Slides the bar out of view, or back. Out of view, its window is see-through, so clicks reach what is under it.</summary>
+    private void Tuck(bool tucked)
+    {
+        if (tucked == _tucked) return;
+        _tucked = tucked;
+        if (tucked) ClosePopup();
+        var away = (FullHeight + 4) * (_settings.Edge == TopBarEdge.Bottom ? 1 : -1);
+        var to = tucked ? away : 0;
+        _bar.IsHitTestVisible = !tucked;
+        if (_settings.AnimationsEnabled && SystemParameters.ClientAreaAnimation)
+            _slide.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty,
+                new System.Windows.Media.Animation.DoubleAnimation(to, TimeSpan.FromMilliseconds(160))
+                { EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } });
+        else { _slide.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, null); _slide.Y = to; }
+    }
+
+    private void UpdateAutoHide()
+    {
+        if (_settings.AutoHide && !IsPreview) { _autoHide.Start(); return; }
+        _autoHide.Stop();
+        _lastWanted = Environment.TickCount64;
+        Tuck(false);
+    }
 
     /// <summary>
     /// Steps aside for a full-screen app on this monitor. Windows also reports "full screen" when the desktop itself
@@ -298,7 +365,7 @@ internal sealed class TopBarWindow : Window
         _screen = screen;
         if (_dock == null || screen.IsEmpty) return;
         var scale = VisualTreeHelper.GetDpi(this).DpiScaleY;
-        _dock.Dock(screen, (int)Math.Round(FullHeight * scale), _settings.Edge == TopBarEdge.Bottom, (int)Math.Ceiling(Overhang * scale));
+        _dock.Dock(screen, (int)Math.Round(FullHeight * scale), _settings.Edge == TopBarEdge.Bottom, (int)Math.Ceiling(Overhang * scale), !_settings.AutoHide);
     }
 
     /// <summary>Follows resolution and arrangement changes without redocking every second.</summary>
@@ -308,9 +375,9 @@ internal sealed class TopBarWindow : Window
     public void Apply(TopBarSettings settings, WallpaperColors? colors = null)
     {
         if (settings.Left == null || settings.Center == null || settings.Right == null) settings.Normalize();
-        var before = (FullHeight, Overhang, _settings.Edge);
+        var before = (FullHeight, Overhang, _settings.Edge, _settings.AutoHide);
         _settings = settings;
-        var moved = before != (FullHeight, Overhang, _settings.Edge);
+        var moved = before != (FullHeight, Overhang, _settings.Edge, _settings.AutoHide);
         if (_css != settings.Css) { _css = settings.Css; _sheet = BarStylesheet.Parse(_css); }
         ClosePopup();
         var matched = settings.Colors == TopBarColors.Wallpaper ? colors : null;
@@ -369,6 +436,7 @@ internal sealed class TopBarWindow : Window
         }
         BuildModules(border);
         if (moved) Place(_screen);
+        UpdateAutoHide();
     }
 
     private BarLook Look(IEnumerable<KeyValuePair<string, string>> own, BarElement element)

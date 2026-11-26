@@ -6,10 +6,9 @@ namespace WallpaperProfiles.Workspaces;
 internal enum TileDirection { Left, Right, Up, Down }
 
 /// <summary>
-/// The windows of one workspace and where each goes. In the dwindle layout each new window splits the space of the
-/// one it opens beside: wide spaces split side by side and tall ones top and bottom, decided again each time the
-/// space changes, so splits follow the screen when windows close or a monitor turns. The other layouts go by the
-/// order windows opened in and always use all of the space, however many windows there are.
+/// The windows of one workspace and where each goes, the way Hyprland tiles. In dwindle each new window splits the
+/// tile of the one it opens beside, side by side when that tile is wide and top and bottom when it is tall. In master
+/// the first window takes one side and the rest share the other.
 /// </summary>
 internal sealed class DwindleTree
 {
@@ -17,22 +16,18 @@ internal sealed class DwindleTree
     {
         public nint Window;
         public Node? Parent, First, Second;
-        /// <summary>The way its shape suggested when it was last decided: when windows opened or closed, or the screen changed.</summary>
-        public bool SideBySide, Oriented;
-        /// <summary>The user turned this split, so it goes the other way from what its shape suggests.</summary>
+        /// <summary>The way its shape said to split, decided when windows open or close or the screen changes.</summary>
+        public bool SideBySide = true;
+        /// <summary>The user turned this split.</summary>
         public bool Flipped;
-        /// <summary>The direction it was given; windows with a minimum size can force the other one.</summary>
-        public bool Placed;
-        public Size Minimum;
+        /// <summary>The way it was split last time, which minimum sizes can turn.</summary>
+        public bool Across = true;
         public double Ratio = .5;
-        /// <summary>Its share of its column or stack in the layouts other than dwindle, dragged by the user.</summary>
+        /// <summary>Its share of the stack in master, dragged by the user.</summary>
         public double Weight = 1;
         public Rectangle Bounds;
         public bool IsLeaf => First == null;
     }
-
-    /// <summary>A tile wider than this, compared to its height, looks stretched, so the grid adds a column first.</summary>
-    private const double GridAspect = 1.6;
 
     private Node? _root;
     private readonly Dictionary<nint, Node> _leaves = new();
@@ -40,18 +35,11 @@ internal sealed class DwindleTree
     private readonly List<Node> _order = new();
     private int _gap;
     private double? _mainRatio;
-    private List<Node[]> _groups = new();
-    private readonly List<Rectangle> _groupBounds = new();
-    private bool _groupsAcross;
-    /// <summary>Column sizes dragged in the grid, kept until a window opens or closes.</summary>
-    private readonly List<double> _columnWeights = new();
-    private int _gridShape;
+    private Rectangle _mainBounds, _stackBounds;
+    private bool _across;
     /// <summary>The share a window keeps when another opens beside it, and the main window's share.</summary>
     public double SplitRatio { get; set; } = .5;
     public TileLayout Mode { get; set; }
-    private TileLayout _arranged;
-    /// <summary>Trying every trade gets slow past this many windows.</summary>
-    private const int MostToBalance = 10;
     private Func<nint, Size> _minimum = _ => Size.Empty;
     /// <summary>
     /// Splits choose their direction again only when windows open or close or the screen changes. Dragging an edge
@@ -59,6 +47,7 @@ internal sealed class DwindleTree
     /// </summary>
     private bool _reorient = true;
     private Rectangle _lastArea;
+    private TileLayout _arranged;
 
     public IReadOnlyCollection<nint> Windows => _leaves.Keys;
     public bool Contains(nint window) => _leaves.ContainsKey(window);
@@ -71,7 +60,9 @@ internal sealed class DwindleTree
         else
         {
             var target = _leaves.TryGetValue(beside, out var found) ? found : LastLeaf(_root);
-            var split = new Node { Parent = target.Parent, First = target, Second = leaf, Ratio = SplitRatio };
+            // Like Hyprland, the split goes the way the tile it splits is shaped.
+            var wide = target.Bounds.IsEmpty || Wide(target.Bounds);
+            var split = new Node { Parent = target.Parent, First = target, Second = leaf, Ratio = SplitRatio, SideBySide = wide, Across = wide };
             Replace(target, split);
             target.Parent = split; leaf.Parent = split;
         }
@@ -118,7 +109,7 @@ internal sealed class DwindleTree
     {
         if (Mode != TileLayout.Dwindle || !_leaves.TryGetValue(window, out var leaf) || leaf.Parent is not { } parent) return false;
         // Turn it from the way it is now, which minimum sizes may have decided.
-        parent.Flipped = !parent.Placed != parent.SideBySide;
+        parent.Flipped = !parent.Across != parent.SideBySide;
         return true;
     }
 
@@ -128,96 +119,56 @@ internal sealed class DwindleTree
     {
         _gap = gap;
         _minimum = minimum ?? (_ => Size.Empty);
-        if (area != _lastArea) { _reorient = true; _lastArea = area; }
-        if (Mode != _arranged) { _reorient = true; _arranged = Mode; }
+        if (area != _lastArea || Mode != _arranged) { _reorient = true; _lastArea = area; _arranged = Mode; }
         if (_root != null)
         {
-            if (_reorient && _leaves.Count is > 1 and <= MostToBalance && _leaves.Keys.Any(window => !_minimum(window).IsEmpty)) Balance(area);
-            Place(area, _reorient);
+            if (Mode == TileLayout.MainAndStack) ArrangeMaster(area);
+            else
+            {
+                Arrange(_root, area);
+                // Splits that just turned change what their tiles need, so the sizes are worked out once more.
+                if (_reorient) { _reorient = false; Arrange(_root, area); }
+            }
         }
+        _reorient = false;
         return _leaves.ToDictionary(item => item.Key, item => item.Value.Bounds);
     }
 
-    /// <summary>Asks for the splits to be chosen again, as when a window learns it cannot be smaller.</summary>
+    /// <summary>Asks for the splits to be chosen again, as when a window turns out to have a minimum size.</summary>
     public void Rebalance() => _reorient = true;
 
-    private void Place(Rectangle area, bool reorient)
-    {
-        _reorient = reorient;
-        Measure(_root!, area);
-        if (Mode != TileLayout.Dwindle) ArrangeInOrder(area);
-        else
-        {
-            Arrange(_root!, area);
-            // The first pass guessed each split's space; now each knows the space it really has.
-            if (reorient) { Settle(_root!); _reorient = false; Measure(_root!, area); Arrange(_root!, area); }
-        }
-        _reorient = false;
-    }
-
-    private static void Settle(Node node)
-    {
-        if (node.IsLeaf) return;
-        node.SideBySide = Wide(node.Bounds);
-        Settle(node.First!); Settle(node.Second!);
-    }
-
     /// <summary>
-    /// Apps with a minimum size can leave no room for the others where they happen to be. This trades windows
-    /// between tiles while that lets more of them fit, or gives the most squeezed one clearly more room.
+    /// The least room a tile and everything in it needs, given roughly the space it will get: split the way each
+    /// split went last time, or the way its share of that space is shaped when splits are being chosen again.
     /// </summary>
-    private void Balance(Rectangle area)
+    private Size Need(Node node, Rectangle area)
     {
-        Place(area, true);
-        var best = Score();
-        for (var improved = true; improved;)
-        {
-            improved = false;
-            for (var i = 0; i < _order.Count; i++)
-                for (var j = i + 1; j < _order.Count; j++)
-                {
-                    nint a = _order[i].Window, b = _order[j].Window;
-                    Swap(a, b);
-                    Place(area, true);
-                    var score = Score();
-                    if (score.Fit > best.Fit || score.Fit == best.Fit && score.Side >= best.Side * 1.25 + 1) { best = score; improved = true; }
-                    else Swap(a, b);
-                }
-        }
-    }
-
-    /// <summary>How many windows get at least their minimum, then the shortest side of any tile.</summary>
-    private (int Fit, int Side) Score() => (
-        _order.Count(node => node.Bounds.Width >= node.Minimum.Width && node.Bounds.Height >= node.Minimum.Height),
-        _order.Min(node => Math.Min(node.Bounds.Width, node.Bounds.Height)));
-
-    private void Measure(Node node, Rectangle area)
-    {
-        if (node.IsLeaf) { node.Minimum = _minimum(node.Window); return; }
-        // The minimum follows the way the split is likely to go in roughly the space it will get; Arrange turns it if it cannot.
-        if (_reorient || !node.Oriented) { node.SideBySide = Wide(area); node.Oriented = true; }
-        var across = node.SideBySide != node.Flipped;
+        if (node.IsLeaf) return _minimum(node.Window);
+        var across = _reorient ? Wide(area) != node.Flipped : node.Across;
         var first = (int)Math.Round((across ? area.Width : area.Height) * node.Ratio);
-        Measure(node.First!, across ? area with { Width = first } : area with { Height = first });
-        Measure(node.Second!, across ? area with { Width = area.Width - first } : area with { Height = area.Height - first });
-        node.Minimum = Combine(across, node.First!.Minimum, node.Second!.Minimum);
+        return Combine(across, Need(node.First!, across ? area with { Width = first } : area with { Height = first }),
+            Need(node.Second!, across ? area with { Width = area.Width - first } : area with { Height = area.Height - first }));
     }
 
-    private Size Combine(bool sideBySide, Size first, Size second) => sideBySide
+    private Size Combine(bool across, Size first, Size second) => across
         ? new Size(first.Width + _gap + second.Width, Math.Max(first.Height, second.Height))
         : new Size(Math.Max(first.Width, second.Width), first.Height + _gap + second.Height);
 
-    private bool Fits(bool sideBySide, Size first, Size second, Rectangle area)
-        => Combine(sideBySide, first, second) is var need && need.Width <= area.Width && need.Height <= area.Height;
+    private bool Fits(bool across, Size first, Size second, Rectangle area)
+        => Combine(across, first, second) is var need && need.Width <= area.Width && need.Height <= area.Height;
 
     private void Arrange(Node node, Rectangle area)
     {
         node.Bounds = area;
         if (node.IsLeaf) return;
-        Size a = node.First!.Minimum, b = node.Second!.Minimum;
+        if (_reorient) node.SideBySide = Wide(area);
         var across = node.SideBySide != node.Flipped;
+        var guess = (int)Math.Round((across ? area.Width : area.Height) * node.Ratio);
+        Size a = Need(node.First!, across ? area with { Width = guess } : area with { Height = guess }),
+            b = Need(node.Second!, across ? area with { Width = area.Width - guess } : area with { Height = area.Height - guess });
+        // A window that cannot be that narrow (or short) gets the split turned the other way, if that fits.
         if (!Fits(across, a, b, area) && Fits(!across, a, b, area)) across = !across;
-        node.Placed = across;
+        node.Across = across;
         var length = Math.Max(2, (across ? area.Width : area.Height) - _gap);
         var first = Math.Clamp((int)Math.Round(length * node.Ratio), 1, length - 1);
         int least = across ? a.Width : a.Height, rest = across ? b.Width : b.Height;
@@ -230,90 +181,30 @@ internal sealed class DwindleTree
             : new Rectangle(area.X, area.Y + first + _gap, area.Width, length - first));
     }
 
-    /// <summary>How many columns a grid of this many windows gets, so tiles stay close to a comfortable shape.</summary>
-    internal static int GridColumns(int count, Rectangle area)
+    /// <summary>The first window on one side and the rest stacked on the other, turned on a tall screen.</summary>
+    private void ArrangeMaster(Rectangle area)
     {
-        if (count <= 1 || area.Width <= 0 || area.Height <= 0) return 1;
-        var columns = (int)Math.Round(Math.Sqrt(count * area.Width / (area.Height * GridAspect)));
-        return Math.Clamp(columns, 1, count);
-    }
-
-    /// <summary>
-    /// Grid, Columns and Main window and a stack are all groups of tiles side by side (or stacked on a tall screen),
-    /// each group sharing its space among its own tiles the other way. Every edge between two can be dragged.
-    /// </summary>
-    private void ArrangeInOrder(Rectangle area)
-    {
-        var tiles = _order;
-        // Columns on a wide screen become rows on a tall one, so the same layout works on a turned monitor.
-        var across = Wide(area);
-        var groups = new List<Node[]>();
-        switch (Mode)
-        {
-            case TileLayout.Columns:
-                groups.AddRange(tiles.Select(node => new[] { node }));
-                break;
-            case TileLayout.MainAndStack:
-                groups.Add(new[] { tiles[0] });
-                if (tiles.Count > 1) groups.Add(tiles.Skip(1).ToArray());
-                break;
-            default:
-            {
-                // Earlier columns hold fewer windows, so the first ones opened keep the larger tiles.
-                var columns = GridColumns(tiles.Count, across ? area : new Rectangle(0, 0, area.Height, area.Width));
-                for (int column = 0, taken = 0; column < columns; column++)
-                {
-                    var size = tiles.Count / columns + (column >= columns - tiles.Count % columns ? 1 : 0);
-                    groups.Add(tiles.Skip(taken).Take(size).ToArray());
-                    taken += size;
-                }
-                // Windows change columns when one opens or closes, so sizes dragged for the old shape no longer apply.
-                if (_gridShape != tiles.Count)
-                {
-                    _gridShape = tiles.Count;
-                    _columnWeights.Clear();
-                    foreach (var node in tiles) node.Weight = 1;
-                }
-                break;
-            }
-        }
-        _groups = groups; _groupsAcross = across; _groupBounds.Clear();
-        var (starts, lengths) = Split(Length(area, across), _gap, groups.Select(group => group.Max(node => Least(node, across))).ToArray(),
-            Enumerable.Range(0, groups.Count).Select(GroupWeight).ToArray());
-        for (var i = 0; i < groups.Count; i++)
-        {
-            var strip = Strip(area, starts[i], lengths[i], across);
-            _groupBounds.Add(strip);
-            var (at, sizes) = Split(Length(strip, !across), _gap, groups[i].Select(node => Least(node, !across)).ToArray(),
-                groups[i].Select(node => node.Weight).ToArray());
-            for (var j = 0; j < groups[i].Length; j++) groups[i][j].Bounds = Strip(strip, at[j], sizes[j], !across);
-        }
+        _across = Wide(area);
+        var main = _order[0];
+        var stack = _order.Skip(1).ToArray();
+        if (stack.Length == 0) { main.Bounds = _mainBounds = area; _stackBounds = Rectangle.Empty; return; }
+        var ratio = _mainRatio ?? SplitRatio;
+        var (starts, lengths) = Split(Length(area, _across), _gap,
+            new[] { Least(_minimum(main.Window), _across), stack.Max(node => Least(_minimum(node.Window), _across)) }, new[] { ratio, 1 - ratio });
+        main.Bounds = _mainBounds = Strip(area, starts[0], lengths[0], _across);
+        _stackBounds = Strip(area, starts[1], lengths[1], _across);
+        var (at, sizes) = Split(Length(_stackBounds, !_across), _gap, stack.Select(node => Least(_minimum(node.Window), !_across)).ToArray(),
+            stack.Select(node => node.Weight).ToArray());
+        for (var i = 0; i < stack.Length; i++) stack[i].Bounds = Strip(_stackBounds, at[i], sizes[i], !_across);
     }
 
     private static int Length(Rectangle area, bool across) => across ? area.Width : area.Height;
     private static int Start(Rectangle area, bool across) => across ? area.X : area.Y;
     private static int End(Rectangle area, bool across) => across ? area.Right : area.Bottom;
-    private static int Least(Node node, bool across) => across ? node.Minimum.Width : node.Minimum.Height;
+    private static int Least(Size minimum, bool across) => across ? minimum.Width : minimum.Height;
     private static Rectangle Strip(Rectangle within, int start, int length, bool across) => across
         ? new Rectangle(within.X + start, within.Y, length, within.Height)
         : new Rectangle(within.X, within.Y + start, within.Width, length);
-
-    private double GroupWeight(int group) => Mode switch
-    {
-        TileLayout.Columns => _groups.Count > group ? _groups[group][0].Weight : 1,
-        TileLayout.MainAndStack => group == 0 ? _mainRatio ?? SplitRatio : 1 - (_mainRatio ?? SplitRatio),
-        _ => group < _columnWeights.Count ? _columnWeights[group] : 1
-    };
-
-    /// <summary>Gives the first of two neighboring groups this share of the space the two have together.</summary>
-    private void ShareGroups(int first, double share)
-    {
-        if (Mode == TileLayout.MainAndStack) { _mainRatio = share; return; }
-        var total = GroupWeight(first) + GroupWeight(first + 1);
-        if (Mode == TileLayout.Columns) { _groups[first][0].Weight = total * share; _groups[first + 1][0].Weight = total * (1 - share); return; }
-        while (_columnWeights.Count < _groups.Count) _columnWeights.Add(1);
-        _columnWeights[first] = total * share; _columnWeights[first + 1] = total * (1 - share);
-    }
 
     /// <summary>Moves the edge between two neighbors to where the user dragged it. False when it did not move.</summary>
     private bool MoveEdge(Rectangle first, Rectangle second, int edge, bool across, Action<double> share)
@@ -324,30 +215,29 @@ internal sealed class DwindleTree
         return true;
     }
 
-    private bool ResizeInOrder(Node leaf, Rectangle bounds, int slack)
+    private bool ResizeMaster(Node leaf, Rectangle bounds, int slack)
     {
-        var group = _groups.FindIndex(nodes => nodes.Contains(leaf));
-        if (group < 0) return false;
+        if (_stackBounds.IsEmpty) return false;
         var old = leaf.Bounds;
         var changed = false;
-        // Edges between groups.
-        var across = _groupsAcross;
-        if (Math.Abs(Start(bounds, across) - Start(old, across)) > slack && group > 0)
-            changed |= MoveEdge(_groupBounds[group - 1], _groupBounds[group], Start(bounds, across) - _gap, across, share => ShareGroups(group - 1, share));
-        if (Math.Abs(End(bounds, across) - End(old, across)) > slack && group < _groups.Count - 1)
-            changed |= MoveEdge(_groupBounds[group], _groupBounds[group + 1], End(bounds, across), across, share => ShareGroups(group, share));
-        // Edges between tiles in the same group.
-        var nodes = _groups[group];
-        var index = Array.IndexOf(nodes, leaf);
+        var isMain = leaf == _order[0];
+        // The edge between the main window and the stack.
+        var moved = isMain ? End(bounds, _across) - End(old, _across) : Start(bounds, _across) - Start(old, _across);
+        if (Math.Abs(moved) > slack)
+            changed |= MoveEdge(_mainBounds, _stackBounds, isMain ? End(bounds, _across) : Start(bounds, _across) - _gap, _across, share => _mainRatio = share);
+        if (isMain) return changed;
+        // Edges between windows in the stack.
+        var stack = _order.Skip(1).ToArray();
+        var index = Array.IndexOf(stack, leaf);
         void Share(Node first, Node second, double share)
         {
             var total = first.Weight + second.Weight;
             first.Weight = total * share; second.Weight = total * (1 - share);
         }
-        if (Math.Abs(Start(bounds, !across) - Start(old, !across)) > slack && index > 0)
-            changed |= MoveEdge(nodes[index - 1].Bounds, old, Start(bounds, !across) - _gap, !across, share => Share(nodes[index - 1], leaf, share));
-        if (Math.Abs(End(bounds, !across) - End(old, !across)) > slack && index < nodes.Length - 1)
-            changed |= MoveEdge(old, nodes[index + 1].Bounds, End(bounds, !across), !across, share => Share(leaf, nodes[index + 1], share));
+        if (Math.Abs(Start(bounds, !_across) - Start(old, !_across)) > slack && index > 0)
+            changed |= MoveEdge(stack[index - 1].Bounds, old, Start(bounds, !_across) - _gap, !_across, share => Share(stack[index - 1], leaf, share));
+        if (Math.Abs(End(bounds, !_across) - End(old, !_across)) > slack && index < stack.Length - 1)
+            changed |= MoveEdge(old, stack[index + 1].Bounds, End(bounds, !_across), !_across, share => Share(leaf, stack[index + 1], share));
         return changed;
     }
 
@@ -400,7 +290,7 @@ internal sealed class DwindleTree
     {
         if (!_leaves.TryGetValue(window, out var leaf)) return false;
         var old = leaf.Bounds;
-        if (Mode != TileLayout.Dwindle) return ResizeInOrder(leaf, bounds, slack);
+        if (Mode != TileLayout.Dwindle) return ResizeMaster(leaf, bounds, slack);
         var changed = false;
         if (Math.Abs(bounds.Left - old.Left) > slack) changed |= MoveSplit(leaf, true, true, bounds.Left - _gap);
         if (Math.Abs(bounds.Right - old.Right) > slack) changed |= MoveSplit(leaf, true, false, bounds.Right);
@@ -413,7 +303,7 @@ internal sealed class DwindleTree
     {
         for (; node.Parent is { } parent; node = parent)
         {
-            if (parent.Placed != sideBySide || parent.Second == node != isSecond) continue;
+            if (parent.Across != sideBySide || parent.Second == node != isSecond) continue;
             var length = (sideBySide ? parent.Bounds.Width : parent.Bounds.Height) - _gap;
             if (length <= 0) return false;
             parent.Ratio = Math.Clamp((edge - (sideBySide ? parent.Bounds.X : parent.Bounds.Y)) / (double)length, .1, .9);
