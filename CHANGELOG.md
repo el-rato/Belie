@@ -1,5 +1,18 @@
 # Belie patch notes
 
+## [4.2.1] - 2026-11-27 - The team moves to the top bar
+
+### Changed
+
+- **The team lives on the top bar.** A new **Team** module shows your leader and its level; click it to open the team, with levels, badges, your streak, **Exp. Share** and **Walks the desktop**. Click a creature there to make it the leader. Add the module with **Add Team to the bar** on the **Team** page, or under **Top bar → Modules**, and move it like any other module.
+- The **Team** page in Belie now holds the team's settings: the GitHub account it counts and the creature pack.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained, and so is your team. The Team module is not added to your bar on its own: choose **Add Team to the bar** on the **Team** page.
+
 ## [4.2.0] - 2026-11-27 - Subjects that stand out, and a team of critters
 
 ### Added
