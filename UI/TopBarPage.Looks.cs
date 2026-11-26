@@ -106,7 +106,7 @@ internal sealed partial class TopBarPage
     {
         Tab("Looks");
         Switch("Show the top bar", "TopBarEnabled", settings.Enabled, (to, value) => to.Enabled = value);
-        Hint("A look changes everything the bar shows and how it is drawn. Your workspaces, profiles and tiling stay as they are, and the look you had is kept below.");
+        Hint("A look changes everything the bar shows and how it is drawn. Your workspaces and profiles stay as they are, and the look you had is kept below.");
         _cards.Clear(); _drawn = 0;
         foreach (var rice in BarRice.BuiltIn) Add(LookCard(rice, null));
         Heading("Yours");

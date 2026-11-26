@@ -50,9 +50,9 @@ Use your editor's **Go to definition** on each called method. **Find all referen
 | Wallpaper switcher and its keys | `UI/WallpaperSwitcher.cs`, `UI/SwitcherDeck.cs`, `UI/SwitcherPage.cs`, `Engine/WallpaperKeys.cs` |
 | Transitions page and its preview | `UI/TransitionsPage.cs` |
 | Bar readings: system, weather, colors of the wallpaper | `Engine/SystemReadings.cs`, `Engine/WeatherSource.cs`, `Engine/WallpaperColors.cs` |
-| Workspace and tiling keys, shared with profile shortcuts | `Engine/WorkspaceKeys.cs`, `Infrastructure/ProfileShortcutManager.cs` |
+| Workspace keys, shared with profile shortcuts | `Engine/WorkspaceKeys.cs`, `Infrastructure/ProfileShortcutManager.cs` |
 | Workspace rules | `Workspaces/WorkspaceManager.cs` |
-| Automatic tiling | `Workspaces/TilingEngine.cs`, `Workspaces/DwindleTree.cs` |
+| Window frames and work areas for workspace animations | `Workspaces/WindowFrames.cs` |
 | Workspace and window animations, their curves | `UI/SceneOverlay.cs`, `Workspaces/Motion.cs` |
 | Which windows workspaces may touch | `Workspaces/NativeWindowSystem.cs` |
 | Bringing hidden windows back after a crash | `Workspaces/HiddenWindowJournal.cs`, `TopBarProcess.RunGuard` |
@@ -77,7 +77,7 @@ Use your editor's **Go to definition** on each called method. **Find all referen
 - Smooth live playback and icon-safe playback use different Windows rendering mechanisms. Both implementations are used.
 - The detached live host and desktop host (widgets and top bar) keep rendering alive independently of the tray app.
 - The wallpaper switcher belongs to the tray app; the bar asks for it through named events (`TopBarProcess.WallpaperEventName`). Choosing a wallpaper never stops a slideshow: it carries on from there.
-- A look (`BarRice`) changes what the bar shows and how it is drawn, never workspaces, profile links or tiling. Looks from a file may hold commands, so importing one lists them and asks.
+- A look (`BarRice`) changes what the bar shows and how it is drawn, never workspaces or profile links. Looks from a file may hold commands, so importing one lists them and asks.
 - The full profile editor supports rules and scene settings; the inline profile editor supports common daily edits.
 - Legacy canvas migration preserves existing user data, including saved boards. Its backup and validation paths are still needed.
 

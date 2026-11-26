@@ -27,15 +27,11 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _syncDelay = new() { Interval = TimeSpan.FromMilliseconds(40) };
     private readonly IWindowSystem _system;
-    private readonly NativeTileSystem _tileSystem;
+    private readonly NativeWindowFrames _frames = new();
     private readonly Dictionary<string, SceneOverlay> _scenes = new();
-    private TilingEngine? _tiling;
-    private bool _dragging;
-    private nint _dragged;
-    private readonly System.Diagnostics.Stopwatch _dragTime = new();
     private readonly DispatcherTimer _titleDelay = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private WorkspaceProfileRequest? _waitingProfile;
-    private bool _following, _reading;
+    private bool _reading;
     private long _lastSync;
     private readonly Dictionary<string, TopBarWindow> _windows = new();
     private readonly SystemReadings _readings = new();
@@ -58,17 +54,13 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
 
     internal WorkspaceManager? Workspaces => _workspaces;
     internal IReadOnlyCollection<TopBarWindow> Windows => _windows.Values;
-    internal TilingEngine? Tiling => _tiling;
     internal SceneOverlay? Scene(string monitor) => _scenes.GetValueOrDefault(monitor);
 
     public TopBarHost(string file, Action exit, Func<DesktopWindow, bool>? only = null, Func<IProfileHotkeys>? hotkeys = null, bool guard = true)
     {
         _store = new TopBarStore(file);
         _exit = exit;
-        _keys = new WorkspaceKeys(hotkeys ?? (() => new NativeProfileHotkeys()), OpenByKey, SendWindow,
-            direction => WithTile((tiling, window) => { if (tiling.Neighbor(window, direction) is var next && next != 0) _system!.Focus(next); }),
-            direction => WithTile((tiling, window) => tiling.Swap(window, direction)),
-            () => WithTile((tiling, window) => tiling.ToggleFloating(window)), () => WithTile((tiling, window) => tiling.ToggleSplit(window)));
+        _keys = new WorkspaceKeys(hotkeys ?? (() => new NativeProfileHotkeys()), OpenByKey, SendWindow);
         _mutex = LocalIpc.Mutex(true, TopBarProcess.MutexName(file), out var first);
         if (!first) { _mutex.Dispose(); throw new InvalidOperationException("The top bar is already running."); }
         _stop = LocalIpc.Event(EventResetMode.AutoReset, TopBarProcess.MutexName(file) + ".Stop");
@@ -78,7 +70,6 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
         _closed = LocalIpc.Event(EventResetMode.ManualReset, TopBarProcess.ClosedEventName(file));
         _closed.Reset();
         _settings = _store.Load();
-        _tileSystem = new NativeTileSystem(() => _settings.FloatingApps);
         _system = new NativeWindowSystem(() => _settings.PinnedApps, () => _settings.PrimaryMonitorOnly, only, () => _settings.StickyPopouts);
         // Also covers a crash followed by turning workspaces off.
         new HiddenWindowJournal(HiddenWindowJournal.PathFor(_store.FilePath)).RestoreOrphans(_system);
@@ -127,18 +118,6 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
     private void WindowChanged(uint eventId, nint window)
     {
         if (_disposed) return;
-        // Tiles wait while a window is being dragged; moving them would fight the pointer.
-        if (eventId == WindowEvents.MoveStarted)
-        {
-            _dragging = true; _dragged = window;
-            if (_tiling?.IsTiled(window) == true) { FinishScenes(); Follow(true); }
-        }
-        else if (eventId == WindowEvents.MoveEnded)
-        {
-            _dragging = false;
-            Follow(false);
-            _tiling?.UserMoved(window, System.Windows.Forms.Cursor.Position);
-        }
         // Some apps animate their titles; a window that is already known has nothing else to say.
         if (eventId == 0x800C && (_workspaces == null || _workspaces.Knows(window)))
         {
@@ -148,23 +127,6 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
         // A new or closed window is dealt with at once, or it would be seen out of place. Bursts still wait.
         if (eventId is 0x8001 or 0x8002 or 0x8003 && Environment.TickCount64 - _lastSync > 40) { _syncDelay.Stop(); Sync(); return; }
         if (!_syncDelay.IsEnabled) _syncDelay.Start();
-    }
-
-    /// <summary>Neighbors keep up with a dragged edge at the display's own rate.</summary>
-    private void Follow(bool follow)
-    {
-        if (follow == _following) return;
-        _following = follow;
-        _dragTime.Restart();
-        if (follow) System.Windows.Media.CompositionTarget.Rendering += FollowDrag; else System.Windows.Media.CompositionTarget.Rendering -= FollowDrag;
-    }
-
-    private void FollowDrag(object? sender, EventArgs e)
-    {
-        if (!_dragging) { Follow(false); return; }
-        if (_dragTime.ElapsedMilliseconds < 6) return; // Raised more than once for some frames.
-        _dragTime.Restart();
-        _tiling?.UserResizing(_dragged);
     }
 
     private void RunCommand()
@@ -183,8 +145,8 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
     private SceneOverlay SceneFor(string monitor)
     {
         if (!_scenes.TryGetValue(monitor, out var scene)) {
-            _scenes[monitor] = scene = new SceneOverlay(_tileSystem, () => _settings.AnimationSpeed, () => _settings.Motion);
-            // Tiles may have changed while the animation played.
+            _scenes[monitor] = scene = new SceneOverlay(_frames, () => _settings.AnimationSpeed, () => _settings.Motion);
+            // Windows may have changed while the animation played.
             scene.Completed += () => { if (!_disposed && !_syncDelay.IsEnabled) _syncDelay.Start(); };
         }
         return scene;
@@ -204,28 +166,6 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
 
     void IWorkspaceTransition.Finish() { foreach (var scene in _scenes.Values) scene.Finish(); }
 
-    private void Retile()
-    {
-        // The end of a drag can be missed when its app closes.
-        if (_dragging && System.Windows.Forms.Control.MouseButtons == System.Windows.Forms.MouseButtons.None) _dragging = false;
-        if (_tiling == null || _workspaces == null || _dragging || _scenes.Values.Any(scene => scene.IsRunning)) return;
-        var moves = _tiling.Update(_workspaces.Windows(), _workspaces.ActiveWindow);
-        _tiling.Apply(moves.Where(move => move.Hidden || move.IsCorrection).ToArray());
-        foreach (var group in moves.Where(move => !move.Hidden && !move.IsCorrection).GroupBy(move => move.Monitor))
-        {
-            var visible = group.ToArray();
-            if (Animates) SceneFor(group.Key).Rearrange(group.Key, visible, () => _tiling?.Apply(visible));
-            else _tiling.Apply(visible);
-        }
-    }
-
-    private void WithTile(Action<TilingEngine, nint> action)
-    {
-        if (_tiling == null || _workspaces is not { ActiveWindow: not 0 } workspaces) return;
-        action(_tiling, workspaces.ActiveWindow);
-        Sync();
-    }
-
     private void Reload()
     {
         if (_disposed) return;
@@ -236,7 +176,6 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
         _read = read;
         _settings = settings;
         if (!_settings.Runs) { _exit(); return; }
-        if (!_settings.WorkspacesEnabled || !_settings.TilingEnabled) { FinishScenes(); _tiling?.Release(); _tiling = null; }
         if (!_settings.WorkspacesEnabled) { _workspaces?.Dispose(); _workspaces = null; }
         else if (_workspaces == null)
         {
@@ -246,13 +185,6 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
             _workspaces.Switched += RequestProfile;
         }
         else _workspaces.SetCount(_settings.WorkspaceCount);
-        if (_settings.WorkspacesEnabled && _settings.TilingEnabled)
-        {
-            _tiling ??= new TilingEngine(_tileSystem);
-            _tiling.Gap = _settings.TileGap; _tiling.Margin = _settings.TileMargin;
-            _tiling.SmartGaps = _settings.SmartGaps; _tiling.SplitRatio = _settings.SplitRatio;
-            _tiling.Layout = _settings.TileLayout; _tiling.TileFixedSize = _settings.TileFixedSize;
-        }
         _keys.Apply(_settings);
         _colorsKey = "";
         foreach (var window in _windows.Values) window.Apply(_settings, _colors);
@@ -268,7 +200,6 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
             SendWaitingProfile();
             SyncMonitors();
             _workspaces?.Sync();
-            Retile();
             UpdateTitles();
             _lastSync = Environment.TickCount64;
         }
@@ -541,11 +472,10 @@ internal sealed class TopBarHost : IWorkspaceTransition, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        _timer.Stop(); _syncDelay.Stop(); _titleDelay.Stop(); Follow(false);
+        _timer.Stop(); _syncDelay.Stop(); _titleDelay.Stop();
         // Bring windows back before anything else can fail.
         FinishScenes();
         _workspaces?.Dispose();
-        _tiling?.Release();
         foreach (var scene in _scenes.Values) scene.Dispose();
         _events.Dispose();
         _keys.Dispose();

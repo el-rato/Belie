@@ -46,7 +46,7 @@ internal sealed class SceneOverlay : IDisposable
         public byte LastOpacity;
     }
 
-    private readonly ITileSystem _tiles;
+    private readonly IWindowFrames _tiles;
     private readonly Func<double> _speed;
     private readonly Func<WorkspaceMotion> _motion;
     private Canvas? _source;
@@ -61,7 +61,7 @@ internal sealed class SceneOverlay : IDisposable
     public event Action? Completed;
     internal int FrameCount { get; private set; }
 
-    public SceneOverlay(ITileSystem tiles, Func<double> speed, Func<WorkspaceMotion>? motion = null)
+    public SceneOverlay(IWindowFrames tiles, Func<double> speed, Func<WorkspaceMotion>? motion = null)
     { _tiles = tiles; _speed = speed; _motion = motion ?? (() => WorkspaceMotion.Horizontal); }
 
     /// <summary>Moves or fades one workspace out while the next comes in.</summary>
@@ -74,22 +74,13 @@ internal sealed class SceneOverlay : IDisposable
         {
             var leaves = leaving.Contains(window);
             if (!leaves && !arriving.Contains(window)) return null;
-            var frame = _tiles.Describe(window).Frame;
+            var frame = _tiles.Frame(window);
             if (motion == WorkspaceMotion.Fade) return new Picture { From = frame, To = frame, FromOpacity = leaves ? 1 : 0, ToOpacity = leaves ? 0 : 1,
                 FromScale = leaves ? 1 : .97, Ease = Motion.Slide, Time = Motion.MoveTime, Animated = true };
             var offset = leaves ? -distance : distance;
             var away = motion == WorkspaceMotion.Vertical ? frame with { Y = frame.Y + offset } : frame with { X = frame.X + offset };
             return new Picture { From = leaves ? frame : away, To = leaves ? away : frame, Ease = Motion.Slide, Time = Motion.SlideTime, Animated = true };
         }, arriving, leaving.Concat(arriving));
-    }
-
-    /// <summary>Moves tiles to their new places; windows that just opened pop in.</summary>
-    public void Rearrange(string monitor, IReadOnlyList<TileMove> moves, Action apply)
-    {
-        var byWindow = moves.ToDictionary(move => move.Window);
-        Run(_tiles.WorkArea(monitor), apply, () => { }, window => !byWindow.TryGetValue(window, out var move) ? null : move.IsNew
-            ? new Picture { From = move.To, To = move.To, FromScale = .78, FromOpacity = 0, Ease = Motion.Open, Time = Motion.OpenTime, Animated = true }
-            : new Picture { From = move.From, To = move.To, Ease = Motion.Move, Time = Motion.MoveTime, Animated = true }, Array.Empty<nint>(), byWindow.Keys);
     }
 
     private async void Run(Rectangle area, Action begin, Action end, Func<nint, Picture?> animate, IReadOnlyCollection<nint> arriving, IEnumerable<nint> changing)
@@ -244,7 +235,7 @@ internal sealed class SceneOverlay : IDisposable
         if (NativeMethods.DwmRegisterThumbnail(_source!.Handle, window, out var thumbnail) != 0) return;
         NativeMethods.GetWindowRect(window, out var rect);
         var outer = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
-        var frame = _tiles.Describe(window).Frame;
+        var frame = _tiles.Frame(window);
         picture ??= new Picture { From = frame, To = frame };
         picture.Window = window; picture.Thumbnail = thumbnail;
         // Pictures of some windows include the invisible border and others do not; the size tells which.

@@ -4,7 +4,7 @@
 
 **Your whole Windows desktop, your way.**
 
-Wallpaper profiles, a top bar you can restyle with CSS, tiling workspaces and desktop widgets, in one app that lives in the tray.
+Wallpaper profiles, a top bar you can restyle with CSS, workspaces and desktop widgets, in one app that lives in the tray.
 
 [![Download](https://img.shields.io/github/v/release/el-rato/Belie?label=Download&style=for-the-badge&color=79d5c8)](https://github.com/el-rato/Belie/releases/latest/download/Belie-win-Setup.exe)
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-4c8bf5?style=for-the-badge)](#install)
@@ -16,7 +16,7 @@ Wallpaper profiles, a top bar you can restyle with CSS, tiling workspaces and de
 
 <p align="center">
   <a href="#a-bar-you-can-rice">Top bar</a> ·
-  <a href="#workspaces-and-tiling">Workspaces</a> ·
+  <a href="#workspaces">Workspaces</a> ·
   <a href="#wallpaper-switcher">Switcher</a> ·
   <a href="#transitions">Transitions</a> ·
   <a href="#widgets">Widgets</a> ·
@@ -26,7 +26,7 @@ Wallpaper profiles, a top bar you can restyle with CSS, tiling workspaces and de
   <a href="CHANGELOG.md">Patch notes</a>
 </p>
 
-> **New in 4.0:** the top bar, workspaces and tiling, the wallpaper switcher, wallpaper transitions and many more widgets. [Read the patch notes](CHANGELOG.md).
+> **New in 4.0:** the top bar, workspaces, the wallpaper switcher, wallpaper transitions and many more widgets. [Read the patch notes](CHANGELOG.md).
 
 ## A bar you can rice
 
@@ -60,22 +60,14 @@ Pick one of eight looks and make it yours. Every module, part and workspace dot 
 #workspaces button.active { background: @accent; min-width: 22px; }
 ```
 
-## Workspaces and tiling
+## Workspaces
 
-Every monitor gets its own set of workspaces. Windows arrange themselves, make room for each other with animation, and can be swapped, floated or resized together.
-
-<img src="docs/images/tiling.gif" alt="Windows opening and arranging themselves as tiles" width="100%">
-
-<sup>Belie's own layout and motion, shown with drawn windows.</sup>
+Every monitor gets its own set of workspaces. Windows on the others are hidden and leave the taskbar until you return, and switching slides or fades between them.
 
 | Keys | What they do |
 | --- | --- |
 | `Alt` + `1`–`9` | Open a workspace |
 | `Alt` + `Shift` + `1`–`9` | Send the window there |
-| `Ctrl` + `Alt` + arrows | Move focus between tiles |
-| `Ctrl` + `Alt` + `Shift` + arrows | Swap tiles |
-| `Ctrl` + `Alt` + `F` | Float or tile the window |
-| `Ctrl` + `Alt` + `J` | Turn the split |
 
 A workspace can also have a **profile**, so opening it changes the wallpaper with it.
 
@@ -140,7 +132,7 @@ Already using Belie? Open **Settings → App updates → Check for updates**, th
 
 1. **Profiles:** add a folder of pictures and press **Apply to desktop**.
 2. **Top bar:** turn on **Show the top bar**, then pick a look.
-3. **Workspaces:** optional, with or without the bar. Turn on **Use workspaces** here. Tiling and the keys have their own settings.
+3. **Workspaces:** optional, with or without the bar. Turn on **Use workspaces** here.
 4. **Widgets:** press **Add widget**, then **Browse the gallery**.
 
 Closing the window leaves Belie in the tray. Right-click its icon and choose **Exit** to quit.

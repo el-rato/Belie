@@ -86,7 +86,7 @@ public sealed class TopBarDesktopTests
             try
             {
                 var file = Path.Combine(directory, "topbar.json");
-                new TopBarStore(file).Save(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, Shortcuts = WorkspaceShortcutModifier.None, TilingEnabled = false, AnimationsEnabled = false });
+                new TopBarStore(file).Save(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, Shortcuts = WorkspaceShortcutModifier.None, AnimationsEnabled = false });
                 bool Mine(DesktopWindow window) => window.Identity.ProcessId == helper.Id;
                 var system = new NativeWindowSystem(only: Mine);
                 Assert.True(Until(() => system.VisibleWindows().Count >= 3), "The helper windows did not open.");
@@ -154,7 +154,7 @@ public sealed class TopBarDesktopTests
 
     [Fact]
     [Trait("Category", "Desktop")]
-    public void RealWindowsAreTiledAndSlideBetweenWorkspaces()
+    public void RealWindowsSlideBetweenWorkspaces()
     {
         if (!Enabled) return;
         OnDesktop(directory =>
@@ -164,48 +164,34 @@ public sealed class TopBarDesktopTests
             {
                 var file = Path.Combine(directory, "topbar.json");
                 var store = new TopBarStore(file);
-                store.Save(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, Shortcuts = WorkspaceShortcutModifier.None, TilingEnabled = false });
+                store.Save(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, Shortcuts = WorkspaceShortcutModifier.None });
                 bool Mine(DesktopWindow window) => window.Identity.ProcessId == helper.Id;
                 var system = new NativeWindowSystem(only: Mine);
                 Assert.True(Until(() => system.VisibleWindows().Count >= 3), "The helper windows did not open.");
                 var apps = system.VisibleWindows().Where(window => window.Root == window.Handle).OrderBy(window => window.Title).Select(window => window.Handle).ToArray();
-                var tiles = new NativeTileSystem();
+                var frames = new NativeWindowFrames();
                 var monitor = System.Windows.Forms.Screen.PrimaryScreen!.DeviceName;
                 System.Drawing.Rectangle[] before;
                 using (var host = new TopBarHost(file, () => { }, Mine, guard: false))
                 {
                     // Docking the bar makes Windows move some windows itself.
                     Pump(TimeSpan.FromSeconds(3));
-                    Assert.False(host.Tiling?.IsTiled(apps[0]) == true);
-                    before = apps.Select(handle => tiles.Describe(handle).Frame).ToArray();
-                    store.Save(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, Shortcuts = WorkspaceShortcutModifier.None, TileGap = 10, TileMargin = 10 });
-                    using (var changed = EventWaitHandle.OpenExisting(TopBarProcess.MutexName(file) + ".Changed")) changed.Set();
-                    Assert.True(Until(() => host.Tiling != null && apps.All(host.Tiling.IsTiled)), "Not tiled.");
-                    Frames("open", 3);
-                    System.Drawing.Rectangle Area() { var area = tiles.WorkArea(monitor); area.Inflate(-10, -10); return area; }
-                    bool Tiled()
-                    {
-                        var frames = apps.Select(handle => tiles.Describe(handle).Frame).ToArray();
-                        var union = System.Drawing.Rectangle.Union(frames[0], frames[1]);
-                        return !frames[0].IntersectsWith(frames[1]) && Math.Abs(union.Width - Area().Width) <= 4 && Math.Abs(union.Height - Area().Height) <= 4;
-                    }
-                    Assert.True(Until(Tiled), $"{string.Join(" ", apps.Select(handle => tiles.Describe(handle).Frame))} in {Area()}");
+                    before = apps.Select(frames.Frame).ToArray();
                     Assert.True(Until(() => host.Scene(monitor)?.IsRunning != true));
-                    _output.WriteLine($"Opened in {host.Scene(monitor)!.FrameCount} frames");
                     var manager = host.Workspaces!;
                     Assert.True(manager.Switch(monitor, 2));
-                    // The red window's picture must cross the left half while the real one stays on the right, letting clicks through.
+                    // The red window (left 400) slides left, so its picture crosses the strip to its left while clicks still reach the real window.
                     var (moved, through) = (false, false);
                     var seen = new HashSet<string>();
                     var clock = Stopwatch.StartNew();
                     while (clock.ElapsedMilliseconds < 450)
                     {
                         Pump(TimeSpan.FromMilliseconds(10));
-                        using var row = new System.Drawing.Bitmap(900, 1);
-                        using (var graphics = System.Drawing.Graphics.FromImage(row)) graphics.CopyFromScreen(20, 500, 0, 0, row.Size);
+                        using var row = new System.Drawing.Bitmap(360, 1);
+                        using (var graphics = System.Drawing.Graphics.FromImage(row)) graphics.CopyFromScreen(20, 300, 0, 0, row.Size);
                         moved |= Enumerable.Range(0, row.Width).Any(x => row.GetPixel(x, 0).ToArgb() == System.Drawing.Color.IndianRed.ToArgb());
-                        seen.Add(NativeMethods.ClassName(WindowFromPoint(new System.Drawing.Point(400, 500))));
-                        NativeMethods.GetWindowThreadProcessId(WindowFromPoint(new System.Drawing.Point(400, 500)), out var under);
+                        seen.Add(NativeMethods.ClassName(WindowFromPoint(new System.Drawing.Point(450, 300))));
+                        NativeMethods.GetWindowThreadProcessId(WindowFromPoint(new System.Drawing.Point(450, 300)), out var under);
                         through |= host.Scene(monitor)!.IsRunning && under == (uint)helper.Id;
                     }
                     Assert.True(moved, "The slide was not drawn.");
@@ -219,7 +205,6 @@ public sealed class TopBarDesktopTests
                     Frames("back", 6);
                     Assert.True(Until(() => apps.All(system.IsVisible) && host.Scene(monitor)?.IsRunning != true), "Windows did not return.");
                     _output.WriteLine($"Slid in with {host.Scene(monitor)!.FrameCount} frames");
-                    Assert.True(Tiled());
                     // Faster than the animation.
                     foreach (var index in new[] { 2, 3, 1, 2, 1, 4, 1 }) { manager.Switch(monitor, index); Pump(TimeSpan.FromMilliseconds(120)); }
                     Assert.True(Until(() => host.Scene(monitor)?.IsRunning != true));
@@ -228,103 +213,10 @@ public sealed class TopBarDesktopTests
                     Assert.True(manager.Switch(monitor, 5));
                 }
                 Assert.True(Until(() => apps.All(system.IsVisible)), "Closing the bar left windows hidden.");
-                Assert.True(Until(() => apps.Select(handle => tiles.Describe(handle).Frame).SequenceEqual(before)),
-                    $"Windows were not put back where they were: {string.Join(" ", before)} but now {string.Join(" ", apps.Select(handle => tiles.Describe(handle).Frame))}");
+                Assert.True(Until(() => apps.Select(frames.Frame).SequenceEqual(before)),
+                    $"Windows were not put back where they were: {string.Join(" ", before)} but now {string.Join(" ", apps.Select(frames.Frame))}");
             }
             finally { if (!helper.HasExited) helper.Kill(); }
-        });
-    }
-
-    /// <summary>Browsers draw their own frames, start maximized and repaint slowly, unlike the simple helper windows.</summary>
-    [Fact]
-    [Trait("Category", "DesktopApps")]
-    public void RealAppsAreTiled()
-    {
-        const string edge = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", firefox = @"C:\Program Files\Mozilla Firefox\firefox.exe";
-        if (!Enabled || !File.Exists(edge) || !File.Exists(firefox)) return;
-        OnDesktop(directory =>
-        {
-            void Open(string exe, params string[] arguments)
-            {
-                var info = new ProcessStartInfo(exe) { UseShellExecute = false };
-                foreach (var argument in arguments) info.ArgumentList.Add(argument);
-                Process.Start(info)!.Dispose();
-            }
-            string Profile(string name) => Directory.CreateDirectory(Path.Combine(directory, name)).FullName;
-            // Only browsers using this test's empty profiles; never the user's own.
-            HashSet<int> Ours()
-            {
-                using var search = new System.Management.ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='msedge.exe' OR Name='firefox.exe'");
-                return search.Get().Cast<System.Management.ManagementBaseObject>()
-                    .Where(item => (item["CommandLine"] as string)?.Contains(directory, StringComparison.OrdinalIgnoreCase) == true)
-                    .Select(item => Convert.ToInt32(item["ProcessId"])).ToHashSet();
-            }
-            var known = new Dictionary<int, bool>();
-            bool Mine(DesktopWindow window)
-            {
-                var id = window.Identity.ProcessId;
-                if (!known.TryGetValue(id, out var ours)) known[id] = ours = Ours().Contains(id);
-                return ours;
-            }
-            try
-            {
-                var file = Path.Combine(directory, "topbar.json");
-                new TopBarStore(file).Save(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, Shortcuts = WorkspaceShortcutModifier.None });
-                var system = new NativeWindowSystem(only: Mine);
-                var tiles = new NativeTileSystem();
-                var monitor = System.Windows.Forms.Screen.PrimaryScreen!.DeviceName;
-                Open(edge, "--user-data-dir=" + Profile("edge"), "--no-first-run", "--start-maximized", "about:blank");
-                Assert.True(Until(() => system.VisibleWindows().Count(window => window.Root == window.Handle) >= 1, 30));
-                Pump(TimeSpan.FromSeconds(3));
-                using var host = new TopBarHost(file, () => { }, Mine, guard: false);
-                string Report()
-                {
-                    var text = "";
-                    foreach (var window in system.VisibleWindows().Where(window => window.Root == window.Handle))
-                    {
-                        var state = tiles.Describe(window.Handle);
-                        text += $"  {window.Identity.ClassName} tiled={host.Tiling?.IsTiled(window.Handle)} max={state.Maximized} {state.Frame}\n";
-                    }
-                    return text + "  area " + tiles.WorkArea(monitor);
-                }
-                void Watch(string step, int seconds)
-                {
-                    var clock = Stopwatch.StartNew(); var last = "";
-                    while (clock.Elapsed.TotalSeconds < seconds)
-                    {
-                        var now = Report() + $" scene={host.Scene(monitor)?.IsRunning}";
-                        if (now != last) { _output.WriteLine($"{step} +{clock.ElapsedMilliseconds} ms\n{now}"); last = now; }
-                        Pump(TimeSpan.FromMilliseconds(15));
-                    }
-                }
-                Watch("maximized edge", 4);
-                Open(firefox, "-no-remote", "-profile", Profile("firefox"), "about:blank");
-                Watch("open firefox", 9);
-                Open(edge, "--user-data-dir=" + Path.Combine(directory, "edge"), "--new-window", "about:blank");
-                Watch("open second edge", 5);
-                host.Workspaces!.Switch(monitor, 2); Watch("leave", 3);
-                host.Workspaces.Switch(monitor, 1); Watch("return", 3);
-                void Settled(int count)
-                {
-                    System.Drawing.Rectangle[] Now() => system.VisibleWindows().Where(window => window.Root == window.Handle).Select(window => tiles.Describe(window.Handle).Frame).ToArray();
-                    var area = tiles.WorkArea(monitor);
-                    var frames = Now();
-                    Assert.Equal(count, frames.Length);
-                    Assert.All(frames, frame => Assert.True(area.Contains(frame), $"{frame} is outside {area}"));
-                    foreach (var frame in frames) Assert.Single(frames, other => other.IntersectsWith(frame));
-                    Pump(TimeSpan.FromSeconds(2));
-                    Assert.Equal(frames, Now()); // Nothing keeps twitching.
-                }
-                Settled(3);
-                var first = system.VisibleWindows().First(window => window.Root == window.Handle).Handle;
-                PostMessage(first, 0x10, 0, 0); Watch("close one", 4);
-                Settled(2);
-            }
-            finally
-            {
-                foreach (var id in Ours()) try { using var process = Process.GetProcessById(id); process.Kill(); } catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { }
-                Pump(TimeSpan.FromSeconds(2));
-            }
         });
     }
 

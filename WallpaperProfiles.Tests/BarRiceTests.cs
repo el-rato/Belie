@@ -104,8 +104,8 @@ public sealed class BarRiceTests : IDisposable
         var profile = Guid.NewGuid();
         var mine = new TopBarSettings
         {
-            Enabled = true, WorkspaceCount = 4, HideEmptyWorkspaces = true, WorkspaceProfiles = new() { [2] = profile }, WorkspaceNames = new() { "Web" }, TilingEnabled = false, TileGap = 21,
-            PinnedApps = new() { "spotify" }, FloatingApps = new() { "calc" }, Motion = WorkspaceMotion.Fade, WeatherPlace = "Lisbon", Shortcuts = WorkspaceShortcutModifier.CtrlAlt
+            Enabled = true, WorkspaceCount = 4, HideEmptyWorkspaces = true, WorkspaceProfiles = new() { [2] = profile }, WorkspaceNames = new() { "Web" }, StickyPopouts = false, AutoHide = false,
+            PinnedApps = new() { "spotify" }, Motion = WorkspaceMotion.Fade, WeatherPlace = "Lisbon", Shortcuts = WorkspaceShortcutModifier.CtrlAlt
         }.Normalize();
         foreach (var rice in BarRice.BuiltIn)
         {
@@ -114,10 +114,10 @@ public sealed class BarRiceTests : IDisposable
             var next = rice.ApplyTo(mine);
             Assert.Equal(rice.Css, next.Css);
             Assert.Equal(rice.Look.Normalize().Modules.Select(module => module.Kind), next.Modules.Select(module => module.Kind));
-            Assert.True(next.Enabled); Assert.True(next.HideEmptyWorkspaces); Assert.False(next.TilingEnabled);
-            Assert.Equal((4, 21, profile, "Lisbon"), (next.WorkspaceCount, next.TileGap, next.WorkspaceProfiles[2], next.WeatherPlace));
+            Assert.True(next.Enabled); Assert.True(next.HideEmptyWorkspaces); Assert.False(next.StickyPopouts); Assert.False(next.AutoHide);
+            Assert.Equal((4, profile, "Lisbon"), (next.WorkspaceCount, next.WorkspaceProfiles[2], next.WeatherPlace));
             Assert.Equal((WorkspaceMotion.Fade, WorkspaceShortcutModifier.CtrlAlt), (next.Motion, next.Shortcuts));
-            Assert.Equal(new[] { "spotify" }, next.PinnedApps); Assert.Equal(new[] { "calc" }, next.FloatingApps);
+            Assert.Equal(new[] { "spotify" }, next.PinnedApps);
         }
         Assert.Equal(BarRice.BuiltIn.Count, BarRice.BuiltIn.Select(rice => rice.Name).Distinct().Count());
     }

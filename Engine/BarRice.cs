@@ -26,9 +26,7 @@ internal sealed class BarRice
         next.WorkspacesWithBar = null; // From a look made before 4.0.2.
         next.WorkspacesEnabled = current.WorkspacesEnabled; next.WorkspaceCount = current.WorkspaceCount; next.WorkspaceNames = current.WorkspaceNames;
         next.HideEmptyWorkspaces = current.HideEmptyWorkspaces; next.Shortcuts = current.Shortcuts; next.PinnedApps = current.PinnedApps; next.WorkspaceProfiles = current.WorkspaceProfiles;
-        next.TilingEnabled = current.TilingEnabled; next.TileGap = current.TileGap; next.TileMargin = current.TileMargin; next.SmartGaps = current.SmartGaps;
-        next.SplitRatio = current.SplitRatio; next.FloatingApps = current.FloatingApps;
-        next.TileLayout = current.TileLayout; next.TileFixedSize = current.TileFixedSize; next.StickyPopouts = current.StickyPopouts; next.AutoHide = current.AutoHide;
+        next.StickyPopouts = current.StickyPopouts; next.AutoHide = current.AutoHide;
         next.AnimationsEnabled = current.AnimationsEnabled; next.AnimationSpeed = current.AnimationSpeed; next.Motion = current.Motion;
         return next.Normalize();
     }

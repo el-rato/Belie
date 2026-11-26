@@ -95,9 +95,9 @@ public sealed class ProfileShortcutTests
         var opened = new List<string>();
         long now = 0;
         SharedHotkeys? hotkeys = null;
-        var settings = new TopBarSettings { Enabled = true, WorkspacesEnabled = true, WorkspaceCount = 3, TilingEnabled = false };
+        var settings = new TopBarSettings { Enabled = true, WorkspacesEnabled = true, WorkspaceCount = 3 };
         using var keys = new WorkspaceKeys(() => hotkeys = new SharedHotkeys(taken), (index, gesture) => opened.Add($"{index} {ProfileShortcutManager.Format(gesture)}"),
-            _ => { }, _ => { }, _ => { }, () => { }, () => { }, () => now);
+            _ => { }, () => now);
         keys.Apply(settings);
         Assert.Same(tray, taken["Alt+2"]); Assert.Same(hotkeys, taken["Alt+1"]);
         Assert.DoesNotContain("Ctrl+Alt+2", taken.Keys);
@@ -125,8 +125,8 @@ public sealed class ProfileShortcutTests
         var opened = new List<int>();
         long now = 0;
         SharedHotkeys? hotkeys = null;
-        using var keys = new WorkspaceKeys(() => hotkeys = new SharedHotkeys(taken), (index, _) => opened.Add(index), _ => { }, _ => { }, _ => { }, () => { }, () => { }, () => now);
-        keys.Apply(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, WorkspaceCount = 2, TilingEnabled = false });
+        using var keys = new WorkspaceKeys(() => hotkeys = new SharedHotkeys(taken), (index, _) => opened.Add(index), _ => { }, () => now);
+        keys.Apply(new TopBarSettings { Enabled = true, WorkspacesEnabled = true, WorkspaceCount = 2 });
         keys.Retry();
         Assert.DoesNotContain("Ctrl+Alt+1", taken.Keys);
         now += WorkspaceKeys.Patience; keys.Retry();

@@ -111,24 +111,19 @@ public sealed partial class LibraryWindowTests
         Find<ComboBox>(spaces, "TopBarShortcuts").SelectedIndex = 2;
         Find<ComboBox>(spaces, "TopBarProfile2").SelectedIndex = 1;
         Find<TextBox>(spaces, "TopBarName2").Text = "Mail";
-        Assert.True(Find<CheckBox>(spaces, "TopBarTiling").IsChecked); Assert.True(Find<CheckBox>(spaces, "TopBarAnimations").IsChecked);
-        Find<CheckBox>(spaces, "TopBarTiling").IsChecked = false;
-        Find<CheckBox>(spaces, "TopBarSmartGaps").IsChecked = true;
-        Find<Slider>(spaces, "TopBarTileGap").Value = 12; Find<Slider>(spaces, "TopBarTileMargin").Value = 900;
-        Find<Slider>(spaces, "TopBarSplitRatio").Value = 60;
+        Assert.True(Find<CheckBox>(spaces, "TopBarStickyPopouts").IsChecked); Assert.True(Find<CheckBox>(spaces, "TopBarAnimations").IsChecked);
+        Find<CheckBox>(spaces, "TopBarStickyPopouts").IsChecked = false;
         Find<CheckBox>(spaces, "TopBarAnimations").IsChecked = false;
         Find<ComboBox>(spaces, "TopBarMotion").SelectedIndex = 1;
         Find<Slider>(spaces, "TopBarAnimationSpeed").Value = 150;
         Find<TextBox>(spaces, "TopBarPinnedApps").Text = "Spotify.exe, Discord";
-        Find<TextBox>(spaces, "TopBarFloatingApps").Text = "obs64.exe";
         Assert.True(spaces.SaveNow());
         var saved = store.Load();
-        Assert.False(saved.TilingEnabled); Assert.False(saved.AnimationsEnabled); Assert.True(saved.SmartGaps);
-        Assert.Equal(12, saved.TileGap); Assert.Equal(64, saved.TileMargin); Assert.Equal(1.5, saved.AnimationSpeed); Assert.Equal(.6, saved.SplitRatio, 6);
+        Assert.False(saved.StickyPopouts); Assert.False(saved.AnimationsEnabled); Assert.Equal(1.5, saved.AnimationSpeed);
         Assert.True(saved.Enabled); Assert.Equal(4, saved.WorkspaceCount);
         Assert.Equal(WorkspaceShortcutModifier.None, saved.Shortcuts); Assert.Equal(WorkspaceMotion.Vertical, saved.Motion);
         Assert.Equal(profile.Id, saved.WorkspaceProfiles[2]); Assert.Equal("Mail", saved.WorkspaceName(2));
-        Assert.Equal(new[] { "Spotify", "Discord" }, saved.PinnedApps); Assert.Equal(new[] { "obs64" }, saved.FloatingApps);
+        Assert.Equal(new[] { "Spotify", "Discord" }, saved.PinnedApps);
 
         // The other page was open all along and must not undo any of that.
         Find<TextBox>(bar, "TopBarAccent").Text = "pink"; Find<Slider>(bar, "TopBarHeight").Value = 44;

@@ -21,33 +21,22 @@ internal sealed class WorkspaceKeys : IDisposable
     private readonly Action<int, KeyGesture> _open;
     private readonly Action<int> _send;
     private readonly Func<long> _now;
-    private readonly IReadOnlyList<(KeyGesture Keys, Action Run)> _tiling;
     private readonly List<Wanted> _wanted = new();
     private readonly Dictionary<int, Action> _held = new();
     private IProfileHotkeys? _hotkeys;
-    private (WorkspaceShortcutModifier Modifier, int Count, bool Tiling) _applied;
+    private (WorkspaceShortcutModifier Modifier, int Count) _applied;
     private long _since;
     private bool _warned;
 
-    public WorkspaceKeys(Func<IProfileHotkeys> create, Action<int, KeyGesture> open, Action<int> send,
-        Action<TileDirection> focus, Action<TileDirection> swap, Action toggleFloating, Action toggleSplit, Func<long>? now = null)
+    public WorkspaceKeys(Func<IProfileHotkeys> create, Action<int, KeyGesture> open, Action<int> send, Func<long>? now = null)
     {
         _create = create; _open = open; _send = send;
         _now = now ?? (() => Environment.TickCount64);
-        var tiling = new List<(KeyGesture, Action)>();
-        foreach (var (direction, key) in new[] { (TileDirection.Left, Key.Left), (TileDirection.Right, Key.Right), (TileDirection.Up, Key.Up), (TileDirection.Down, Key.Down) })
-        {
-            tiling.Add((new KeyGesture(key, ControlAlt), () => focus(direction)));
-            tiling.Add((new KeyGesture(key, ControlAlt | ModifierKeys.Shift), () => swap(direction)));
-        }
-        tiling.Add((new KeyGesture(Key.F, ControlAlt), toggleFloating));
-        tiling.Add((new KeyGesture(Key.J, ControlAlt), toggleSplit));
-        _tiling = tiling;
     }
 
     public void Apply(TopBarSettings settings)
     {
-        var wanted = (settings.WorkspacesEnabled ? settings.Shortcuts : WorkspaceShortcutModifier.None, settings.WorkspaceCount, settings.TilingEnabled);
+        var wanted = (settings.WorkspacesEnabled ? settings.Shortcuts : WorkspaceShortcutModifier.None, settings.WorkspaceCount);
         if (wanted == _applied) return;
         _applied = wanted;
         Dispose();
@@ -62,12 +51,6 @@ internal sealed class WorkspaceKeys : IDisposable
             _wanted.Add(new Wanted(100 + index, new KeyGesture(Key.D0 + index, keys | ModifierKeys.Shift), _ => _send(target),
                 new KeyGesture(Key.D0 + index, other | ModifierKeys.Shift)));
         }
-        if (_applied.Tiling)
-            for (var i = 0; i < _tiling.Count; i++)
-            {
-                var (gesture, run) = _tiling[i];
-                _wanted.Add(new Wanted(200 + i, gesture, _ => run()));
-            }
         _since = _now();
         _warned = false;
         Retry();

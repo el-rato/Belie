@@ -313,7 +313,7 @@ internal sealed class WorkspacesPage : BarSettingsPage
         var profiles = _profiles();
         Tab("Workspaces");
         Switch("Use workspaces", "TopBarWorkspaces", settings.WorkspacesEnabled, (to, value) => to.WorkspacesEnabled = value);
-        Hint("Optional, and separate from the top bar. Without the bar, workspaces are opened with the shortcuts below. Tiling has its own switch under Tiling.");
+        Hint("Optional, and separate from the top bar. Without the bar, workspaces are opened with the shortcuts below.");
         var count = Pick("Number of workspaces", "TopBarWorkspaceCount",
             Enumerable.Range(1, TopBarSettings.MaxWorkspaces).Select(number => new Choice<int>(number, number.ToString(CultureInfo.CurrentCulture))),
             settings.WorkspaceCount, (to, value) => to.WorkspaceCount = value);
@@ -334,6 +334,8 @@ internal sealed class WorkspacesPage : BarSettingsPage
             .Select(profile => $"{profile.KeyboardShortcut} ({profile.Name})").ToArray();
         if (shared.Length > 0) Hint($"Also profile shortcuts: {string.Join(", ", shared)}. These open the workspace, then apply its profile below, or the shortcut's own if none is chosen.");
         Text("Apps that stay on every workspace", "TopBarPinnedApps", string.Join(", ", settings.PinnedApps), (to, value) => to.PinnedApps = Apps(value), "Spotify, Discord");
+        Switch("Keep popout players and calls on every workspace", "TopBarStickyPopouts", settings.StickyPopouts, (to, value) => to.StickyPopouts = value);
+        Hint("Picture-in-picture videos and small always-on-top windows, such as mini players and call windows, stay visible when you switch workspaces.");
 
         Heading("Names and profiles");
         Hint("A profile is applied when its workspace opens on the primary monitor. Belie must be running in the tray.");
@@ -361,28 +363,8 @@ internal sealed class WorkspacesPage : BarSettingsPage
                 .ToDictionary(i => i + 1, i => ((ProfileChoice)boxes[i].SelectedItem).Id);
         });
 
-        Tab("Tiling");
-        Switch("Tile windows automatically", "TopBarTiling", settings.TilingEnabled, (to, value) => to.TilingEnabled = value);
-        Pick("Layout", "TopBarTileLayout", new[]
-        {
-            new Choice<TileLayout>(TileLayout.Dwindle, "Dwindle: each window splits the one beside it"), new(TileLayout.MainAndStack, "Master: a main window and a stack")
-        }, settings.TileLayout, (to, value) => to.TileLayout = value);
-        Hint("These work like Hyprland's layouts. There is no limit on how many windows tile, and both turn with the screen on a portrait monitor.");
-        Slide("Gap between windows", "TopBarTileGap", 0, 64, 1, settings.TileGap, " px", (to, value) => to.TileGap = (int)Math.Round(value));
-        Slide("Gap at screen edges", "TopBarTileMargin", 0, 64, 1, settings.TileMargin, " px", (to, value) => to.TileMargin = (int)Math.Round(value));
-        Switch("No gaps around a window that is alone", "TopBarSmartGaps", settings.SmartGaps, (to, value) => to.SmartGaps = value);
-        Slide("First window's share", "TopBarSplitRatio", 20, 80, 5, Math.Round(settings.SplitRatio * 100), "%", (to, value) => to.SplitRatio = value / 100);
-        Hint("In Dwindle, the share a window keeps when another opens beside it. In Master, the main window's share.");
-        Switch("Stretch fixed-size windows too", "TopBarTileFixedSize", settings.TileFixedSize, (to, value) => to.TileFixedSize = value);
-        Hint("Windows that can't be resized by their edges are sized to their tile anyway. One that stays smaller is centered in its tile, and one that can't get smaller gets more room.");
-        Switch("Keep popout players and calls floating on every workspace", "TopBarStickyPopouts", settings.StickyPopouts, (to, value) => to.StickyPopouts = value);
-        Hint("Picture-in-picture videos and small always-on-top windows, such as mini players and call windows, are never tiled or stretched. With this on, they also stay visible when you switch workspaces.");
-        Text("Apps that always float", "TopBarFloatingApps", string.Join(", ", settings.FloatingApps), (to, value) => to.FloatingApps = Apps(value), "Calculator, obs64");
-        Heading("Keys");
-        Hint("Ctrl + Alt + arrows move focus. Add Shift to swap windows. Ctrl + Alt + F floats a window, and Ctrl + Alt + J turns its split in Dwindle. Drag a window onto another to swap them, or drag an edge to resize.");
-
         Tab("Animation");
-        Switch("Animate workspaces and windows", "TopBarAnimations", settings.AnimationsEnabled, (to, value) => to.AnimationsEnabled = value);
+        Switch("Animate workspace changes", "TopBarAnimations", settings.AnimationsEnabled, (to, value) => to.AnimationsEnabled = value);
         Pick("Workspace change", "TopBarMotion", new[] { new Choice<WorkspaceMotion>(WorkspaceMotion.Horizontal, "Slide sideways"), new(WorkspaceMotion.Vertical, "Slide up and down"), new(WorkspaceMotion.Fade, "Fade") },
             settings.Motion, (to, value) => to.Motion = value);
         Slide("Speed", "TopBarAnimationSpeed", 25, 400, 25, Math.Round(settings.AnimationSpeed * 100), "%", (to, value) => to.AnimationSpeed = value / 100);

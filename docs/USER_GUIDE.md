@@ -164,7 +164,7 @@ C:\Users\YOURNAME\AppData\Roaming\Belie\
 - `settings.json` — minimized/last-active-profile preferences.
 - `cache\` — the staged copy of the currently applied wallpaper (kept short-lived and small;
   safe to clear while the app is closed).
-- `topbar.json`, `topbar.css` — the top bar, workspaces and tiling, and the bar's stylesheet.
+- `topbar.json`, `topbar.css` — the top bar and workspaces, and the bar's stylesheet.
 - `logs\` — rolling log files (old ones deleted after 14 days).
 
 **To uninstall:** uncheck "Start with Windows", close the app (tray → Exit), then uninstall
@@ -227,8 +227,6 @@ Belie.exe --help
 - **The live wallpaper stays after I exit the app:** that's the detached helper doing its job —
   it stops automatically the next time Belie starts or you switch to a static wallpaper. To stop
   it right away, start Belie once (it takes over immediately) or kill the `Belie.exe` process.
-- **Windows do not tile:** windows of apps running as administrator cannot be moved by Belie, so they float. Windows without
-  a resizable border, dialogs and always-on-top windows float too.
 - **A shortcut does nothing:** another app may own it. Belie says so in the log and keeps trying; change the keys under
   **Workspaces** or **Switcher**.
 - **A window is missing after a crash:** start Belie. Windows hidden on another workspace are listed on disk and brought back.

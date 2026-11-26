@@ -1,29 +1,24 @@
 # Belie patch notes
 
-## [Unreleased] - Tiling like Hyprland
+## [Unreleased] - A bar that gets out of the way
 
 ### Added
 
-- **Master layout.** Choose it under **Workspaces → Tiling → Layout**: one main window on one side and the rest stacked on the other, as in Hyprland. **Dwindle** stays the default.
 - **The top bar draws over windows and gets out of their way.** Windows now get the whole screen. The bar slides away while a window is under it and stays on an empty desktop. Rest the pointer at the top edge for a moment to bring it back; a quick click there, such as on a browser tab, still reaches the app. Turn off **Draw over windows and hide while one is under the bar** under **Top bar → Style** to give the bar its own strip again.
-- **Stretch fixed-size windows too**, on by default. Windows that can't be resized by their edges now tile like the rest. One that stays smaller than its tile is centered in it.
 
 ### Changed
 
-- Dwindle works like Hyprland's. Each new window splits the focused tile the way that tile is shaped, and splits suit their space again when windows open or close or the monitor turns. Splits no longer turn while you drag an edge.
-- Every edge between tiles can be dragged, however many windows are open.
+- Picture-in-picture videos, mini players and call windows stay visible when you switch workspaces. Turn this off with **Keep popout players and calls on every workspace** under **Workspaces**.
 
-### Fixed
+### Removed
 
-- Apps that draw their own title bar, such as Firefox, are tiled again.
-- Apps that can't be made smaller than a certain size, such as Spotify, no longer overlap their neighbors in Dwindle. The split turns or moves to give them room.
-- Picture-in-picture videos, mini players and call windows are no longer tiled or stretched. They keep their own size and place, and stay visible when you switch workspaces. Turn that last part off with **Keep popout players and calls floating on every workspace**.
+- **Automatic tiling.** Belie no longer arranges your windows, and the **Tiling** tab and its Ctrl + Alt shortcuts are gone. Windows stay where you put them. Workspaces, their shortcuts and their animations work as before.
 
 ### Updating
 
 Read these notes offline at **Settings → App updates → What’s new**.
 
-Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained. Your tiling keeps the Dwindle layout until you choose another.
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained. Windows that were tiled stay where they are after the update.
 
 ## [4.0.6] - 2026-11-26 - Steadier update checks
 
