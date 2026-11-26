@@ -93,7 +93,7 @@ internal partial class MainWindow
     private void ShowTeam_Click(object sender, RoutedEventArgs e)
     {
         if (!TryLeaveWidgetDraft()) return;
-        TeamPane.Content ??= new TeamPage();
+        if (TeamPane.Content is TeamPage page) page.Show(); else TeamPane.Content = new TeamPage(TopBarFile, StartTopBar);
         ShowPane(TeamPane, TeamNavButton, "/  Team");
     }
 
