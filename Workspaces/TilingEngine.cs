@@ -258,7 +258,7 @@ internal sealed class TilingEngine
 
 internal sealed class NativeTileSystem : ITileSystem
 {
-    private const int WsThickFrame = 0x40000, WsCaption = 0xC00000, WsExTopmost = 0x8, WsMaximize = 0x1000000;
+    private const int WsThickFrame = 0x40000, WsMaximizeBox = 0x10000, WsCaption = 0xC00000, WsExTopmost = 0x8, WsMaximize = 0x1000000;
     private const uint SwpAsync = 0x4000;
     private readonly Func<IReadOnlyCollection<string>> _floatingApps;
 
@@ -286,12 +286,22 @@ internal sealed class NativeTileSystem : ITileSystem
         var maximized = (style & WsMaximize) != 0;
         // Dialogs and panels belong to another window, often a hidden one, and float unless they have their own taskbar button.
         var standsAlone = NativeMethods.GetWindow(window, NativeMethods.GW_OWNER) == IntPtr.Zero || (extended & NativeMethods.WS_EX_APPWINDOW) != 0;
-        // A fullscreen window is left alone just like one the user maximized. Without a title bar, a window with no
-        // resizable edges is a splash screen or a panel, not an app window. Picture-in-picture players and call
+        // A fullscreen window is left alone just like one the user maximized. Picture-in-picture players and call
         // windows keep their own size and place.
-        var resizable = (style & WsThickFrame) != 0;
-        return new TileWindow(standsAlone && (resizable || (style & WsCaption) == WsCaption) && (extended & WsExTopmost) == 0 && (maximized || !fullscreen),
-            NativeMethods.IsIconic(window), maximized || fullscreen, frame, Floats(window) || Popouts.Is(window), !resizable);
+        var (tiles, fixedSize) = Shape(style);
+        return new TileWindow(standsAlone && tiles && (extended & WsExTopmost) == 0 && (maximized || !fullscreen),
+            NativeMethods.IsIconic(window), maximized || fullscreen, frame, Floats(window) || Popouts.Is(window), fixedSize);
+    }
+
+    /// <summary>
+    /// Whether a window's style makes it an app window to tile, and whether it has no way to be resized. Apps that
+    /// draw their own frame, such as Firefox, drop the resizable-edge and title-bar styles but keep a maximize
+    /// button, which says they are meant to change size. Without any of these, it is a splash screen or a panel.
+    /// </summary>
+    internal static (bool Tiles, bool FixedSize) Shape(int style)
+    {
+        var resizable = (style & (WsThickFrame | WsMaximizeBox)) != 0;
+        return (resizable || (style & WsCaption) == WsCaption, !resizable);
     }
 
     private bool Floats(nint window)

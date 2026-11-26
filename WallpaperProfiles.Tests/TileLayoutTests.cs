@@ -249,6 +249,14 @@ public sealed class TileLayoutTests
         Assert.All(tiles.All.Values, tile => Assert.Equal(1000, tile.Frame.Width));
     }
 
+    [Theory]
+    [InlineData(0x160B0000, true, false)] // Firefox: draws its own frame, keeps a maximize button.
+    [InlineData(0x16CF0000, true, false)] // An ordinary resizable window.
+    [InlineData(0x16C80000, true, true)]  // A fixed-size window with a title bar.
+    [InlineData(unchecked((int)0x96000000), false, true)] // A splash screen.
+    public void AppsThatDrawTheirOwnFrameAreStillTiled(int style, bool tiles, bool fixedSize)
+        => Assert.Equal((tiles, fixedSize), NativeTileSystem.Shape(style));
+
     [Fact]
     public void DraggingNeverTurnsASplit()
     {
