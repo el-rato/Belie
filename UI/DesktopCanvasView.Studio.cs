@@ -58,14 +58,14 @@ internal sealed partial class DesktopCanvasView
     {
         var panel = new StackPanel();
         var choices = new WrapPanel();
-        var label = new TextBlock { Text = "Arrange on", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 6), FontSize = 12 };
+        var label = new TextBlock { Text = "Arrange on", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 6), FontSize = 12 };
         label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); choices.Children.Add(label);
         _wallpaperPicker.ToolTip = "Default spots apply to every wallpaper. Pick a wallpaper to move widgets just for it; they still show on every wallpaper.";
         choices.Children.Add(_wallpaperPicker); choices.Children.Add(_followDesktop);
         _resetPosition = ActionButton("Use default position", "ResetWidgetPositionButton", ResetPosition);
         _resetPosition.ToolTip = "Forget this widget's spot on this wallpaper and use its default spot.";
         _hideHere = ActionButton("Hide widgets here", "HideWidgetsOnWallpaperButton", ToggleHiddenHere);
-        _hideHere.Padding = new Thickness(8, 6, 8, 6); _hideHere.FontSize = 12; _hideHere.Margin = new Thickness(0, 0, 8, 6);
+        _hideHere.SetResourceReference(StyleProperty, "PillButton"); _hideHere.Padding = new Thickness(12, 7, 12, 7); _hideHere.Margin = new Thickness(0, 0, 8, 6); _hideHere.VerticalAlignment = VerticalAlignment.Center;
         choices.Children.Add(_hideHere);
         foreach (var button in new[] {
             ActionButton("Save as preset", "SaveWidgetLayoutButton", SaveLayoutPreset),

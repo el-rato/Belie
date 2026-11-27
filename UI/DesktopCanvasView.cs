@@ -165,7 +165,8 @@ internal sealed partial class DesktopCanvasView : UserControl
         Content = BuildWorkspace();
         foreach (var preview in new FrameworkElement[] { _preview, _list, _desktopOverview })
             TextOptions.SetTextRenderingMode(preview, TextRenderingMode.Grayscale);
-        SizeChanged += (_, _) => _preview.Height = ActualHeight < 640 ? 48 : 96;
+        // The editor keeps its fields first; the widget preview shows only when there is room for both.
+        SizeChanged += (_, _) => { _preview.Height = ActualHeight < 760 ? 72 : 96; _preview.Visibility = ActualWidth < 800 || ActualHeight < 640 ? Visibility.Collapsed : Visibility.Visible; };
         AllowDrop = true;
         PreviewDragOver += (_, e) => { e.Effects = System.Windows.DragDropEffects.Copy; e.Handled = true; };
         PreviewDrop += (_, e) => { Run(() => CreateFromDrop(e.Data)); e.Handled = true; };
