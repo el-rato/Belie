@@ -71,14 +71,83 @@ internal static class UiAppearance
         var brushKeys = new[] { "AccentBrush", "AccentHoverBrush", "AccentPressedBrush", "AccentSubtleBrush" };
         for (var i = 0; i < accents.Length; i++) { resources[colorKeys[i]] = accents[i]; resources[brushKeys[i]] = new SolidColorBrush(accents[i]); }
         resources["AccentTextBrush"] = ReadableAccent(accent);
+        ApplyGlass(resources, theme, accent);
         if (SystemParameters.HighContrast)
         {
             foreach (var key in new[] { "BgBrush", "SurfaceBrush", "SurfaceRaisedBrush", "SurfaceHoverBrush", "AccentSubtleBrush" }) resources[key] = SystemColors.WindowBrush;
             foreach (var key in new[] { "TextPrimaryBrush", "TextSecondaryBrush", "TextTertiaryBrush", "BorderBrush", "BorderStrongBrush", "DangerBrush", "GoodBrush", "SignalBrush" }) resources[key] = SystemColors.WindowTextBrush;
             foreach (var key in new[] { "AccentBrush", "AccentHoverBrush", "AccentPressedBrush", "AccentTextBrush" }) resources[key] = SystemColors.HighlightBrush;
             resources["BgColor"] = SystemColors.WindowColor;
+            foreach (var key in new[] { "BackdropBrush", "PaneBrush", "PaneBaseBrush", "CardBrush", "CardHoverBrush" }) resources[key] = SystemColors.WindowBrush;
+            resources["PaneEdgeBrush"] = resources["CardEdgeBrush"] = SystemColors.WindowTextBrush;
+            resources["PaneGlowBrush"] = SystemColors.HighlightBrush;
         }
         Changed?.Invoke();
+    }
+
+    /// <summary>The glass strength the person chose; <see cref="EffectiveGlass"/> says what this machine can show.</summary>
+    public static Persistence.GlassLevel Glass { get; set; } = Persistence.GlassLevel.Strong;
+
+    /// <summary>Glass needs Windows 11's backdrop materials, transparency effects turned on, and no high contrast.</summary>
+    public static Persistence.GlassLevel EffectiveGlass => GlassSupported ? Glass : Persistence.GlassLevel.Off;
+
+    public static bool GlassSupported => BlurAvailable && !SystemParameters.HighContrast && TransparencyEnabled();
+
+    /// <summary>The compositor's blur behind a window arrived in Windows 10 version 1803.</summary>
+    private static bool BlurAvailable => Environment.OSVersion.Version.Build >= 17134;
+
+    private static bool TransparencyEnabled()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return key?.GetValue("EnableTransparency") is not int value || value != 0;
+        }
+        catch (Exception) { return true; }
+    }
+
+    private static void ApplyGlass(ResourceDictionary resources, UiTheme theme, Color accent)
+    {
+        var level = EffectiveGlass;
+        var background = Parse(theme.Background);
+        var surface = Parse(theme.Surface);
+        var (backdrop, pane) = level switch
+        {
+            Persistence.GlassLevel.Strong => (.16, .46),
+            Persistence.GlassLevel.Light => (.36, .64),
+            _ => (1d, 1d)
+        };
+        resources["BackdropBrush"] = Frozen(new SolidColorBrush(WithAlpha(background, backdrop)));
+        // Off keeps today's look: panes share the window colour and only their edges show.
+        resources["PaneBrush"] = Frozen(new SolidColorBrush(level == Persistence.GlassLevel.Off ? background : WithAlpha(surface, pane)));
+        resources["PaneBaseBrush"] = level == Persistence.GlassLevel.Off ? Frozen(new SolidColorBrush(background)) : Brushes.Transparent;
+        var edge = Parse(theme.Border);
+        resources["PaneEdgeBrush"] = Frozen(new SolidColorBrush(level == Persistence.GlassLevel.Off ? edge : WithAlpha(Mix(edge, Colors.White, .12), .75)));
+        // Cards inside a pane lighten the glass a little instead of covering it.
+        var light = theme.Name == "Daylight";
+        resources["CardBrush"] = Frozen(new SolidColorBrush(level == Persistence.GlassLevel.Off ? surface : WithAlpha(Colors.White, light ? .45 : .055)));
+        resources["CardHoverBrush"] = Frozen(new SolidColorBrush(level == Persistence.GlassLevel.Off ? Parse(theme.Hover) : WithAlpha(Colors.White, light ? .65 : .10)));
+        resources["CardEdgeBrush"] = Frozen(new SolidColorBrush(level == Persistence.GlassLevel.Off ? edge : WithAlpha(light ? Colors.Black : Colors.White, light ? .08 : .09)));
+        resources["PaneGlowBrush"] = Frozen(new LinearGradientBrush(new GradientStopCollection
+        {
+            new(accent, 0), new(Mix(accent, Colors.White, .25), .5), new(ShiftHue(accent, 48), 1)
+        }, new System.Windows.Point(0, 0), new System.Windows.Point(1, 1)));
+    }
+
+    private static T Frozen<T>(T brush) where T : Freezable { brush.Freeze(); return brush; }
+    private static Color WithAlpha(Color color, double alpha) => Color.FromArgb((byte)Math.Round(alpha * 255), color.R, color.G, color.B);
+
+    /// <summary>The accent turned around the colour wheel, so the focus edge runs between two related colours.</summary>
+    internal static Color ShiftHue(Color color, double degrees)
+    {
+        double r = color.R / 255d, g = color.G / 255d, b = color.B / 255d;
+        double max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b)), delta = max - min;
+        double hue = delta == 0 ? 0 : max == r ? 60 * (((g - b) / delta) % 6) : max == g ? 60 * ((b - r) / delta + 2) : 60 * ((r - g) / delta + 4);
+        double saturation = max == 0 ? 0 : delta / max;
+        hue = ((hue + degrees) % 360 + 360) % 360;
+        double c = max * saturation, x = c * (1 - Math.Abs(hue / 60 % 2 - 1)), m = max - c;
+        var (r1, g1, b1) = (int)(hue / 60) switch { 0 => (c, x, 0d), 1 => (x, c, 0d), 2 => (0d, c, x), 3 => (0d, x, c), 4 => (x, 0d, c), _ => (c, 0d, x) };
+        return Color.FromRgb((byte)Math.Round((r1 + m) * 255), (byte)Math.Round((g1 + m) * 255), (byte)Math.Round((b1 + m) * 255));
     }
 
     internal static System.Windows.Media.Brush ReadableAccent(Color accent)
@@ -199,8 +268,16 @@ internal static class UiAppearance
         Attach(dialog);
     }
 
-    public static void Attach(Window window)
+    private static readonly DependencyProperty GlassHostProperty = DependencyProperty.RegisterAttached("GlassHost", typeof(bool), typeof(UiAppearance));
+
+    /// <param name="glass">True for a window whose background may show the blurred desktop behind it.</param>
+    public static void Attach(Window window, bool glass = false)
     {
+        window.SetValue(GlassHostProperty, glass);
+        // Windows only blurs what is behind a window whose pixels may be see-through (a layered window).
+        // That has to be decided before the window first shows, so glass can then be turned off and on freely.
+        if (glass && BlurAvailable && !window.IsLoaded && new WindowInteropHelper(window).Handle == IntPtr.Zero)
+            window.AllowsTransparency = true;
         WindowChrome.SetWindowChrome(window, new WindowChrome { CaptionHeight = 0, ResizeBorderThickness = new Thickness(6), GlassFrameThickness = new Thickness(0), CornerRadius = new CornerRadius(0), UseAeroCaptionButtons = false });
         void Update() { window.Icon = RenderIcon(Current, 64); UpdateFrame(window); }
         Update(); Changed += Update;
@@ -245,6 +322,32 @@ internal static class UiAppearance
     }
 
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+
+    [StructLayout(LayoutKind.Sequential)] private struct AccentPolicy { public int State, Flags, Color, Animation; }
+    [StructLayout(LayoutKind.Sequential)] private struct CompositionData { public int Attribute; public IntPtr Data; public int Size; }
+    [DllImport("user32.dll")] private static extern int SetWindowCompositionAttribute(IntPtr window, ref CompositionData data);
+
+    private static void SetBlur(IntPtr handle, bool on)
+    {
+        var accent = new AccentPolicy { State = on ? 3 : 0 }; // ACCENT_ENABLE_BLURBEHIND, or off.
+        var size = Marshal.SizeOf<AccentPolicy>();
+        var pointer = Marshal.AllocHGlobal(size);
+        try
+        {
+            Marshal.StructureToPtr(accent, pointer, false);
+            var data = new CompositionData { Attribute = 19, Data = pointer, Size = size }; // WCA_ACCENT_POLICY
+            SetWindowCompositionAttribute(handle, ref data);
+        }
+        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException) { }
+        finally { Marshal.FreeHGlobal(pointer); }
+    }
+
+    private static void UpdateGlass(Window window, IntPtr handle)
+    {
+        // The compositor's blur stays on when the window loses focus, unlike Windows 11's acrylic material,
+        // and Belie's own glass brushes tint it. It only shows through a layered window.
+        SetBlur(handle, window.AllowsTransparency && EffectiveGlass != Persistence.GlassLevel.Off);
+    }
     internal static bool UpdateFrame(Window window)
     {
         var handle = new WindowInteropHelper(window).Handle;
@@ -256,6 +359,7 @@ internal static class UiAppearance
         var background = Parse(Current.Surface);
         var caption = background.R | (background.G << 8) | (background.B << 16);
         DwmSetWindowAttribute(handle, 35, ref caption, sizeof(int));
+        if ((bool)window.GetValue(GlassHostProperty)) UpdateGlass(window, handle);
         return borderResult == 0;
     }
 }

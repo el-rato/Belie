@@ -80,6 +80,39 @@ internal partial class MainWindow
         }
     }
 
+    private bool _loadingGlass;
+
+    private void LoadGlassChoice()
+    {
+        _loadingGlass = true;
+        GlassPicker.ItemsSource = Enum.GetValues<Persistence.GlassLevel>();
+        GlassPicker.SelectedItem = UiAppearance.Glass;
+        _loadingGlass = false;
+        GlassHint.Text = UiAppearance.GlassSupported ? "" : "Needs Windows 11 with transparency effects on";
+        GlassHint.Visibility = UiAppearance.GlassSupported ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void Glass_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingGlass || GlassPicker.SelectedItem is not Persistence.GlassLevel level || level == UiAppearance.Glass) return;
+        var previous = UiAppearance.Glass;
+        try
+        {
+            var store = Persistence.ShellStore.Default;
+            var shell = store.Load();
+            shell.Glass = level;
+            store.Save(shell);
+            UiAppearance.Glass = level;
+            UiAppearance.Apply(UiAppearance.Current.Name);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Saving the glass setting failed.", ex);
+            UiAppearance.Glass = previous;
+            LoadGlassChoice();
+        }
+    }
+
     private void Toggle_Changed(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded)

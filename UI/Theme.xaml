@@ -26,6 +26,15 @@
     <SolidColorBrush x:Key="SignalBrush" Color="#C69A5A"/>
     <SolidColorBrush x:Key="DangerBrush" Color="#D08A86"/>
     <SolidColorBrush x:Key="GoodBrush" Color="#87B493"/>
+    <!-- Glass: UiAppearance replaces these with see-through versions when the window shows the desktop behind it. -->
+    <SolidColorBrush x:Key="BackdropBrush" Color="#111613"/>
+    <SolidColorBrush x:Key="PaneBrush" Color="#111613"/>
+    <SolidColorBrush x:Key="PaneBaseBrush" Color="#111613"/>
+    <SolidColorBrush x:Key="PaneEdgeBrush" Color="#364239"/>
+    <SolidColorBrush x:Key="PaneGlowBrush" Color="#DDF79D"/>
+    <SolidColorBrush x:Key="CardBrush" Color="#191F1B"/>
+    <SolidColorBrush x:Key="CardHoverBrush" Color="#303B32"/>
+    <SolidColorBrush x:Key="CardEdgeBrush" Color="#364239"/>
 
     <!-- Shared shell tokens; desktop widget typography remains user controlled. -->
     <sys:Double x:Key="TypeCaption">12</sys:Double>
@@ -44,6 +53,29 @@
     <DropShadowEffect x:Key="CardLift" Color="#000000" BlurRadius="22" ShadowDepth="5" Direction="270" Opacity="0.38"/>
     <CubicEase x:Key="EaseOut" EasingMode="EaseOut"/>
     <BackEase x:Key="EasePop" EasingMode="EaseOut" Amplitude="0.45"/>
+    <!-- A floating glass pane. The pane holding keyboard focus lights its edge with the accent gradient. -->
+    <Style x:Key="GlassPane" TargetType="ContentControl">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContentControl">
+            <Grid>
+                <Border CornerRadius="12" Background="{DynamicResource PaneBrush}" BorderBrush="{DynamicResource PaneEdgeBrush}" BorderThickness="1">
+                    <ContentPresenter local:RoundedClip.Radius="11" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                </Border>
+                <Border x:Name="Glow" CornerRadius="12" BorderThickness="2" BorderBrush="{DynamicResource PaneGlowBrush}" Opacity="0" IsHitTestVisible="False"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter TargetName="Glow" Property="Opacity" Value="1"/>
+                    <Trigger.EnterActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                        <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.25" EasingFunction="{StaticResource EaseOut}"/>
+                    </Storyboard></BeginStoryboard></Trigger.EnterActions>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
     <Style x:Key="FocusRing" TargetType="Control">
         <Setter Property="Template"><Setter.Value><ControlTemplate>
             <Border BorderBrush="{DynamicResource TextPrimaryBrush}" BorderThickness="2" CornerRadius="12" Margin="-2"/>
@@ -63,7 +95,7 @@
 
     <FontFamily x:Key="AppFont">Segoe UI Variable Text, Segoe UI</FontFamily>
     <FontFamily x:Key="IconFont">Segoe MDL2 Assets</FontFamily>
-    <FontFamily x:Key="MonoFont">Consolas</FontFamily>
+    <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
 
     <local:AccentInkConverter x:Key="AccentInk"/>
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
@@ -923,22 +955,58 @@
         <Setter Property="Padding" Value="0"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-            <Border x:Name="PreviewChrome" CornerRadius="13,13,0,0" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="0">
+            <Border x:Name="PreviewChrome" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="0">
                 <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
             </Border>
             <ControlTemplate.Triggers>
-                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="PreviewChrome" Property="Opacity" Value="0.85"/></Trigger>
-                <Trigger Property="IsPressed" Value="True"><Setter TargetName="PreviewChrome" Property="Opacity" Value="0.6"/></Trigger>
+                <Trigger Property="IsPressed" Value="True"><Setter TargetName="PreviewChrome" Property="Opacity" Value="0.8"/></Trigger>
                 <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="PreviewChrome" Property="BorderThickness" Value="2"/></Trigger>
             </ControlTemplate.Triggers>
         </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style x:Key="SceneCard" TargetType="Border" BasedOn="{StaticResource InteractiveCard}">
-        <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource CardBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource CardEdgeBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="14"/>
         <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter Property="Effect" Value="{StaticResource CardLift}"/></Trigger></Style.Triggers>
+    </Style>
+    <!-- A card that sits on a glass pane: lighter glass, thin edge, rounded. -->
+    <Style x:Key="GlassCard" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource CardBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource CardEdgeBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="18,16"/>
+    </Style>
+    <!-- A small rounded button for actions on cards. -->
+    <Style x:Key="PillButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource CardEdgeBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,5"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" CornerRadius="14" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+                <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="RenderTransform"><Setter.Value><ScaleTransform ScaleX="0.95" ScaleY="0.95"/></Setter.Value></Setter></Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}"/></Trigger>
+                <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chrome" Property="Opacity" Value="0.5"/></Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="AccentPillButton" TargetType="Button" BasedOn="{StaticResource PillButton}">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="Foreground" Value="{Binding Background, RelativeSource={RelativeSource Self}, Converter={StaticResource AccentInk}}"/>
     </Style>
     <Style x:Key="CardBorder" TargetType="Border">
         <Setter Property="Background" Value="Transparent"/>

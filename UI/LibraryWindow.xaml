@@ -7,7 +7,7 @@
         WindowStyle="None" Background="{DynamicResource BgBrush}"
         BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1">
     <Window.Resources><local:GalleryCardWidthConverter x:Key="GalleryCardWidth"/></Window.Resources>
-    <Grid x:Name="LibraryRoot" Background="{DynamicResource BgBrush}">
+    <Grid x:Name="LibraryRoot" Background="Transparent">
         <Grid.RowDefinitions>
             <RowDefinition Height="46"/>
             <RowDefinition Height="Auto"/>
@@ -110,7 +110,7 @@
             </Grid.ColumnDefinitions>
             <Grid x:Name="LocalGalleryFrame" Margin="0,0,12,0">
                 <ListBox x:Name="Gallery" SelectionChanged="Gallery_SelectionChanged" MouseDoubleClick="Gallery_DoubleClick"
-                         Background="{DynamicResource BgBrush}" BorderThickness="0"
+                         Background="{DynamicResource PaneBaseBrush}" BorderThickness="0"
                          Foreground="{DynamicResource TextPrimaryBrush}"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemsPanel>
@@ -221,7 +221,7 @@
             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <Grid.ColumnDefinitions><ColumnDefinition x:Name="MarketGalleryColumn" Width="*"/><ColumnDefinition x:Name="MarketDetailsColumn" Width="0"/></Grid.ColumnDefinitions>
             <Grid Margin="0,0,12,0">
-                <ListBox x:Name="MarketGallery" Background="{DynamicResource BgBrush}" BorderThickness="0"
+                <ListBox x:Name="MarketGallery" Background="{DynamicResource PaneBaseBrush}" BorderThickness="0"
                          Foreground="{DynamicResource TextPrimaryBrush}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          ItemContainerStyle="{Binding ItemContainerStyle, ElementName=Gallery}"
                          SelectionChanged="MarketGallery_SelectionChanged" ScrollViewer.ScrollChanged="MarketGallery_ScrollChanged">

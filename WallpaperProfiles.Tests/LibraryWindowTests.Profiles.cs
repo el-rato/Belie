@@ -197,13 +197,18 @@ public sealed partial class LibraryWindowTests
         Assert.Equal(UiAppearance.Themes.Count, picker.Items.Count);
         Assert.Equal("Sage", UiAppearance.Find("unknown-theme").Name);
         var icons = new HashSet<string>();
+        UiAppearance.Apply(UiAppearance.Current.Name); // As at startup, so glass brushes reflect this machine.
         foreach (var theme in UiAppearance.Themes)
         {
             picker.SelectedItem = theme;
             main.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
             Assert.Equal(theme.Name, UiAppearance.Current.Name);
             Assert.Equal(theme.Name, settings.Load().UiTheme);
-            Assert.Equal((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(theme.Background), ((SolidColorBrush)main.Background).Color);
+            // With glass the window keeps the theme's colour but lets the desktop show through it.
+            var backdrop = ((SolidColorBrush)main.Background).Color;
+            var themeBackground = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(theme.Background);
+            Assert.Equal((themeBackground.R, themeBackground.G, themeBackground.B), (backdrop.R, backdrop.G, backdrop.B));
+            Assert.True((UiAppearance.EffectiveGlass == Persistence.GlassLevel.Off) == (backdrop.A == 255), $"{theme.Name} {UiAppearance.EffectiveGlass} {backdrop}");
             Assert.Equal((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(theme.Text), ((SolidColorBrush)main.Foreground).Color);
             foreach (var key in new[] { "TextPrimaryBrush", "TextSecondaryBrush", "TextTertiaryBrush", "AccentTextBrush" })
             {
@@ -231,6 +236,8 @@ public sealed partial class LibraryWindowTests
         var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(main);
         Assert.NotNull(chrome);
         Assert.Equal(new Thickness(0), chrome.GlassFrameThickness);
+        // The main window is see-through (layered) so Windows can blur the desktop behind its glass.
+        Assert.Equal(Environment.OSVersion.Version.Build >= 17134, main.AllowsTransparency);
         if (Environment.OSVersion.Version.Build >= 22000) Assert.True(UiAppearance.UpdateFrame(main));
         Click(main, "MaximizeButton");
         main.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);

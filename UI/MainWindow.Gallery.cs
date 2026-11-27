@@ -109,26 +109,25 @@ internal partial class MainWindow
             _ = LoadRailThumbAsync(profile, monitor);
         }
 
+        SceneGalleryCount.Text = _coordinator.Profiles.Count.ToString();
         FilterRail(); _shellCompact = null; UpdateShellLayout();
     }
 
     private void AddSceneCard(WallpaperProfile profile, MonitorThumbnail monitor)
     {
-        var content = new Grid();
-        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var artwork = new Grid { Height = 118 };
-        var fallback = new Border { CornerRadius = new CornerRadius(13, 13, 0, 0),
-            Background = new LinearGradientBrush(System.Windows.Media.Color.FromRgb(29, 82, 80),
-                System.Windows.Media.Color.FromRgb(150, 177, 137), 35) };
-        artwork.Children.Add(fallback);
+        // The wallpaper fills the whole card; the name and the apply pill sit on a soft shade at the bottom.
+        var content = new Grid { Height = 150 };
+        RoundedClip.SetRadius(content, 13);
+        var artwork = new Grid();
+        artwork.Children.Add(new Border { Background = new LinearGradientBrush(System.Windows.Media.Color.FromRgb(29, 82, 80),
+            System.Windows.Media.Color.FromRgb(150, 177, 137), 35) });
         var image = new ImageBrush { Stretch = Stretch.UniformToFill };
         BindingOperations.SetBinding(image, ImageBrush.ImageSourceProperty,
             new System.Windows.Data.Binding(nameof(MonitorThumbnail.ScreenSource)) { Source = monitor });
-        artwork.Children.Add(new Border { CornerRadius = new CornerRadius(13, 13, 0, 0), Background = image });
+        artwork.Children.Add(new Border { Background = image });
         var placeholder = new TextBlock { Text = "Add a wallpaper  →", Foreground = System.Windows.Media.Brushes.White,
             FontSize = 12, HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            VerticalAlignment = System.Windows.VerticalAlignment.Center, IsHitTestVisible = false };
+            VerticalAlignment = System.Windows.VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 40), IsHitTestVisible = false };
         var placeholderStyle = new Style(typeof(TextBlock));
         placeholderStyle.Setters.Add(new Setter(VisibilityProperty, Visibility.Collapsed));
         var empty = new DataTrigger { Binding = new System.Windows.Data.Binding(nameof(MonitorThumbnail.ScreenSource)) { Source = monitor }, Value = null };
@@ -136,30 +135,41 @@ internal partial class MainWindow
         placeholderStyle.Triggers.Add(empty); placeholder.Style = placeholderStyle;
         artwork.Children.Add(placeholder);
         var preview = new System.Windows.Controls.Button { Content = artwork, Tag = profile.Id,
-            Style = (Style)FindResource("ScenePreviewButton"), ToolTip = $"Open {profile.Name} in the wallpaper studio" };
+            Style = (Style)FindResource("ScenePreviewButton"), ToolTip = $"Open {profile.Name}" };
         preview.Click += (_, _) => Select(profile.Id);
         System.Windows.Automation.AutomationProperties.SetName(preview, $"Preview {profile.Name}");
         content.Children.Add(preview);
-        var footer = new Grid { Margin = new Thickness(13) };
+        var shade = new Border { IsHitTestVisible = false, Background = new LinearGradientBrush(new GradientStopCollection
+        {
+            new(System.Windows.Media.Color.FromArgb(0, 0, 0, 0), .35), new(System.Windows.Media.Color.FromArgb(215, 0, 0, 0), 1)
+        }, 90) };
+        content.Children.Add(shade);
+        var footer = new Grid { Margin = new Thickness(12, 0, 10, 10), VerticalAlignment = VerticalAlignment.Bottom };
         footer.ColumnDefinitions.Add(new ColumnDefinition());
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = new TextBlock { Text = profile.Name, FontWeight = FontWeights.SemiBold,
+        var title = new TextBlock { Text = profile.Name, FontWeight = FontWeights.SemiBold, Foreground = System.Windows.Media.Brushes.White,
             FontSize = 14, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 0), ToolTip = profile.Name };
+            Margin = new Thickness(0, 0, 10, 0), ToolTip = profile.Name, IsHitTestVisible = false };
         footer.Children.Add(title);
-        var play = new System.Windows.Controls.Button { Padding = new Thickness(10, 6, 10, 6),
-            FontSize = 12, ToolTip = $"Apply {profile.Name} to your desktop", Tag = profile.Id };
-        var style = new Style(typeof(System.Windows.Controls.Button), (Style)FindResource("PrimaryButton"));
+        var play = new System.Windows.Controls.Button { ToolTip = $"Apply {profile.Name} to your desktop", Tag = profile.Id };
+        // Waiting profiles get a frosted pill; the applied one turns to the accent colour.
+        var style = new Style(typeof(System.Windows.Controls.Button), (Style)FindResource("PillButton"));
+        style.Setters.Add(new Setter(System.Windows.Controls.ContentControl.ContentProperty, "Apply"));
+        style.Setters.Add(new Setter(System.Windows.Controls.Control.BackgroundProperty, new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 255, 255, 255))));
+        style.Setters.Add(new Setter(System.Windows.Controls.Control.BorderBrushProperty, new SolidColorBrush(System.Windows.Media.Color.FromArgb(70, 255, 255, 255))));
+        style.Setters.Add(new Setter(System.Windows.Controls.Control.ForegroundProperty, System.Windows.Media.Brushes.White));
         var active = new DataTrigger { Binding = new System.Windows.Data.Binding(nameof(MonitorThumbnail.IsActive)) { Source = monitor }, Value = true };
         active.Setters.Add(new Setter(System.Windows.Controls.ContentControl.ContentProperty, "Applied"));
+        active.Setters.Add(new Setter(System.Windows.Controls.Control.BackgroundProperty, new DynamicResourceExtension("AccentBrush")));
+        active.Setters.Add(new Setter(System.Windows.Controls.Control.BorderBrushProperty, new DynamicResourceExtension("AccentBrush")));
+        active.Setters.Add(new Setter(System.Windows.Controls.Control.ForegroundProperty, new SolidColorBrush(System.Windows.Media.Color.FromRgb(16, 24, 29))));
         style.Triggers.Add(active);
-        style.Setters.Add(new Setter(System.Windows.Controls.ContentControl.ContentProperty, "Apply"));
         play.Style = style;
         play.Click += (_, _) => _coordinator.SwitchManually(profile.Id);
         System.Windows.Automation.AutomationProperties.SetName(play, $"Apply profile {profile.Name}");
         Grid.SetColumn(play, 1); footer.Children.Add(play);
-        Grid.SetRow(footer, 1); content.Children.Add(footer);
-        SceneGallery.Children.Add(new Border { Width = 214, Margin = new Thickness(0, 0, 12, 0),
+        content.Children.Add(footer);
+        SceneGallery.Children.Add(new Border { Width = 230, Margin = new Thickness(0, 0, 12, 0),
             Style = (Style)FindResource("SceneCard"), Child = content });
     }
 

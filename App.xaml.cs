@@ -141,6 +141,7 @@ internal partial class App : System.Windows.Application
             _barProfileEvent = LocalIpc.Event(EventResetMode.AutoReset, TopBarProcess.ProfileEventName);
             _wallpaperEvents = Enum.GetValues<WallpaperAction>().Select(action => LocalIpc.Event(EventResetMode.AutoReset, TopBarProcess.WallpaperEventName(action))).ToArray();
             var settings = settingsStore.Load();
+            UiAppearance.Glass = ShellStore.Default.Load().Glass;
             UiAppearance.Apply(settings.UiTheme);
             var profileStore = new ProfileStore(AppPaths.ProfilesDir);
 

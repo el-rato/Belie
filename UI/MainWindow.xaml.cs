@@ -64,11 +64,11 @@ internal partial class MainWindow : Window
     {
         InitializeComponent();
         InstalledVersionText.Text = $"Belie {AppUpdater.CurrentVersion.ToString(3)}";
-        if (AppPaths.IsSandbox)
+        if (AppPaths.IsDevBuild)
         {
             // Make a test build impossible to mistake for the real one.
-            SandboxBadge.Visibility = Visibility.Visible; SandboxBadge.ToolTip = "Running on a copy of your data in " + AppPaths.BaseDir;
-            Title = "Belie (sandbox)"; InstalledVersionText.Text += " · sandbox";
+            DevBuildBadge.Visibility = Visibility.Visible; DevBuildBadge.ToolTip = "Dev build for testing. Uses a copy of your data in " + AppPaths.BaseDir;
+            Title = "Belie (dev)"; InstalledVersionText.Text += " · dev";
         }
         if (System.Windows.Application.Current is App app)
         {
@@ -147,6 +147,7 @@ internal partial class MainWindow : Window
     {
         AutostartToggle.IsChecked = AutostartManager.IsEnabled();
         MinimizedToggle.IsChecked = _settings.StartMinimizedToTray;
+        LoadGlassChoice();
         BuildRail();
         _loadingDraft = false;
         UpdateDraftState();
@@ -182,7 +183,7 @@ internal partial class MainWindow : Window
 
     private void TrySetAppIcon()
     {
-        UiAppearance.Attach(this);
+        UiAppearance.Attach(this, glass: true);
     }
 
     private void TitleBar_Drag(object sender, MouseButtonEventArgs e)
