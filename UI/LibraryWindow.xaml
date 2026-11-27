@@ -7,7 +7,6 @@
         MinWidth="900" MinHeight="600" WindowStartupLocation="CenterOwner"
         WindowStyle="None" Background="{DynamicResource BgBrush}"
         BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1">
-    <Window.Resources><local:GalleryCardWidthConverter x:Key="GalleryCardWidth"/></Window.Resources>
     <Grid x:Name="LibraryRoot" Background="Transparent">
         <Grid.RowDefinitions>
             <RowDefinition Height="46"/>
@@ -25,42 +24,64 @@
             </Grid>
         </Border>
         <StackPanel Grid.Row="1" Margin="20,18,20,14">
-            <Border Margin="0,0,0,18">
+            <Border Margin="0,0,0,4">
                 <Border.Style><Style TargetType="Border" BasedOn="{StaticResource WorkspaceBanner}">
                     <Setter Property="Background" Value="Transparent"/>
                     <Style.Triggers><DataTrigger Binding="{Binding Visibility, ElementName=MarketDetails}" Value="Visible"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
                 </Style></Border.Style>
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <StackPanel><TextBlock Text="Library" Style="{StaticResource WorkspaceHeading}"/></StackPanel>
-
+                    <TextBlock x:Name="PaneHeading" Text="Library" Style="{StaticResource WorkspaceHeading}" VerticalAlignment="Center"/>
+                    <StackPanel x:Name="ImportActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="ImportFolderButton" Content="&#xE8B7;" FontFamily="{StaticResource IconFont}" Style="{StaticResource PillButton}" Width="36" Height="34" Padding="0" Margin="0,0,8,0"
+                                ToolTip="Import a folder" AutomationProperties.Name="Import folder" Click="ImportFolder_Click"/>
+                        <Button x:Name="ImportFilesButton" Content="+  Import" Style="{StaticResource AccentPillButton}" Padding="16,8" FontSize="13" ToolTip="Import images or videos" Click="ImportFiles_Click"/>
+                    </StackPanel>
                 </Grid>
             </Border>
             <DockPanel>
-                <StackPanel x:Name="ImportActions" DockPanel.Dock="Right" Orientation="Horizontal">
-                    <Button x:Name="ImportFilesButton" Content="+  Import" Style="{StaticResource PrimaryButton}" ToolTip="Import images or videos" Click="ImportFiles_Click" Margin="0,0,8,0"/>
-                    <Button x:Name="ImportFolderButton" Content="&#xE8B7;" FontFamily="{StaticResource IconFont}" ToolTip="Import folder" AutomationProperties.Name="Import folder" Click="ImportFolder_Click"/>
-                </StackPanel>
                 <StackPanel x:Name="LibraryTabs" Orientation="Horizontal">
                     <Button x:Name="LocalLibraryTab" Content="My collection" Background="{DynamicResource AccentSubtleBrush}" Click="LocalLibrary_Click" Margin="0,0,8,0" Padding="16,10"/>
                     <Button x:Name="MarketplaceTab" Content="Discover wallpapers" Click="Marketplace_Click" Padding="16,10"/>
                 </StackPanel>
             </DockPanel>
-            <Grid x:Name="LocalFilters" Margin="0,18,0,0">
+            <Grid x:Name="LocalFilters" Margin="0,14,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="160"/>
+                    <ColumnDefinition Width="180"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <Grid Margin="0,0,12,0">
-                    <TextBox x:Name="SearchBox" TextChanged="Filter_Changed" AutomationProperties.Name="Search library" ToolTip="Search names, tags, or collections"/>
-                    <TextBlock Text="Search library" Margin="10,0" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{DynamicResource TextTertiaryBrush}">
+                <Grid Margin="0,0,10,0">
+                    <TextBox x:Name="SearchBox" TextChanged="Filter_Changed" AutomationProperties.Name="Search library" ToolTip="Search names, tags, or collections"
+                             Padding="34,0,10,0" Height="40" VerticalContentAlignment="Center"/>
+                    <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="13,0,0,0" IsHitTestVisible="False"/>
+                    <TextBlock Text="Search names, tags or collections" Margin="36,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{DynamicResource TextTertiaryBrush}">
                         <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
                     </TextBlock>
                 </Grid>
-                <ComboBox Grid.Column="1" x:Name="CollectionFilter" DisplayMemberPath="Label" SelectionChanged="Filter_Changed" ToolTip="Collection"/>
-                <CheckBox Grid.Column="2" x:Name="FavoritesFilter" Content="★" ToolTip="Favorites only" AutomationProperties.Name="Favorites only" Margin="12,0,0,0"
-                          VerticalAlignment="Center" Checked="Filter_Changed" Unchecked="Filter_Changed"/>
+                <ComboBox Grid.Column="1" x:Name="CollectionFilter" DisplayMemberPath="Label" SelectionChanged="Filter_Changed" ToolTip="Collection" Height="40" VerticalContentAlignment="Center"/>
+                <CheckBox Grid.Column="2" x:Name="FavoritesFilter" ToolTip="Favorites only" AutomationProperties.Name="Favorites only" Margin="10,0,0,0"
+                          VerticalAlignment="Center" Checked="Filter_Changed" Unchecked="Filter_Changed" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                    <CheckBox.Template><ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="Pill" CornerRadius="17" Height="34" Padding="14,0" BorderThickness="1" Background="{DynamicResource CardHoverBrush}" BorderBrush="{DynamicResource CardEdgeBrush}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock x:Name="Star" Text="&#xE734;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,0,7,0" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock x:Name="Label" Text="Favorites" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}"/></Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
+                                <Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="Star" Property="Text" Value="&#xE735;"/>
+                                <Setter TargetName="Star" Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
+                                <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate></CheckBox.Template>
+                </CheckBox>
             </Grid>
             <StackPanel x:Name="MarketFilters" Visibility="Collapsed" Margin="0,16,0,0">
                 <DockPanel>
@@ -115,10 +136,14 @@
                 <ColumnDefinition x:Name="DetailsColumn" Width="0"/>
             </Grid.ColumnDefinitions>
             <Grid x:Name="LocalGalleryFrame" Margin="0,0,12,0">
-                <ListBox x:Name="Gallery" SelectionChanged="Gallery_SelectionChanged" MouseDoubleClick="Gallery_DoubleClick"
-                         Background="{DynamicResource PaneBaseBrush}" BorderThickness="0"
-                         Foreground="{DynamicResource TextPrimaryBrush}"
+                <ListBox x:Name="Gallery" SelectionChanged="Gallery_SelectionChanged" MouseDoubleClick="Gallery_DoubleClick" SizeChanged="Gallery_SizeChanged"
+                         Background="Transparent" BorderThickness="0" Padding="0" Margin="-5,0,-5,0"
+                         Foreground="{DynamicResource TextPrimaryBrush}" VirtualizingPanel.ScrollUnit="Pixel"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.Resources>
+                        <sys:Double x:Key="TileWidth">280</sys:Double>
+                        <sys:Double x:Key="TileHeight">158</sys:Double>
+                    </ListBox.Resources>
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
                     </ListBox.ItemsPanel>
@@ -126,21 +151,18 @@
                         <Style TargetType="ListBoxItem">
                             <Setter Property="AutomationProperties.Name" Value="{Binding Asset.Name}"/>
                             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-                            <Setter Property="Margin" Value="0,0,12,14"/>
                             <Setter Property="Cursor" Value="Hand"/>
-                            <Setter Property="Padding" Value="0"/>
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="ListBoxItem">
-                                        <Border x:Name="Card" Style="{StaticResource InteractiveCard}" CornerRadius="14" BorderThickness="1"
-                                                Background="Transparent" BorderBrush="Transparent">
+                                        <Border x:Name="Card" Margin="4,4,4,10" Padding="5" CornerRadius="14" BorderThickness="1" Background="Transparent" BorderBrush="Transparent">
                                             <ContentPresenter/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                                <Setter TargetName="Card" Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
+                                                <Setter TargetName="Card" Property="Background" Value="{DynamicResource CardBrush}"/>
+                                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource CardEdgeBrush}"/>
                                             </Trigger>
                                             <Trigger Property="IsSelected" Value="True">
                                                 <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
@@ -155,18 +177,18 @@
                     </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource GalleryCardWidth}}" ToolTip="{Binding Asset.FilePath}">
-                                <Grid Height="140">
-                                    <Border Background="{DynamicResource SurfaceRaisedBrush}" CornerRadius="13,13,0,0"/>
-                                    <TextBlock Text="{Binding Placeholder}" Style="{StaticResource HintText}"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    <Border CornerRadius="13,13,0,0"><Border.Background><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/></Border.Background></Border>
-                                    <CheckBox IsChecked="{Binding IsPicked, Mode=TwoWay}" IsEnabled="{Binding Exists}" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                              Margin="9" ToolTip="Select for profile" AutomationProperties.Name="Select wallpaper for profile"/>
-                                </Grid>
-                                <StackPanel Margin="13,12">
-                                    <TextBlock Text="{Binding Asset.Name}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" FontSize="14"/>
-                                    <TextBlock Text="{Binding Caption}" Style="{StaticResource HintText}" Margin="0,4,0,0"/>
+                            <StackPanel Width="{DynamicResource TileWidth}" ToolTip="{Binding Asset.FilePath}">
+                                <Border Height="{DynamicResource TileHeight}" CornerRadius="10" Background="{DynamicResource SurfaceRaisedBrush}" local:RoundedClip.Radius="10">
+                                    <Grid>
+                                        <TextBlock Text="{Binding Placeholder}" Style="{StaticResource HintText}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Rectangle><Rectangle.Fill><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/></Rectangle.Fill></Rectangle>
+                                        <CheckBox IsChecked="{Binding IsPicked, Mode=TwoWay}" IsEnabled="{Binding Exists}" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                  Margin="9" ToolTip="Select for profile" AutomationProperties.Name="Select wallpaper for profile"/>
+                                    </Grid>
+                                </Border>
+                                <StackPanel Margin="4,10,4,3">
+                                    <TextBlock Text="{Binding Asset.Name}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" FontSize="13"/>
+                                    <TextBlock Text="{Binding Caption}" Foreground="{DynamicResource TextSecondaryBrush}" FontFamily="{StaticResource MonoFont}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/>
                                 </StackPanel>
                             </StackPanel>
                         </DataTemplate>
@@ -175,11 +197,11 @@
                 <TextBlock x:Name="EmptyText" TextWrapping="Wrap" Style="{StaticResource HintText}" FontSize="14"
                            TextAlignment="Center" VerticalAlignment="Center" Margin="35" IsHitTestVisible="False"/>
             </Grid>
-            <Border x:Name="DetailsFrame" Visibility="Collapsed" Grid.Column="1" Background="Transparent" CornerRadius="0" Padding="16,0,0,0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+            <Border x:Name="DetailsFrame" Visibility="Collapsed" Grid.Column="1" Style="{StaticResource GlassCard}" CornerRadius="16" Padding="18,16" Margin="0,4,0,10">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <Button x:Name="BackToCollectionButton" Content="Back to collection" Click="BackToCollection_Click" HorizontalAlignment="Left" Visibility="Collapsed" Margin="0,0,0,16"/>
-                        <TextBlock Text="Wallpaper details" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,14"/>
+                        <Button x:Name="BackToCollectionButton" Content="Back to collection" Style="{StaticResource PillButton}" Click="BackToCollection_Click" HorizontalAlignment="Left" Visibility="Collapsed" Margin="0,0,0,16"/>
+                        <TextBlock Text="Details" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold" Margin="0,0,0,14"/>
                         <TextBlock x:Name="SelectionHint" Text="Choose a wallpaper"
                                    Style="{StaticResource HintText}" TextWrapping="Wrap"/>
                         <StackPanel x:Name="DetailsPanel" Visibility="Collapsed">
@@ -190,11 +212,11 @@
                             <TextBox x:Name="TagsBox" ToolTip="Separate tags with commas"/>
                             <TextBlock Text="Collection" Style="{StaticResource FieldLabel}" Margin="0,16,0,6"/>
                             <TextBox x:Name="AssetCollectionBox"/>
-                            <Button x:Name="SaveDetailsButton" Content="Save details" Style="{StaticResource PrimaryButton}" Click="SaveDetails_Click" Margin="0,18,0,0"/>
-                            <TextBlock x:Name="SourceText" Style="{StaticResource HintText}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Margin="0,18,0,0"/>
+                            <Button x:Name="SaveDetailsButton" Content="Save details" Style="{StaticResource AccentPillButton}" Padding="16,9" FontSize="13" Click="SaveDetails_Click" Margin="0,18,0,0"/>
+                            <TextBlock x:Name="SourceText" Style="{StaticResource HintText}" FontFamily="{StaticResource MonoFont}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Margin="0,18,0,0"/>
                             <TextBlock x:Name="MissingText" Text="Source file missing"
                                        Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,10,0,0"/>
-                            <Button Content="Remove" Style="{StaticResource DangerButton}" Click="Remove_Click" Margin="0,18,0,0"
+                            <Button Content="Remove from library" Style="{StaticResource PillButton}" Foreground="{DynamicResource DangerBrush}" Padding="14,8" HorizontalAlignment="Left" Click="Remove_Click" Margin="0,14,0,0"
                                     ToolTip="Removes the library entry. The original file and existing profiles are kept."/>
                         </StackPanel>
                     </StackPanel>
@@ -207,18 +229,20 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel>
-                <TextBlock x:Name="StatusText" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,12,8"/>
+                <TextBlock x:Name="StatusText" Style="{StaticResource HintText}" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap" Margin="0,0,12,8"/>
                 <StackPanel Orientation="Horizontal">
-                    <Button x:Name="PreviousButton" Content="←" ToolTip="Previous page" AutomationProperties.Name="Previous page" Click="Previous_Click" Padding="10,4"/>
-                    <TextBlock x:Name="PageText" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="12,0"/>
-                    <Button x:Name="NextButton" Content="→" ToolTip="Next page" AutomationProperties.Name="Next page" Click="Next_Click" Padding="10,4"/>
+                    <Button x:Name="PreviousButton" Content="&#xE76B;" FontFamily="{StaticResource IconFont}" Style="{StaticResource PillButton}" Width="34" Height="30" Padding="0"
+                            ToolTip="Previous page" AutomationProperties.Name="Previous page" Click="Previous_Click"/>
+                    <TextBlock x:Name="PageText" Style="{StaticResource HintText}" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" Margin="12,0"/>
+                    <Button x:Name="NextButton" Content="&#xE76C;" FontFamily="{StaticResource IconFont}" Style="{StaticResource PillButton}" Width="34" Height="30" Padding="0"
+                            ToolTip="Next page" AutomationProperties.Name="Next page" Click="Next_Click"/>
                 </StackPanel>
             </StackPanel>
             <StackPanel Grid.Column="1" VerticalAlignment="Bottom" MaxWidth="300">
                 <TextBlock x:Name="LibrarySelectionText" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="ClearPickedButton" Content="Clear" Visibility="Collapsed" Click="ClearPicked_Click" Margin="0,0,8,0"/>
-                    <Button x:Name="UseButton" Content="Use in profile" Style="{StaticResource PrimaryButton}"
+                    <Button x:Name="ClearPickedButton" Content="Clear" Style="{StaticResource PillButton}" Padding="14,9" Visibility="Collapsed" Click="ClearPicked_Click" Margin="0,0,8,0"/>
+                    <Button x:Name="UseButton" Content="Use in profile" Style="{StaticResource AccentPillButton}" Padding="18,9" FontSize="13"
                             IsEnabled="False" Click="Use_Click"/>
                 </StackPanel>
             </StackPanel>

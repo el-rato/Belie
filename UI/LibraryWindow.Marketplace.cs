@@ -89,6 +89,7 @@ internal partial class LibraryWindow
         CancelMarketRequests();
         MarketPane.Visibility = MarketFilters.Visibility = Visibility.Collapsed;
         LocalFilters.Visibility = LocalGalleryPane.Visibility = LocalFooter.Visibility = ImportActions.Visibility = Visibility.Visible;
+        PaneHeading.Text = "Library";
         LocalLibraryTab.SetResourceReference(Control.BackgroundProperty, "AccentSubtleBrush");
         MarketplaceTab.ClearValue(Control.BackgroundProperty);
         RefreshGallery();
@@ -98,6 +99,7 @@ internal partial class LibraryWindow
     {
         if (_busy) return;
         LocalFilters.Visibility = LocalGalleryPane.Visibility = LocalFooter.Visibility = ImportActions.Visibility = Visibility.Collapsed;
+        PaneHeading.Text = "Discover";
         MarketPane.Visibility = MarketFilters.Visibility = Visibility.Visible;
         MarketplaceTab.SetResourceReference(Control.BackgroundProperty, "AccentSubtleBrush");
         LocalLibraryTab.ClearValue(Control.BackgroundProperty);
@@ -422,6 +424,16 @@ internal partial class LibraryWindow
         var tile = Math.Floor(width / columns) - 14; // Ring, padding and margin around each tile.
         MarketGallery.Resources["TileWidth"] = tile;
         MarketGallery.Resources["TileHeight"] = Math.Round(tile * 9 / 16);
+    }
+
+    /// <summary>Your own wallpapers fill each row the same way, a little smaller.</summary>
+    private void Gallery_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var width = Math.Max(200, e.NewSize.Width - 18);
+        var columns = Math.Max(1, (int)Math.Round(width / 270));
+        var tile = Math.Floor(width / columns) - 20; // Card padding, border and margin.
+        Gallery.Resources["TileWidth"] = tile;
+        Gallery.Resources["TileHeight"] = Math.Round(tile * 9 / 16);
     }
 
     private bool MarketHasMorePages => _marketPage < _marketLastPage;

@@ -265,7 +265,7 @@ internal partial class LibraryWindow : Window
         var selected = Gallery.SelectedItem != null;
         var compact = LibraryRoot.ActualWidth > 0 && LibraryRoot.ActualWidth < 780;
         LocalGalleryFrame.Visibility = selected && compact ? Visibility.Collapsed : Visibility.Visible;
-        DetailsColumn.Width = new GridLength(selected && !compact ? 280 : 0);
+        DetailsColumn.Width = new GridLength(selected && !compact ? 320 : 0);
         System.Windows.Controls.Grid.SetColumn(DetailsFrame, compact ? 0 : 1);
         System.Windows.Controls.Grid.SetColumnSpan(DetailsFrame, compact ? 2 : 1);
         BackToCollectionButton.Visibility = selected && compact ? Visibility.Visible : Visibility.Collapsed;

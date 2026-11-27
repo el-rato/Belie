@@ -377,14 +377,3 @@ internal sealed class AccentInkConverter : IValueConverter
         value is SolidColorBrush brush && Luminance(brush.Color) < .179 ? Brushes.White : Brushes.Black;
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
-
-internal sealed class GalleryCardWidthConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        var width = value is double actual && actual > 0 ? actual : 620;
-        var columns = Math.Max(1, (int)Math.Floor(width / 206));
-        return Math.Max(150, Math.Min(240, (width - 14 * columns) / columns));
-    }
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
-}
