@@ -93,6 +93,22 @@ public class CreatureTeamTests
     }
 
     [Fact]
+    public void CommitsCountWhenTheCalendarIsEmpty()
+    {
+        var count = GitHubContributions.ParseCommits("""
+            aaa 2026-11-26T12:00:00+05:30
+            bbb 2026-11-26T13:00:00+05:30
+            aaa 2026-11-26T12:00:00+05:30
+            ccc 2026-11-20T09:00:00Z
+            not-a-line
+            """, "someone");
+        Assert.Equal("someone", count.Login);
+        Assert.Equal(3, count.Total); // The repeated commit counts once.
+        Assert.Equal(2, count.Days[DateOnly.FromDateTime(DateTimeOffset.Parse("2026-11-26T12:00:00+05:30").LocalDateTime)]);
+        Assert.Equal(0, GitHubContributions.ParseCommits("", "someone").Total);
+    }
+
+    [Fact]
     public void AnyAccountCanBeCounted()
     {
         var named = GitHubContributions.Parse("""

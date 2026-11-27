@@ -76,11 +76,13 @@ internal static class GitHubContributions
         if (login.Length > 0 && !IsValidAccount(login)) throw new ArgumentException($"\"{login}\" is not a GitHub account name.");
         try
         {
-            return Parse(await Cli(login.Length == 0 ? "query{viewer{login " + Days + "}}" : "query{user(login:\"" + login + "\"){login " + Days + "}}", token));
+            var count = Parse(await Cli(new[] { "api", "graphql", "-f", "query=" + (login.Length == 0 ? "query{viewer{login " + Days + "}}" : "query{user(login:\"" + login + "\"){login " + Days + "}}") }, token));
+            return count.Total > 0 ? count : await FromCommitsAsync(count, cli: true, token);
         }
         catch (CliMissingException) when (login.Length > 0)
         {
-            return ParsePage(await Page(login, token), login);
+            var count = ParsePage(await Page(login, token), login);
+            return count.Total > 0 ? count : await FromCommitsAsync(count, cli: false, token);
         }
         catch (CliMissingException)
         {
@@ -90,10 +92,63 @@ internal static class GitHubContributions
 
     private sealed class CliMissingException : Exception { }
 
-    private static async Task<string> Cli(string query, CancellationToken token)
+    /// <summary>
+    /// Some accounts' contribution calendars stay empty although their commits are there (GitHub leaves them out). Then
+    /// the commits themselves are counted, from GitHub's commit search, so the team still grows. A calendar that is
+    /// really empty stays empty: the search finds nothing either.
+    /// </summary>
+    private static async Task<Count> FromCommitsAsync(Count calendar, bool cli, CancellationToken token)
+    {
+        if (calendar.Login.Length == 0 || !IsValidAccount(calendar.Login)) return calendar;
+        var since = DateOnly.FromDateTime(DateTime.Today.AddYears(-1)).ToString("yyyy-MM-dd");
+        var query = $"author:{calendar.Login} author-date:>={since}";
+        try
+        {
+            string lines;
+            if (cli)
+                lines = await Cli(new[] { "api", "-X", "GET", "search/commits", "-f", "q=" + query, "-f", "per_page=100", "--paginate",
+                    "--jq", ".items[] | .sha + \" \" + .commit.author.date" }, token);
+            else
+            {
+                // Without the CLI, GitHub allows a few searches an hour; the first page is enough for a start.
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("Belie (team)");
+                var json = await http.GetStringAsync("https://api.github.com/search/commits?per_page=100&q=" + Uri.EscapeDataString(query), token);
+                using var document = JsonDocument.Parse(json);
+                lines = string.Join("\n", document.RootElement.GetProperty("items").EnumerateArray()
+                    .Select(item => item.GetProperty("sha").GetString() + " " + item.GetProperty("commit").GetProperty("author").GetProperty("date").GetString()));
+            }
+            var commits = ParseCommits(lines, calendar.Login);
+            if (commits.Total > 0) Logger.Info($"The contribution calendar is empty; counted {commits.Total} commits instead.");
+            return commits.Total > 0 ? commits : calendar;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or JsonException or KeyNotFoundException or CliMissingException)
+        {
+            Logger.Warn("Counting commits failed: " + ex.Message);
+            return calendar;
+        }
+    }
+
+    /// <summary>Reads "sha date" lines; each commit counts once, on the day it was written, in local time.</summary>
+    internal static Count ParseCommits(string lines, string login)
+    {
+        var seen = new HashSet<string>();
+        var days = new Dictionary<DateOnly, int>();
+        foreach (var line in lines.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = line.Split(' ', 2);
+            if (parts.Length != 2 || !seen.Add(parts[0])
+                || !DateTimeOffset.TryParse(parts[1], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var when)) continue;
+            var day = DateOnly.FromDateTime(when.LocalDateTime);
+            days[day] = days.GetValueOrDefault(day) + 1;
+        }
+        return new Count(login, days.Values.Sum(), days);
+    }
+
+    private static async Task<string> Cli(IEnumerable<string> arguments, CancellationToken token)
     {
         var start = new ProcessStartInfo("gh") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-        foreach (var argument in new[] { "api", "graphql", "-f", "query=" + query }) start.ArgumentList.Add(argument);
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
         Process process;
         try { process = Process.Start(start) ?? throw new CliMissingException(); }
         catch (System.ComponentModel.Win32Exception) { throw new CliMissingException(); }
