@@ -1,5 +1,17 @@
 # Belie patch notes
 
+## [4.2.3] - 2026-11-27 - Hide widgets on one wallpaper
+
+### Changed
+
+- **Hide widgets on one wallpaper.** In the widget studio, pick a wallpaper under **Arrange on**, then use the eye on a widget to hide it on that wallpaper only, in that profile. It still shows on the profile's other wallpapers. **Hide widgets here** hides all of the profile's widgets on that wallpaper at once, and **Show widgets here** brings them back. With **Profile default** picked, the eye still hides a widget everywhere.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained, and so is your team.
+
 ## [4.2.2] - 2026-11-27 - Creature packs bring their own colors
 
 ### Changed
