@@ -265,7 +265,7 @@ public sealed class StressTests : IDisposable
     }
 
     [Fact]
-    public void AtomicSave_TemporaryExternalReadLock_PublishesAfterRelease()
+    public async Task AtomicSave_TemporaryExternalReadLock_PublishesAfterRelease()
     {
         var path = Path.Combine(_directory, "locked-snapshot.json");
         AtomicJsonFile.Write(path, new[] { 1, 2, 3 });
@@ -279,7 +279,7 @@ public sealed class StressTests : IDisposable
             Assert.Equal(new[] { 1, 2, 3 }, System.Text.Json.JsonSerializer.Deserialize<int[]>(held));
         }
         finally { held.Dispose(); }
-        save.GetAwaiter().GetResult();
+        await save;
         Assert.Equal(new[] { 4, 5, 6 }, AtomicJsonFile.Read<int[]>(path));
         Assert.Empty(Directory.GetFiles(_directory, "*.tmp"));
     }
