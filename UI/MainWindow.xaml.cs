@@ -64,6 +64,12 @@ internal partial class MainWindow : Window
     {
         InitializeComponent();
         InstalledVersionText.Text = $"Belie {AppUpdater.CurrentVersion.ToString(3)}";
+        if (AppPaths.IsSandbox)
+        {
+            // Make a test build impossible to mistake for the real one.
+            SandboxBadge.Visibility = Visibility.Visible; SandboxBadge.ToolTip = "Running on a copy of your data in " + AppPaths.BaseDir;
+            Title = "Belie (sandbox)"; InstalledVersionText.Text += " · sandbox";
+        }
         if (System.Windows.Application.Current is App app)
         {
             app.Updates.Changed += RefreshUpdateStatus;

@@ -34,7 +34,24 @@
                     <TextBlock Text="Belie" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" Margin="10,0,0,0"/>
                     <TextBlock x:Name="WorkspaceTitle" Text="/  Profiles" Foreground="{DynamicResource TextTertiaryBrush}"
                                FontSize="12" VerticalAlignment="Center" Margin="16,0,0,0"/>
+                    <Border x:Name="SandboxBadge" Visibility="Collapsed" Margin="14,0,0,0" Padding="8,2" CornerRadius="9" VerticalAlignment="Center"
+                            BorderThickness="1" BorderBrush="{DynamicResource SignalBrush}" AutomationProperties.Name="Sandbox build">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{DynamicResource SignalBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="Sandbox · separate data" FontSize="11" Foreground="{DynamicResource SignalBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
+                <!-- A thin accent line that fades out along the title bar. -->
+                <Border Height="1" VerticalAlignment="Bottom" Margin="0,0,0,-1" IsHitTestVisible="False" Opacity="0.7"
+                        Background="{DynamicResource AccentBrush}">
+                    <Border.OpacityMask>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="Black" Offset="0"/>
+                            <GradientStop Color="Transparent" Offset="0.55"/>
+                        </LinearGradientBrush>
+                    </Border.OpacityMask>
+                </Border>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
                     <Button Style="{StaticResource TitleBarButton}" Click="MinBtn_Click" ToolTip="Minimize" AutomationProperties.Name="Minimize">
                         <Path Data="M0,0 L10,0" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1"/>

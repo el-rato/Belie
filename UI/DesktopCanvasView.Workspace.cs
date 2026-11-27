@@ -290,7 +290,7 @@ internal sealed partial class DesktopCanvasView
     {
         var style = new Style(typeof(ListBoxItem));
         style.Setters.Add(new Setter(MarginProperty, new Thickness(0, 0, 0, 8)));
-        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8)));
+        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(10)));
         style.Setters.Add(new Setter(Control.CursorProperty, System.Windows.Input.Cursors.Hand));
         style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, System.Windows.HorizontalAlignment.Stretch));
         style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, System.Windows.Application.Current.FindResource("FocusRing")));
@@ -298,18 +298,31 @@ internal sealed partial class DesktopCanvasView
         frame.SetResourceReference(StyleProperty, "InteractiveCard");
         frame.SetValue(Border.CornerRadiusProperty, new CornerRadius(14));
         frame.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-        frame.SetValue(Border.BackgroundProperty, System.Windows.Media.Brushes.Transparent);
-        frame.SetValue(Border.BorderBrushProperty, System.Windows.Media.Brushes.Transparent);
         frame.SetBinding(Border.PaddingProperty, new System.Windows.Data.Binding("Padding") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
+        frame.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
+        frame.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+        var accent = System.Windows.Application.Current.TryFindResource("SceneAccentColor") is System.Windows.Media.Color color ? color : Colors.White;
+        var glow = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 18, ShadowDepth = 0, Opacity = .3, Color = accent };
+        // The bar on the left edge marks the open widget; the content sits beside it.
+        var layout = new FrameworkElementFactory(typeof(Grid));
+        var bar = new FrameworkElementFactory(typeof(Border)); bar.Name = "Bar";
+        bar.SetValue(WidthProperty, 3.0); bar.SetValue(Border.CornerRadiusProperty, new CornerRadius(2));
+        bar.SetValue(HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Left);
+        bar.SetValue(MarginProperty, new Thickness(-5, 6, 0, 6)); bar.SetValue(OpacityProperty, 0.0);
+        bar.SetResourceReference(Border.BackgroundProperty, "AccentBrush");
         var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
-        presenter.SetValue(HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Stretch); frame.AppendChild(presenter);
+        presenter.SetValue(HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Stretch);
+        layout.AppendChild(presenter); layout.AppendChild(bar); frame.AppendChild(layout);
         var template = new ControlTemplate(typeof(ListBoxItem)) { VisualTree = frame };
         var hover = new Trigger { Property = IsMouseOverProperty, Value = true };
         hover.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("SurfaceHoverBrush"), "Card"));
-        hover.Setters.Add(new Setter(Border.BorderBrushProperty, new DynamicResourceExtension("AccentBrush"), "Card")); template.Triggers.Add(hover);
+        hover.Setters.Add(new Setter(Border.BorderBrushProperty, new DynamicResourceExtension("BorderStrongBrush"), "Card"));
+        hover.Setters.Add(new Setter(EffectProperty, glow, "Card")); template.Triggers.Add(hover);
         var selected = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
         selected.Setters.Add(new Setter(Border.BorderBrushProperty, new DynamicResourceExtension("AccentBrush"), "Card"));
-        selected.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("AccentSubtleBrush"), "Card")); template.Triggers.Add(selected);
+        selected.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("AccentSubtleBrush"), "Card"));
+        selected.Setters.Add(new Setter(EffectProperty, glow, "Card"));
+        selected.Setters.Add(new Setter(OpacityProperty, 1.0, "Bar")); template.Triggers.Add(selected);
         style.Setters.Add(new Setter(Control.TemplateProperty, template)); return style;
     }
     private DataTemplate GalleryCardTemplate()
@@ -326,43 +339,147 @@ internal sealed partial class DesktopCanvasView
     }
     private FrameworkElement BuildGalleryCard(DesktopWidget widget)
     {
-        var panel = new Grid();
-        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
-        panel.ColumnDefinitions.Add(new ColumnDefinition());
-        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
-        var renderer = new DesktopWidgetWindow(widget, _store);
-        renderer.UpdatePreview(widget, DesktopWidgetWindow.PreviewScale(widget));
-        var visual = (FrameworkElement)renderer.Content; renderer.Content = null;
-        visual.Width = widget.Width; visual.Height = widget.Height; renderer.Close();
-        var preview = new Viewbox { Height = 40, Stretch = Stretch.Uniform, Child = visual, IsHitTestVisible = false };
-        var previewFrame = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(4), Child = preview, Margin = new Thickness(0, 0, 8, 0) };
-        previewFrame.SetResourceReference(Border.BackgroundProperty, "SurfaceRaisedBrush"); panel.Children.Add(previewFrame);
-        var details = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
-        details.Children.Add(new TextBlock { Text = widget.DisplayTitle, TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = FontWeights.SemiBold, ToolTip = widget.DisplayTitle });
-        var badge = new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 0), HorizontalAlignment = System.Windows.HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
-        badge.SetResourceReference(Border.BackgroundProperty, "SurfaceRaisedBrush");
-        var spots = widget.Placements.Count;
         // With a wallpaper picked, the eye hides the widget on that wallpaper only; otherwise everywhere.
         var here = !string.IsNullOrEmpty(CanvasPath);
         var hiddenHere = here && widget.IsHiddenOn(CanvasProfile, CanvasPath);
         var shown = widget.Enabled && !hiddenHere;
-        var hiddenCount = widget.HiddenOn.Count;
-        var caption = new TextBlock { Text = KindName(widget.Kind)
-            + (hiddenHere ? " · hidden on this wallpaper"
-                : hiddenCount > 0 ? $" · hidden on {hiddenCount} wallpaper{(hiddenCount == 1 ? "" : "s")}"
-                : spots > 0 ? $" · moved on {spots} wallpaper{(spots == 1 ? "" : "s")}" : ""), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis };
-        caption.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); badge.Child = caption; details.Children.Add(badge);
-        details.ToolTip = ProfileLabel(widget.ProfileId) + (spots > 0 ? " · own spot on " + string.Join(", ", widget.Placements.Select(p => Path.GetFileName(p.WallpaperPath))) : "")
-            + (hiddenCount > 0 ? " · hidden on " + string.Join(", ", widget.HiddenOn.Select(h => Path.GetFileName(h.WallpaperPath)).Distinct()) : "")
-            + (widget.Enabled ? "" : " · Hidden"); Grid.SetColumn(details, 1); panel.Children.Add(details);
+        var hiddenElsewhere = widget.HiddenOn.Select(h => Path.GetFileName(h.WallpaperPath))
+            .Where(name => !here || !string.Equals(name, Path.GetFileName(CanvasPath), StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        var panel = new Grid();
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
+        panel.ColumnDefinitions.Add(new ColumnDefinition());
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        // A small framed thumbnail of the widget itself, faded when it is off the desktop.
+        var renderer = new DesktopWidgetWindow(widget, _store);
+        renderer.UpdatePreview(widget, DesktopWidgetWindow.PreviewScale(widget));
+        var visual = (FrameworkElement)renderer.Content; renderer.Content = null;
+        visual.Width = widget.Width; visual.Height = widget.Height; renderer.Close();
+        var preview = new Viewbox { Height = 44, Stretch = Stretch.Uniform, Child = visual, IsHitTestVisible = false, Opacity = shown ? 1 : .35 };
+        var previewFrame = new Border { CornerRadius = new CornerRadius(10), Padding = new Thickness(5), Child = preview, Margin = new Thickness(0, 0, 12, 0),
+            BorderThickness = new Thickness(1), Height = 56, ClipToBounds = true };
+        previewFrame.SetResourceReference(Border.BackgroundProperty, "SurfaceRaisedBrush");
+        previewFrame.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+        if (!shown)
+        {
+            previewFrame.Child = null;
+            var veil = new Grid(); veil.Children.Add(preview); previewFrame.Child = veil;
+            var off = new TextBlock { Text = "\uED1A", FontFamily = (System.Windows.Media.FontFamily)FindResource("IconFont"), FontSize = 18,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            off.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); veil.Children.Add(off);
+        }
+        panel.Children.Add(previewFrame);
+
+        var details = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        var title = new TextBlock { Text = widget.DisplayTitle, TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = FontWeights.SemiBold, FontSize = 14 };
+        title.SetResourceReference(TextBlock.ForegroundProperty, shown ? "TextPrimaryBrush" : "TextSecondaryBrush");
+        details.Children.Add(title);
+        var chips = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        chips.Children.Add(Chip(WidgetGlyph(widget.Kind), KindName(widget.Kind), "AccentTextBrush", "AccentSubtleBrush"));
+        var allWidgets = _scopeFilter.SelectedItem is ProfileChoice { All: true };
+        if (widget.ProfileId == null) chips.Children.Add(Chip("\uE774", "All profiles", "TextSecondaryBrush", "SurfaceRaisedBrush"));
+        else if (allWidgets && !here) chips.Children.Add(Chip("\uE77B", ProfileLabel(widget.ProfileId), "TextSecondaryBrush", "SurfaceRaisedBrush"));
+        if (!widget.Enabled) chips.Children.Add(Chip("\uED1A", "Hidden", "DangerBrush", null));
+        else if (hiddenHere) chips.Children.Add(Chip("\uED1A", "Hidden here", "SignalBrush", null));
+        else if (hiddenElsewhere.Count > 0)
+            chips.Children.Add(Chip("\uED1A", $"Hidden on {hiddenElsewhere.Count} wallpaper{(hiddenElsewhere.Count == 1 ? "" : "s")}", "TextTertiaryBrush", null));
+        details.Children.Add(chips);
+        details.ToolTip = CardTip(widget, hiddenHere, hiddenElsewhere);
+        System.Windows.Controls.ToolTipService.SetInitialShowDelay(details, 500);
+        Grid.SetColumn(details, 1); panel.Children.Add(details);
+
         var verb = here && widget.Enabled ? (shown ? "Hide on this wallpaper" : "Show on this wallpaper") : (widget.Enabled ? "Hide widget" : "Show widget");
         var toggle = new Button { Name = "CardVisibilityButton", Content = shown ? "\uE890" : "\uED1A", FontFamily = (System.Windows.Media.FontFamily)FindResource("IconFont"),
             Width = 36, Height = 36, Padding = new Thickness(0), BorderThickness = new Thickness(0), VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = verb };
+            ToolTip = verb, Style = EyeButtonStyle() };
         System.Windows.Automation.AutomationProperties.SetName(toggle, (shown ? "Hide " : "Show ") + widget.DisplayTitle + (here && widget.Enabled ? " on this wallpaper" : ""));
         toggle.SetResourceReference(Control.ForegroundProperty, shown ? "AccentTextBrush" : "TextTertiaryBrush");
         toggle.Click += (_, e) => { e.Handled = true; Run(() => ToggleWidget(widget)); };
-        Grid.SetColumn(toggle, 2); panel.Children.Add(toggle); return panel;
+        Grid.SetColumn(toggle, 2); panel.Children.Add(toggle);
+
+        // A card drifts in the first time it appears; refreshes after a save leave it still.
+        if (!SystemParameters.ClientAreaAnimation || !_introducedCards.Add(widget.Id)) return panel;
+        var drift = new TranslateTransform(); panel.RenderTransform = drift;
+        panel.Loaded += (_, _) =>
+        {
+            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+            const System.Windows.Media.Animation.FillBehavior release = System.Windows.Media.Animation.FillBehavior.Stop;
+            panel.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease, FillBehavior = release });
+            drift.BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease, FillBehavior = release });
+        };
+        return panel;
+    }
+
+    /// <summary>A rounded label: filled when <paramref name="fill"/> is given, otherwise outlined in the text color.</summary>
+    private FrameworkElement Chip(string glyph, string text, string ink, string? fill)
+    {
+        var row = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+        var icon = new TextBlock { Text = glyph, FontFamily = (System.Windows.Media.FontFamily)FindResource("IconFont"), FontSize = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) };
+        var label = new TextBlock { Text = text, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 150, VerticalAlignment = VerticalAlignment.Center };
+        icon.SetResourceReference(TextBlock.ForegroundProperty, ink); label.SetResourceReference(TextBlock.ForegroundProperty, ink);
+        row.Children.Add(icon); row.Children.Add(label);
+        var chip = new Border { Child = row, CornerRadius = new CornerRadius(9), Padding = new Thickness(7, 2, 8, 2), Margin = new Thickness(0, 0, 6, 2), BorderThickness = new Thickness(1) };
+        if (fill != null) { chip.SetResourceReference(Border.BackgroundProperty, fill); chip.BorderBrush = System.Windows.Media.Brushes.Transparent; }
+        else chip.SetResourceReference(Border.BorderBrushProperty, ink);
+        return chip;
+    }
+
+    /// <summary>A short summary card instead of one long line: name, type and profile, then where it's hidden.</summary>
+    private FrameworkElement CardTip(DesktopWidget widget, bool hiddenHere, IReadOnlyList<string> hiddenElsewhere)
+    {
+        var tip = new StackPanel { MaxWidth = 280 };
+        tip.Children.Add(new TextBlock { Text = widget.DisplayTitle, FontWeight = FontWeights.SemiBold, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis });
+        var sub = new TextBlock { Text = KindName(widget.Kind) + " · " + (widget.ProfileId == null ? "All profiles" : ProfileLabel(widget.ProfileId)), Margin = new Thickness(0, 2, 0, 0) };
+        sub.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); tip.Children.Add(sub);
+        string? note = !widget.Enabled ? "Hidden on every wallpaper." : hiddenHere ? "Hidden on this wallpaper." : null;
+        if (note != null)
+        {
+            var line = new TextBlock { Text = note, Margin = new Thickness(0, 8, 0, 0) };
+            line.SetResourceReference(TextBlock.ForegroundProperty, widget.Enabled ? "SignalBrush" : "DangerBrush"); tip.Children.Add(line);
+        }
+        if (widget.Enabled && hiddenElsewhere.Count > 0)
+        {
+            var head = new TextBlock { Text = hiddenHere ? "Also hidden on" : "Hidden on", Margin = new Thickness(0, note == null ? 8 : 4, 0, 2) };
+            head.SetResourceReference(TextBlock.ForegroundProperty, "TextTertiaryBrush"); tip.Children.Add(head);
+            const int shownNames = 4;
+            foreach (var name in hiddenElsewhere.Take(shownNames))
+                tip.Children.Add(new TextBlock { Text = "•  " + name, TextTrimming = TextTrimming.CharacterEllipsis });
+            if (hiddenElsewhere.Count > shownNames)
+            {
+                var more = new TextBlock { Text = $"and {hiddenElsewhere.Count - shownNames} more" };
+                more.SetResourceReference(TextBlock.ForegroundProperty, "TextTertiaryBrush"); tip.Children.Add(more);
+            }
+        }
+        return tip;
+    }
+
+    private readonly HashSet<Guid> _introducedCards = new();
+    private Style? _eyeButtonStyle;
+    /// <summary>A borderless round icon button that lights up under the pointer.</summary>
+    private Style EyeButtonStyle()
+    {
+        if (_eyeButtonStyle != null) return _eyeButtonStyle;
+        var style = new Style(typeof(Button));
+        var ring = new FrameworkElementFactory(typeof(Border)); ring.Name = "Ring";
+        ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(18));
+        ring.SetValue(Border.BackgroundProperty, System.Windows.Media.Brushes.Transparent);
+        ring.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+        ring.SetValue(Border.BorderBrushProperty, System.Windows.Media.Brushes.Transparent);
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+        presenter.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center); ring.AppendChild(presenter);
+        var template = new ControlTemplate(typeof(Button)) { VisualTree = ring };
+        var hover = new Trigger { Property = IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("AccentSubtleBrush"), "Ring")); template.Triggers.Add(hover);
+        var pressed = new Trigger { Property = System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, Value = true };
+        pressed.Setters.Add(new Setter(Border.BorderBrushProperty, new DynamicResourceExtension("AccentBrush"), "Ring")); template.Triggers.Add(pressed);
+        var focus = new Trigger { Property = IsKeyboardFocusedProperty, Value = true };
+        focus.Setters.Add(new Setter(Border.BorderBrushProperty, new DynamicResourceExtension("TextPrimaryBrush"), "Ring")); template.Triggers.Add(focus);
+        style.Setters.Add(new Setter(Control.TemplateProperty, template));
+        style.Setters.Add(new Setter(Control.CursorProperty, System.Windows.Input.Cursors.Hand));
+        return _eyeButtonStyle = style;
     }
     private void ToggleWidget(DesktopWidget widget)
     {
