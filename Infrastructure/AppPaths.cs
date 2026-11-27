@@ -5,9 +5,15 @@ internal static class AppPaths
     private const string AppFolderName = "Belie";
     private const string LegacyFolderName = "WallpaperProfiles";
 
-    public static string BaseDir { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        AppFolderName);
+    /// <summary>Set to a folder to run a test build against its own copy of the data, away from the real setup.</summary>
+    public const string SandboxVariable = "BELIE_DATA_DIR";
+
+    /// <summary>True when <see cref="SandboxVariable"/> points this run (and its helper processes) at a separate data folder.</summary>
+    public static bool IsSandbox { get; } = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(SandboxVariable));
+
+    public static string BaseDir { get; } = IsSandbox
+        ? Path.GetFullPath(Environment.GetEnvironmentVariable(SandboxVariable)!)
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppFolderName);
 
     public static string ProfilesDir => Path.Combine(BaseDir, "profiles");
 
@@ -33,6 +39,7 @@ internal static class AppPaths
     /// </summary>
     private static void MigrateLegacyData()
     {
+        if (IsSandbox) return;
         try
         {
             var legacy = Path.Combine(

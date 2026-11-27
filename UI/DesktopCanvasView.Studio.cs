@@ -264,8 +264,7 @@ internal sealed partial class DesktopCanvasView
     {
         _layoutStatus.Text = string.IsNullOrEmpty(CanvasPath)
             ? "Arranging default spots. Widgets sit here on every wallpaper where you haven’t moved them."
-            : "Arranging " + Path.GetFileName(CanvasPath) + ". Moving a widget here changes its spot on this wallpaper only. "
-                + "The eye on a widget hides it on this wallpaper only, in this profile; it still shows on other wallpapers.";
+            : "Changes here apply to " + Path.GetFileName(CanvasPath) + " only. Use the eye on a widget to hide it on this wallpaper.";
         var widgets = string.IsNullOrEmpty(CanvasPath) ? new List<DesktopWidget>() : document.Composition(CanvasProfile).ToList();
         var allHidden = widgets.Count > 0 && widgets.All(w => w.IsHiddenOn(CanvasProfile, CanvasPath));
         _hideHere.Content = allHidden ? "Show widgets here" : "Hide widgets here";

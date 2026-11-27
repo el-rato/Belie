@@ -39,6 +39,11 @@
     <CornerRadius x:Key="RadiusControl">8</CornerRadius>
     <CornerRadius x:Key="RadiusPanel">12</CornerRadius>
     <DropShadowEffect x:Key="PreviewElevation" Color="#000000" BlurRadius="24" ShadowDepth="4" Opacity="0.18"/>
+    <!-- Elevation for things that float (menus, popups, tooltips) and for cards under the pointer. -->
+    <DropShadowEffect x:Key="FloatElevation" Color="#000000" BlurRadius="18" ShadowDepth="3" Direction="270" Opacity="0.45"/>
+    <DropShadowEffect x:Key="CardLift" Color="#000000" BlurRadius="22" ShadowDepth="5" Direction="270" Opacity="0.38"/>
+    <CubicEase x:Key="EaseOut" EasingMode="EaseOut"/>
+    <BackEase x:Key="EasePop" EasingMode="EaseOut" Amplitude="0.45"/>
     <Style x:Key="FocusRing" TargetType="Control">
         <Setter Property="Template"><Setter.Value><ControlTemplate>
             <Border BorderBrush="{DynamicResource TextPrimaryBrush}" BorderThickness="2" CornerRadius="12" Margin="-2"/>
@@ -127,6 +132,7 @@
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{StaticResource RadiusControl}"
                             Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
                         <Grid>
                         <Border x:Name="HoverWash" Background="{DynamicResource AccentBrush}" CornerRadius="6" Opacity="0" IsHitTestVisible="False"/>
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -138,11 +144,24 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
                             <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
-                            <Setter TargetName="HoverWash" Property="Opacity" Value="0.06"/>
+                            <Setter TargetName="HoverWash" Property="Opacity" Value="0.08"/>
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity" From="0" To="0.08" Duration="0:0:0.16" EasingFunction="{StaticResource EaseOut}"/>
+                            </Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity" From="0.08" To="0" Duration="0:0:0.22" EasingFunction="{StaticResource EaseOut}"/>
+                            </Storyboard></BeginStoryboard></Trigger.ExitActions>
                         </Trigger>
-            <Trigger Property="IsPressed" Value="True">
+                        <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource SurfaceBrush}"/>
-                            <Setter TargetName="Chrome" Property="Opacity" Value="0.72"/>
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.96" Duration="0:0:0.07"/>
+                                <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.96" Duration="0:0:0.07"/>
+                            </Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" From="0.96" To="1" Duration="0:0:0.2" EasingFunction="{StaticResource EasePop}"/>
+                                <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="0.96" To="1" Duration="0:0:0.2" EasingFunction="{StaticResource EasePop}"/>
+                            </Storyboard></BeginStoryboard></Trigger.ExitActions>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>
@@ -167,6 +186,11 @@
                     <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="{StaticResource RadiusControl}"
                             BorderBrush="{DynamicResource TextPrimaryBrush}" BorderThickness="0"
                             Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
+                        <Border.Effect>
+                            <DropShadowEffect ShadowDepth="0" BlurRadius="16" Opacity="0.35"
+                                              Color="{Binding Background.Color, RelativeSource={RelativeSource TemplatedParent}}"/>
+                        </Border.Effect>
 
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                           RecognizesAccessKey="True" TextElement.Foreground="{Binding Background, ElementName=Chrome, Converter={StaticResource AccentInk}}"/>
@@ -177,13 +201,21 @@
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource AccentPressedBrush}"/>
-                            <Setter TargetName="Chrome" Property="Opacity" Value="0.78"/>
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.96" Duration="0:0:0.07"/>
+                                <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.96" Duration="0:0:0.07"/>
+                            </Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" From="0.96" To="1" Duration="0:0:0.22" EasingFunction="{StaticResource EasePop}"/>
+                                <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="0.96" To="1" Duration="0:0:0.22" EasingFunction="{StaticResource EasePop}"/>
+                            </Storyboard></BeginStoryboard></Trigger.ExitActions>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Chrome" Property="BorderThickness" Value="2"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>
+                            <Setter TargetName="Chrome" Property="Effect" Value="{x:Null}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -198,7 +230,7 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{StaticResource RadiusControl}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                           RecognizesAccessKey="True"/>
@@ -277,6 +309,13 @@
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
         <Setter Property="FontSize" Value="{StaticResource TypeBody}"/>
+        <Setter Property="HasDropShadow" Value="False"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu">
+            <Border Background="{TemplateBinding Background}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                    CornerRadius="10" Padding="4" Margin="0,0,10,12" Effect="{StaticResource FloatElevation}">
+                <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/>
+            </Border>
+        </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style TargetType="MenuItem">
         <Setter Property="MinHeight" Value="{StaticResource ControlTarget}"/>
@@ -299,11 +338,14 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
+                    <Grid>
+                    <Border x:Name="Halo" BorderBrush="{DynamicResource AccentSubtleBrush}" BorderThickness="3" CornerRadius="10" Margin="-3" Opacity="0" IsHitTestVisible="False"/>
                     <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{StaticResource RadiusControl}">
                         <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                     </Border>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
@@ -311,6 +353,13 @@
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}"/>
                             <Setter TargetName="Chrome" Property="BorderThickness" Value="1"/>
+                            <Setter TargetName="Halo" Property="Opacity" Value="1"/>
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Halo" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.18" EasingFunction="{StaticResource EaseOut}"/>
+                            </Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Halo" Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.2"/>
+                            </Storyboard></BeginStoryboard></Trigger.ExitActions>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>
@@ -365,11 +414,11 @@
                                  Margin="0,0,28,0" Padding="{TemplateBinding Padding}" IsReadOnly="{TemplateBinding IsReadOnly}"/>
                         <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}"
                                AllowsTransparency="True" Placement="Bottom" VerticalOffset="4"
-                               PopupAnimation="None" Focusable="False">
+                               PopupAnimation="Fade" Focusable="False">
                             <Border Background="{DynamicResource SurfaceRaisedBrush}"
-                                    BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
-                                    CornerRadius="{StaticResource RadiusControl}" Margin="0,0,0,10" MinWidth="{TemplateBinding ActualWidth}"
-                                    MaxHeight="260" SnapsToDevicePixels="True">
+                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                    CornerRadius="10" Margin="0,0,8,14" MinWidth="{TemplateBinding ActualWidth}"
+                                    MaxHeight="300" SnapsToDevicePixels="True" Effect="{StaticResource FloatElevation}">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4">
                                     <ItemsPresenter/>
                                 </ScrollViewer>
@@ -397,7 +446,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ComboBoxItem">
-                    <Border x:Name="Chrome" Background="Transparent" CornerRadius="5"
+                    <Border x:Name="Chrome" Background="Transparent" CornerRadius="6" Margin="0,1"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter VerticalAlignment="Center"/>
                     </Border>
@@ -432,7 +481,9 @@
                             <Path x:Name="Check" Data="M2,5.5 L5,8.5 L10,2.5" Stroke="#171918" StrokeThickness="1.8"
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                                   Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                  Visibility="Collapsed" Margin="0,1,0,0"/>
+                                  Visibility="Collapsed" Margin="0,1,0,0" RenderTransformOrigin="0.5,0.5">
+                                <Path.RenderTransform><ScaleTransform/></Path.RenderTransform>
+                            </Path>
                         </Border>
                         <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True"/>
                     </StackPanel>
@@ -441,6 +492,10 @@
                             <Setter TargetName="Box" Property="Background" Value="{DynamicResource AccentBrush}"/>
                             <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                             <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Check" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" From="0.3" To="1" Duration="0:0:0.22" EasingFunction="{StaticResource EasePop}"/>
+                                <DoubleAnimation Storyboard.TargetName="Check" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="0.3" To="1" Duration="0:0:0.22" EasingFunction="{StaticResource EasePop}"/>
+                            </Storyboard></BeginStoryboard></Trigger.EnterActions>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
@@ -467,7 +522,10 @@
                         <Grid Width="40" Height="22" VerticalAlignment="Center">
                             <Border x:Name="Track" BorderBrush="{DynamicResource TextPrimaryBrush}" CornerRadius="11" Background="{DynamicResource BorderStrongBrush}"/>
                             <Border x:Name="Knob" Width="16" Height="16" CornerRadius="{StaticResource RadiusControl}" Background="#FFFFFF"
-                                    HorizontalAlignment="Left" Margin="3,0,0,0" VerticalAlignment="Center"/>
+                                    HorizontalAlignment="Left" Margin="3,0,0,0" VerticalAlignment="Center">
+                                <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
+                                <Border.Effect><DropShadowEffect Color="#000000" BlurRadius="4" ShadowDepth="1" Direction="270" Opacity="0.35"/></Border.Effect>
+                            </Border>
                         </Grid>
                         <ContentPresenter Margin="9,0,0,0" VerticalAlignment="Center"/>
                     </StackPanel>
@@ -476,6 +534,12 @@
                             <Setter TargetName="Track" Property="Background" Value="{DynamicResource AccentBrush}"/>
                             <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right"/>
                             <Setter TargetName="Knob" Property="Margin" Value="0,0,3,0"/>
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Knob" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" From="-18" To="0" Duration="0:0:0.2" EasingFunction="{StaticResource EaseOut}"/>
+                            </Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Knob" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" From="18" To="0" Duration="0:0:0.2" EasingFunction="{StaticResource EaseOut}"/>
+                            </Storyboard></BeginStoryboard></Trigger.ExitActions>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Track" Property="Opacity" Value="0.85"/>
@@ -506,7 +570,23 @@
                             </Track.DecreaseRepeatButton>
                             <Track.Thumb>
                                 <Thumb Width="16" Height="16" Cursor="Hand">
-                                    <Thumb.Template><ControlTemplate TargetType="Thumb"><Border x:Name="Knob" Background="{DynamicResource AccentBrush}" CornerRadius="{StaticResource RadiusControl}"/><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Knob" Property="Background" Value="{DynamicResource AccentHoverBrush}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Thumb.Template>
+                                    <Thumb.Template><ControlTemplate TargetType="Thumb">
+                                        <Border x:Name="Knob" Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource BgBrush}" BorderThickness="3" CornerRadius="{StaticResource RadiusControl}" RenderTransformOrigin="0.5,0.5">
+                                            <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Knob" Property="Background" Value="{DynamicResource AccentHoverBrush}"/>
+                                                <Trigger.EnterActions><BeginStoryboard><Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="Knob" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1.25" Duration="0:0:0.15" EasingFunction="{StaticResource EaseOut}"/>
+                                                    <DoubleAnimation Storyboard.TargetName="Knob" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1.25" Duration="0:0:0.15" EasingFunction="{StaticResource EaseOut}"/>
+                                                </Storyboard></BeginStoryboard></Trigger.EnterActions>
+                                                <Trigger.ExitActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                                    <DoubleAnimation Storyboard.TargetName="Knob" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" From="1.25" To="1" Duration="0:0:0.2" EasingFunction="{StaticResource EaseOut}"/>
+                                                    <DoubleAnimation Storyboard.TargetName="Knob" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="1.25" To="1" Duration="0:0:0.2" EasingFunction="{StaticResource EaseOut}"/>
+                                                </Storyboard></BeginStoryboard></Trigger.ExitActions>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers></ControlTemplate></Thumb.Template>
                                 </Thumb>
                             </Track.Thumb>
                             <Track.IncreaseRepeatButton>
@@ -537,19 +617,32 @@
                             BorderBrush="{DynamicResource AccentBrush}" BorderThickness="0">
                         <Grid>
                             <Border x:Name="Marker" Width="3" Height="24" CornerRadius="2" Background="{DynamicResource AccentBrush}"
-                                    HorizontalAlignment="Left" Visibility="Collapsed"/>
-                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                    HorizontalAlignment="Left" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
+                            </Border>
+                            <ContentPresenter x:Name="Label" Margin="{TemplateBinding Padding}" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                <ContentPresenter.RenderTransform><TranslateTransform/></ContentPresenter.RenderTransform>
+                            </ContentPresenter>
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
                             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Label" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="3" Duration="0:0:0.16" EasingFunction="{StaticResource EaseOut}"/>
+                            </Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Label" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" From="3" To="0" Duration="0:0:0.2" EasingFunction="{StaticResource EaseOut}"/>
+                            </Storyboard></BeginStoryboard></Trigger.ExitActions>
                         </Trigger>
                         <Trigger Property="Tag" Value="Selected">
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
                             <Setter TargetName="Marker" Property="Visibility" Value="Visible"/>
                             <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Marker" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="0" To="1" Duration="0:0:0.24" EasingFunction="{StaticResource EasePop}"/>
+                            </Storyboard></BeginStoryboard></Trigger.EnterActions>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.65"/></Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderThickness" Value="1"/></Trigger>
@@ -572,7 +665,9 @@
                         <Grid>
                             <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
                             <Border x:Name="Underline" Background="{DynamicResource AccentBrush}" Height="2" CornerRadius="1"
-                                    VerticalAlignment="Bottom" Margin="0,0,0,-9" Visibility="Collapsed"/>
+                                    VerticalAlignment="Bottom" Margin="0,0,0,-9" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
+                            </Border>
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -581,6 +676,9 @@
                             <Setter TargetName="Tab" Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
                             <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
                             <Setter TargetName="Underline" Property="Visibility" Value="Visible"/>
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Underline" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" From="0" To="1" Duration="0:0:0.24" EasingFunction="{StaticResource EaseOut}"/>
+                            </Storyboard></BeginStoryboard></Trigger.EnterActions>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Tab" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}"/></Trigger>
                     </ControlTemplate.Triggers>
@@ -657,10 +755,16 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Border x:Name="Chrome" Background="{DynamicResource BorderStrongBrush}"
-                            CornerRadius="4" Margin="2"/>
+                            CornerRadius="4" Margin="3" Opacity="0.55"/>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource BorderStrongBrush}"/>
+                            <Setter TargetName="Chrome" Property="Opacity" Value="1"/>
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="Opacity" From="0.55" To="1" Duration="0:0:0.15"/>
+                            </Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="Opacity" From="1" To="0.55" Duration="0:0:0.3"/>
+                            </Storyboard></BeginStoryboard></Trigger.ExitActions>
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource AccentBrush}"/>
@@ -729,12 +833,19 @@
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
         <Setter Property="FontSize" Value="{StaticResource TypeCaption}"/>
+        <Setter Property="HasDropShadow" Value="False"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToolTip">
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
-                            CornerRadius="7" Padding="10,6" SnapsToDevicePixels="True">
+                    <Border x:Name="Card" Background="{TemplateBinding Background}"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                            CornerRadius="10" Padding="12,8" Margin="0,0,10,12" SnapsToDevicePixels="True"
+                            Effect="{StaticResource FloatElevation}">
+                        <Border.Triggers>
+                            <EventTrigger RoutedEvent="FrameworkElement.Loaded"><BeginStoryboard><Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.14" EasingFunction="{StaticResource EaseOut}"/>
+                            </Storyboard></BeginStoryboard></EventTrigger>
+                        </Border.Triggers>
                         <ContentPresenter/>
                     </Border>
                 </ControlTemplate>
@@ -827,7 +938,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="14"/>
-        <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger></Style.Triggers>
+        <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter Property="Effect" Value="{StaticResource CardLift}"/></Trigger></Style.Triggers>
     </Style>
     <Style x:Key="CardBorder" TargetType="Border">
         <Setter Property="Background" Value="Transparent"/>
@@ -841,7 +952,7 @@
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderBrush" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="CornerRadius" Value="10"/>
         <Setter Property="Padding" Value="10"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
@@ -849,6 +960,7 @@
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                <Setter Property="Effect" Value="{StaticResource CardLift}"/>
             </Trigger>
             <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}"/></Trigger>
         </Style.Triggers>
