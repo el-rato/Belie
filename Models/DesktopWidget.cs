@@ -21,6 +21,15 @@ internal sealed class WidgetPlacement
     public WidgetPlacement Clone() => (WidgetPlacement)MemberwiseClone();
 }
 
+/// <summary>A wallpaper, within one profile, where a widget is kept off the desktop.</summary>
+internal sealed class WidgetHiddenSpot
+{
+    public string WallpaperPath { get; set; } = "";
+    /// <summary>The profile the widget is hidden in; null hides it on that wallpaper in every profile.</summary>
+    public Guid? ProfileId { get; set; }
+    public WidgetHiddenSpot Clone() => (WidgetHiddenSpot)MemberwiseClone();
+}
+
 internal sealed class DesktopWidget
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -64,6 +73,23 @@ internal sealed class DesktopWidget
     /// <summary>Puts the widget back on its default spot for one wallpaper.</summary>
     public bool ResetPlacement(string? wallpaperPath) =>
         Placements.RemoveAll(p => DesktopCanvasDocument.SameWallpaper(p.WallpaperPath, wallpaperPath)) > 0;
+
+    /// <summary>Wallpapers where the widget is hidden. It still shows on every other wallpaper.</summary>
+    public List<WidgetHiddenSpot> HiddenOn { get; set; } = new();
+
+    public bool IsHiddenOn(Guid? profileId, string? wallpaperPath) => !string.IsNullOrEmpty(wallpaperPath)
+        && HiddenOn.Any(h => DesktopCanvasDocument.SameWallpaper(h.WallpaperPath, wallpaperPath) && (h.ProfileId == null || h.ProfileId == profileId));
+
+    /// <summary>Hides or shows the widget on one wallpaper of one profile. Returns true when anything changed.</summary>
+    public bool SetHiddenOn(Guid? profileId, string? wallpaperPath, bool hidden)
+    {
+        if (string.IsNullOrEmpty(wallpaperPath)) return false;
+        if (!hidden)
+            return HiddenOn.RemoveAll(h => DesktopCanvasDocument.SameWallpaper(h.WallpaperPath, wallpaperPath) && (h.ProfileId == null || h.ProfileId == profileId)) > 0;
+        if (IsHiddenOn(profileId, wallpaperPath)) return false;
+        HiddenOn.Add(new WidgetHiddenSpot { WallpaperPath = wallpaperPath, ProfileId = profileId });
+        return true;
+    }
 
     public bool IsVisibleOn(Guid? activeProfileId) => Enabled && (!ProfileId.HasValue || ProfileId == activeProfileId);
     public bool Locked { get; set; }
@@ -129,6 +155,7 @@ internal sealed class DesktopWidget
         var copy = (DesktopWidget)MemberwiseClone();
         copy.PotdCompletions = new(PotdCompletions);
         copy.Placements = Placements.Select(p => p.Clone()).ToList();
+        copy.HiddenOn = HiddenOn.Select(h => h.Clone()).ToList();
         copy.Id = Guid.NewGuid();
         return copy;
     }

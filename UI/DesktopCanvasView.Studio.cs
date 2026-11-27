@@ -25,6 +25,7 @@ internal sealed partial class DesktopCanvasView
         ToolTip = "Keep the preview on the wallpaper currently on your desktop. Pauses while you edit a widget; does not change your slideshow settings." };
     private readonly TextBlock _layoutStatus = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
     private Button _resetPosition = null!;
+    private Button _hideHere = null!;
     private readonly TextBlock _positionStatus = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) };
     private readonly Grid _galleryFrame = new();
     private readonly StackPanel _skinControls = new(), _spectrumControls = new();
@@ -63,6 +64,9 @@ internal sealed partial class DesktopCanvasView
         choices.Children.Add(_wallpaperPicker); choices.Children.Add(_followDesktop);
         _resetPosition = ActionButton("Use default position", "ResetWidgetPositionButton", ResetPosition);
         _resetPosition.ToolTip = "Forget this widget's spot on this wallpaper and use its default spot.";
+        _hideHere = ActionButton("Hide widgets here", "HideWidgetsOnWallpaperButton", ToggleHiddenHere);
+        _hideHere.Padding = new Thickness(8, 6, 8, 6); _hideHere.FontSize = 12; _hideHere.Margin = new Thickness(0, 0, 8, 6);
+        choices.Children.Add(_hideHere);
         foreach (var button in new[] {
             ActionButton("Save as preset", "SaveWidgetLayoutButton", SaveLayoutPreset),
             ActionButton("Layout presets", "BrowseWidgetLayoutsButton", () => OpenCatalogue(false, true)) })
@@ -164,6 +168,22 @@ internal sealed partial class DesktopCanvasView
         _resetPosition.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>Hides every widget of the profile on the wallpaper being arranged, or shows them again when all are hidden.</summary>
+    private void ToggleHiddenHere()
+    {
+        if (string.IsNullOrEmpty(CanvasPath) || !TryLeaveDraft()) return;
+        var profile = CanvasProfile; var path = CanvasPath; var hide = false;
+        _store.Update(document =>
+        {
+            var widgets = document.Composition(profile).ToList();
+            hide = !widgets.All(w => w.IsHiddenOn(profile, path));
+            foreach (var widget in widgets) widget.SetHiddenOn(profile, path, hide);
+            if (!hide) document.Enabled = true;
+        });
+        CloseEditor(); _overviewKey = ""; RefreshList(); _startHost();
+        _message.Text = hide ? "Widgets hidden on " + Path.GetFileName(path) + "." : "Widgets shown on " + Path.GetFileName(path) + " again.";
+    }
+
     private void ResetPosition()
     {
         if (_selected == null || string.IsNullOrEmpty(CanvasPath)) return;
@@ -244,7 +264,15 @@ internal sealed partial class DesktopCanvasView
     {
         _layoutStatus.Text = string.IsNullOrEmpty(CanvasPath)
             ? "Arranging default spots. Widgets sit here on every wallpaper where you haven’t moved them."
-            : "Arranging " + Path.GetFileName(CanvasPath) + ". Moving a widget here changes its spot on this wallpaper only; it still shows on every wallpaper.";
+            : "Arranging " + Path.GetFileName(CanvasPath) + ". Moving a widget here changes its spot on this wallpaper only. "
+                + "The eye on a widget hides it on this wallpaper only, in this profile; it still shows on other wallpapers.";
+        var widgets = string.IsNullOrEmpty(CanvasPath) ? new List<DesktopWidget>() : document.Composition(CanvasProfile).ToList();
+        var allHidden = widgets.Count > 0 && widgets.All(w => w.IsHiddenOn(CanvasProfile, CanvasPath));
+        _hideHere.Content = allHidden ? "Show widgets here" : "Hide widgets here";
+        _hideHere.ToolTip = allHidden ? "Show this profile's widgets on " + Path.GetFileName(CanvasPath) + " again."
+            : "Keep every widget off the desktop while " + Path.GetFileName(CanvasPath) + " is the wallpaper in this profile.";
+        System.Windows.Automation.AutomationProperties.SetName(_hideHere, (string)_hideHere.Content);
+        _hideHere.Visibility = widgets.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         RefreshPositionStatus();
     }
 
@@ -313,7 +341,7 @@ internal sealed partial class DesktopCanvasView
                 document.Widgets.RemoveAll(w => w.ProfileId == CanvasProfile);
                 foreach (var widget in layout.Widgets)
                 {
-                    var copy = widget.Copy(); copy.ProfileId = CanvasProfile; copy.Placements = new(); document.Widgets.Add(copy);
+                    var copy = widget.Copy(); copy.ProfileId = CanvasProfile; copy.Placements = new(); copy.HiddenOn = new(); document.Widgets.Add(copy);
                 }
                 document.Enabled = true;
             });
@@ -367,7 +395,7 @@ internal sealed partial class DesktopCanvasView
         {
             // Save the arrangement being looked at: each widget at its spot on this wallpaper.
             var widgets = document.Composition(CanvasProfile, !CanvasProfile.HasValue)
-                .Select(widget => { var copy = widget.PlacedOn(CanvasPath).Copy(); copy.Placements = new(); return copy; }).ToList();
+                .Select(widget => { var copy = widget.PlacedOn(CanvasPath).Copy(); copy.Placements = new(); copy.HiddenOn = new(); return copy; }).ToList();
             document.LayoutPresets.RemoveAll(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             document.LayoutPresets.Add(new() { Name = name, Widgets = widgets });
         });

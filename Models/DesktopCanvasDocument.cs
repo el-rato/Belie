@@ -38,9 +38,9 @@ internal sealed class DesktopCanvasDocument
     public IEnumerable<DesktopWidget> Composition(Guid? profileId, bool includeGlobal = true) =>
         Widgets.Where(widget => widget.ProfileId == null ? includeGlobal : widget.ProfileId == profileId);
 
-    /// <summary>Enabled widgets for the active profile, each at its spot for the active wallpaper.</summary>
+    /// <summary>Enabled widgets for the active profile not hidden on the active wallpaper, each at its spot for it.</summary>
     public IEnumerable<DesktopWidget> VisibleWidgets() =>
-        Composition(ActiveProfileId).Where(widget => widget.Enabled).Select(widget => widget.PlacedOn(ActiveWallpaperPath));
+        Composition(ActiveProfileId).Where(widget => widget.Enabled && !widget.IsHiddenOn(ActiveProfileId, ActiveWallpaperPath)).Select(widget => widget.PlacedOn(ActiveWallpaperPath));
 
     /// <summary>
     /// Folds the old per-wallpaper widget copies back into the widget they were copied from. The copy's spot

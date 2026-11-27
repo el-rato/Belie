@@ -342,26 +342,44 @@ internal sealed partial class DesktopCanvasView
         var badge = new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 0), HorizontalAlignment = System.Windows.HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
         badge.SetResourceReference(Border.BackgroundProperty, "SurfaceRaisedBrush");
         var spots = widget.Placements.Count;
+        // With a wallpaper picked, the eye hides the widget on that wallpaper only; otherwise everywhere.
+        var here = !string.IsNullOrEmpty(CanvasPath);
+        var hiddenHere = here && widget.IsHiddenOn(CanvasProfile, CanvasPath);
+        var shown = widget.Enabled && !hiddenHere;
+        var hiddenCount = widget.HiddenOn.Count;
         var caption = new TextBlock { Text = KindName(widget.Kind)
-            + (spots > 0 ? $" · moved on {spots} wallpaper{(spots == 1 ? "" : "s")}" : ""), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis };
+            + (hiddenHere ? " · hidden on this wallpaper"
+                : hiddenCount > 0 ? $" · hidden on {hiddenCount} wallpaper{(hiddenCount == 1 ? "" : "s")}"
+                : spots > 0 ? $" · moved on {spots} wallpaper{(spots == 1 ? "" : "s")}" : ""), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis };
         caption.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush"); badge.Child = caption; details.Children.Add(badge);
         details.ToolTip = ProfileLabel(widget.ProfileId) + (spots > 0 ? " · own spot on " + string.Join(", ", widget.Placements.Select(p => Path.GetFileName(p.WallpaperPath))) : "")
+            + (hiddenCount > 0 ? " · hidden on " + string.Join(", ", widget.HiddenOn.Select(h => Path.GetFileName(h.WallpaperPath)).Distinct()) : "")
             + (widget.Enabled ? "" : " · Hidden"); Grid.SetColumn(details, 1); panel.Children.Add(details);
-        var toggle = new Button { Name = "CardVisibilityButton", Content = widget.Enabled ? "\uE890" : "\uED1A", FontFamily = (System.Windows.Media.FontFamily)FindResource("IconFont"),
+        var verb = here && widget.Enabled ? (shown ? "Hide on this wallpaper" : "Show on this wallpaper") : (widget.Enabled ? "Hide widget" : "Show widget");
+        var toggle = new Button { Name = "CardVisibilityButton", Content = shown ? "\uE890" : "\uED1A", FontFamily = (System.Windows.Media.FontFamily)FindResource("IconFont"),
             Width = 36, Height = 36, Padding = new Thickness(0), BorderThickness = new Thickness(0), VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = widget.Enabled ? "Hide widget" : "Show widget" };
-        System.Windows.Automation.AutomationProperties.SetName(toggle, widget.Enabled ? "Hide " + widget.DisplayTitle : "Show " + widget.DisplayTitle);
-        toggle.SetResourceReference(Control.ForegroundProperty, widget.Enabled ? "AccentTextBrush" : "TextTertiaryBrush");
+            ToolTip = verb };
+        System.Windows.Automation.AutomationProperties.SetName(toggle, (shown ? "Hide " : "Show ") + widget.DisplayTitle + (here && widget.Enabled ? " on this wallpaper" : ""));
+        toggle.SetResourceReference(Control.ForegroundProperty, shown ? "AccentTextBrush" : "TextTertiaryBrush");
         toggle.Click += (_, e) => { e.Handled = true; Run(() => ToggleWidget(widget)); };
         Grid.SetColumn(toggle, 2); panel.Children.Add(toggle); return panel;
     }
     private void ToggleWidget(DesktopWidget widget)
     {
         var visible = false;
+        var profile = CanvasProfile; var path = CanvasPath;
         _store.Update(document =>
         {
             var saved = document.Widgets.FirstOrDefault(item => item.Id == widget.Id);
             if (saved == null) return;
+            if (saved.Enabled && !string.IsNullOrEmpty(path))
+            {
+                // Arranging one wallpaper: hide or show the widget on it only, in this profile.
+                visible = saved.IsHiddenOn(profile, path);
+                saved.SetHiddenOn(profile, path, !visible);
+                if (visible) document.Enabled = true;
+                return;
+            }
             visible = saved.Enabled = !saved.Enabled;
             if (visible) document.Enabled = true;
         });

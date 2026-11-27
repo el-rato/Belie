@@ -83,6 +83,8 @@ internal sealed class DesktopCanvasStore
             spot.Width = Clamp(spot.Width, 120, 1600, widget.Width); spot.Height = Clamp(spot.Height, 80, 1200, widget.Height);
             spot.X = Clamp(spot.X, -100000, 100000, widget.X); spot.Y = Clamp(spot.Y, -100000, 100000, widget.Y);
         }
+        widget.HiddenOn ??= new();
+        widget.HiddenOn.RemoveAll(spot => spot == null || string.IsNullOrWhiteSpace(spot.WallpaperPath));
         widget.FontFamily = string.IsNullOrWhiteSpace(widget.FontFamily) ? "Segoe UI" : widget.FontFamily;
         widget.FontSize = Clamp(widget.FontSize, 10, 96, 16);
         widget.Opacity = Clamp(widget.Opacity, .2, 1, 1);

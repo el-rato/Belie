@@ -47,6 +47,53 @@ public sealed class WallpaperCompositionTests
     }
 
     [Fact]
+    public void HiddenOnWallpaper_HidesOnlyThere_AndOnlyInThatProfile()
+    {
+        var profile = Guid.NewGuid(); var other = Guid.NewGuid();
+        var global = new DesktopWidget { Title = "Everywhere" };
+        var clock = new DesktopWidget { ProfileId = profile, Kind = DesktopWidgetKind.Clock };
+        var document = new DesktopCanvasDocument { ActiveProfileId = profile, Widgets = new() { global, clock } };
+        Assert.True(clock.SetHiddenOn(profile, @"C:\Wallpapers\city.jpg", true));
+        Assert.True(global.SetHiddenOn(profile, @"C:\Wallpapers\city.jpg", true));
+        Assert.False(clock.SetHiddenOn(profile, "c:/wallpapers/CITY.jpg", true));
+        Assert.False(clock.SetHiddenOn(profile, "", true));
+
+        document.ActiveWallpaperPath = "c:/wallpapers/CITY.jpg";
+        Assert.Empty(document.VisibleWidgets());
+        document.ActiveWallpaperPath = @"C:\Wallpapers\forest.jpg";
+        Assert.Equal(new[] { global.Id, clock.Id }, document.VisibleWidgets().Select(w => w.Id));
+        // A general widget hidden on city.jpg in one profile still shows there in another.
+        document.ActiveProfileId = other; document.ActiveWallpaperPath = @"C:\Wallpapers\city.jpg";
+        Assert.Equal(new[] { global.Id }, document.VisibleWidgets().Select(w => w.Id));
+
+        Assert.True(clock.SetHiddenOn(profile, @"C:\WALLPAPERS\city.jpg", false));
+        document.ActiveProfileId = profile;
+        Assert.Equal(new[] { clock.Id }, document.VisibleWidgets().Select(w => w.Id));
+        // Copies keep their own hidden list.
+        var copy = global.Copy(); copy.SetHiddenOn(profile, @"C:\Wallpapers\city.jpg", false);
+        Assert.True(global.IsHiddenOn(profile, @"C:\Wallpapers\city.jpg"));
+    }
+
+    [Fact]
+    public void HiddenOnWallpaper_RoundTripsThroughStore()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+        try
+        {
+            var profile = Guid.NewGuid(); var store = new DesktopCanvasStore(path);
+            var note = new DesktopWidget { ProfileId = profile };
+            note.SetHiddenOn(profile, "forest.jpg", true);
+            store.Save(new DesktopCanvasDocument { Enabled = true, ActiveProfileId = profile, ActiveWallpaperPath = "forest.jpg", Widgets = new() { note } });
+            Assert.Empty(store.Load().VisibleWidgets());
+            store.Update(saved => saved.ActiveWallpaperPath = "city.jpg");
+            Assert.Single(store.Load().VisibleWidgets());
+            File.WriteAllText(path, File.ReadAllText(path).Replace("\"HiddenOn\":", "\"Ignored\":"));
+            Assert.Empty(store.Load().Widgets.Single().HiddenOn);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void DesktopDrag_SavesSpotForTheWallpaperOnScreen_AndRoundTrips()
     {
         var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");

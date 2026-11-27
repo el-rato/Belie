@@ -364,11 +364,11 @@ internal sealed partial class DesktopCanvasView : UserControl
     {
         var active = CanvasProfile;
         // Every widget of the profile, each at its spot on the wallpaper being arranged.
-        var widgets = document.Composition(active).Where(widget => widget.Enabled).Select(widget => widget.PlacedOn(CanvasPath)).ToList();
+        var widgets = document.Composition(active).Where(widget => widget.Enabled && !widget.IsHiddenOn(active, CanvasPath)).Select(widget => widget.PlacedOn(CanvasPath)).ToList();
         if (draft != null)
         {
             widgets.RemoveAll(widget => widget.Id == draft.Id);
-            if (draft.Enabled && (draft.ProfileId == null || draft.ProfileId == active)) widgets.Add(draft);
+            if (draft.Enabled && !draft.IsHiddenOn(active, CanvasPath) && (draft.ProfileId == null || draft.ProfileId == active)) widgets.Add(draft);
         }
         _overviewCaption.Text = (active.HasValue ? ProfileLabel(active) : "Global")
             + (string.IsNullOrEmpty(CanvasPath) ? " · Default" : " · " + Path.GetFileName(CanvasPath))

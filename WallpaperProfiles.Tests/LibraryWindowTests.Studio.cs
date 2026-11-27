@@ -178,6 +178,33 @@ public sealed partial class LibraryWindowTests
         Assert.DoesNotContain(store.Load().Widgets, w => w.Title == "Everywhere");
         store.UpdateWidget(store.Load().Widgets.Single().Id, w => w.Title = "");
         picker.SelectedIndex = picker.Items.Count - 1;
+        CheckHiddenOnWallpaper(studio, store, profile, wallpaper);
+    }
+
+    /// <summary>While arranging one wallpaper, the eye and "Hide widgets here" hide widgets on that wallpaper only.</summary>
+    private static void CheckHiddenOnWallpaper(DesktopCanvasView studio, DesktopCanvasStore store, WallpaperProfile profile, string wallpaper)
+    {
+        var list = (ListBox)studio.FindName("WidgetList");
+        var hideHere = (Button)studio.FindName("HideWidgetsOnWallpaperButton");
+        Button Eye()
+        {
+            studio.UpdateLayout();
+            var container = (DependencyObject)list.ItemContainerGenerator.ContainerFromIndex(0);
+            return VisualChildren(container).OfType<Button>().Single(button => button.Name == "CardVisibilityButton");
+        }
+        Assert.Equal(Visibility.Visible, hideHere.Visibility); Assert.Equal("Hide widgets here", hideHere.Content);
+        Assert.Equal("Hide on this wallpaper", Eye().ToolTip);
+        Eye().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var widget = store.Load().Widgets.Single();
+        Assert.True(widget.Enabled); Assert.True(widget.IsHiddenOn(profile.Id, wallpaper));
+        Assert.False(widget.IsHiddenOn(profile.Id, profile.FolderPath));
+        Assert.Equal("Show on this wallpaper", Eye().ToolTip); Assert.Equal("Show widgets here", hideHere.Content);
+        hideHere.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Empty(store.Load().Widgets.Single().HiddenOn); Assert.Equal("Hide widgets here", hideHere.Content);
+        hideHere.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(store.Load().Widgets.Single().IsHiddenOn(profile.Id, wallpaper));
+        Eye().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Empty(store.Load().Widgets.Single().HiddenOn); Assert.True(store.Load().Widgets.Single().Enabled);
     }
 
     private static void CheckWidgetDrafts(MainWindow main)
