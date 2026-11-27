@@ -25,8 +25,8 @@ internal static class AutostartManager
 
     public static void SetEnabled(bool enabled)
     {
-        // A sandbox build must never point Windows startup at itself.
-        if (AppPaths.IsSandbox) { Logger.Info("Sandbox run: autostart left unchanged."); return; }
+        // A dev build must never point Windows startup at itself.
+        if (AppPaths.IsDevBuild) { Logger.Info("Dev build: autostart left unchanged."); return; }
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);

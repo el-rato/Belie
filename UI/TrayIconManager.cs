@@ -28,7 +28,7 @@ internal sealed class TrayIconManager : IDisposable
         _icon = new WinForms.NotifyIcon
         {
             Icon = UiAppearance.CreateTrayIcon(),
-            Text = "Belie",
+            Text = WallpaperProfiles.Infrastructure.AppPaths.IsDevBuild ? "Belie (dev build)" : "Belie",
             Visible = true,
         };
         _icon.DoubleClick += (_, _) => _openMain();

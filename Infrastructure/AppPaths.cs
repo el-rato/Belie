@@ -6,13 +6,13 @@ internal static class AppPaths
     private const string LegacyFolderName = "WallpaperProfiles";
 
     /// <summary>Set to a folder to run a test build against its own copy of the data, away from the real setup.</summary>
-    public const string SandboxVariable = "BELIE_DATA_DIR";
+    public const string DevDataVariable = "BELIE_DATA_DIR";
 
-    /// <summary>True when <see cref="SandboxVariable"/> points this run (and its helper processes) at a separate data folder.</summary>
-    public static bool IsSandbox { get; } = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(SandboxVariable));
+    /// <summary>True when <see cref="DevDataVariable"/> points this run (and its helper processes) at a separate data folder.</summary>
+    public static bool IsDevBuild { get; } = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(DevDataVariable));
 
-    public static string BaseDir { get; } = IsSandbox
-        ? Path.GetFullPath(Environment.GetEnvironmentVariable(SandboxVariable)!)
+    public static string BaseDir { get; } = IsDevBuild
+        ? Path.GetFullPath(Environment.GetEnvironmentVariable(DevDataVariable)!)
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppFolderName);
 
     public static string ProfilesDir => Path.Combine(BaseDir, "profiles");
@@ -39,7 +39,7 @@ internal static class AppPaths
     /// </summary>
     private static void MigrateLegacyData()
     {
-        if (IsSandbox) return;
+        if (IsDevBuild) return;
         try
         {
             var legacy = Path.Combine(
