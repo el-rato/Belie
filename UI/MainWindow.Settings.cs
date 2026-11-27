@@ -62,6 +62,30 @@ internal partial class MainWindow
         _settingsDialog = dialog; dialog.Show();
     }
 
+    private Action? _themesHandler;
+    private Action _showThemes => _themesHandler ??= ShowThemes;
+
+    /// <summary>Lists every theme, the person's own included, and says which theme files could not be used.</summary>
+    private void ShowThemes()
+    {
+        var loading = _loadingTheme; _loadingTheme = true;
+        ThemePicker.ItemsSource = UiAppearance.Themes;
+        ThemePicker.SelectedItem = UiAppearance.Current;
+        _loadingTheme = loading;
+        ThemeProblemsText.Text = string.Join("\n", UiAppearance.ThemeProblems);
+        ThemeProblemsText.Visibility = UiAppearance.ThemeProblems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OpenThemesFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(UserThemes.Folder);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{UserThemes.Folder}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex) { Logger.Error("Opening the themes folder failed.", ex); }
+    }
+
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_loadingTheme || ThemePicker.SelectedItem is not UiTheme theme) return;

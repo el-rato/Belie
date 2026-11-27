@@ -87,8 +87,9 @@ internal partial class MainWindow : Window
         _toastedActive = coordinator.ActiveProfileId;
         if (UiAppearance.Current.Name != UiAppearance.Find(_settings.UiTheme).Name) UiAppearance.Apply(_settings.UiTheme);
         TrySetAppIcon();
-        ThemePicker.ItemsSource = UiAppearance.Themes;
-        ThemePicker.SelectedItem = UiAppearance.Find(_settings.UiTheme);
+        ShowThemes();
+        UiAppearance.ThemesChanged += _showThemes;
+        Closed += (_, _) => UiAppearance.ThemesChanged -= _showThemes;
         _loadingTheme = false;
         StateChanged += (_, _) => UpdateMaximizeButton();
 

@@ -230,6 +230,7 @@ internal partial class MainWindow
         foreach (var level in Enum.GetValues<GlassLevel>())
             if (level != UiAppearance.Glass)
                 list.Add(new("Glass: " + level, "Look", "", () => GlassPicker.SelectedItem = level, Keywords: "transparency blur window"));
+        list.Add(new("Open themes folder", "Look", "", () => OpenThemesFolder_Click(this, new RoutedEventArgs()), Keywords: "custom theme config json colours colors make your own"));
         foreach (var theme in UiAppearance.Themes)
             if (theme != UiAppearance.Current)
                 list.Add(new("Theme: " + theme.Name, "Look", "", () => ThemePicker.SelectedItem = theme, Keywords: "colour color appearance"));

@@ -46,6 +46,8 @@
     <Thickness x:Key="SpaceMedium">16</Thickness>
     <Thickness x:Key="SpaceLarge">24</Thickness>
     <CornerRadius x:Key="RadiusControl">8</CornerRadius>
+    <!-- Buttons and tabs are pills, as on the top bar. -->
+    <CornerRadius x:Key="RadiusPill">18</CornerRadius>
     <CornerRadius x:Key="RadiusPanel">12</CornerRadius>
     <DropShadowEffect x:Key="PreviewElevation" Color="#000000" BlurRadius="24" ShadowDepth="4" Opacity="0.18"/>
     <!-- Elevation for things that float (menus, popups, tooltips) and for cards under the pointer. -->
@@ -146,9 +148,9 @@
     <Style TargetType="Button">
         <Setter Property="MinHeight" Value="{StaticResource ControlTarget}"/>
         <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
-        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Background" Value="{DynamicResource CardBrush}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource CardEdgeBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="12,7"/>
         <Setter Property="FontWeight" Value="Normal"/>
@@ -161,11 +163,11 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{StaticResource RadiusControl}"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{StaticResource RadiusPill}"
                             Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
                         <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
                         <Grid>
-                        <Border x:Name="HoverWash" Background="{DynamicResource AccentBrush}" CornerRadius="6" Opacity="0" IsHitTestVisible="False"/>
+                        <Border x:Name="HoverWash" Background="{DynamicResource AccentBrush}" CornerRadius="{StaticResource RadiusPill}" Opacity="0" IsHitTestVisible="False"/>
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                           RecognizesAccessKey="True"/>
@@ -173,8 +175,8 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
-                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                             <Setter TargetName="HoverWash" Property="Opacity" Value="0.08"/>
                             <Trigger.EnterActions><BeginStoryboard><Storyboard FillBehavior="Stop">
                                 <DoubleAnimation Storyboard.TargetName="HoverWash" Storyboard.TargetProperty="Opacity" From="0" To="0.08" Duration="0:0:0.16" EasingFunction="{StaticResource EaseOut}"/>
@@ -214,14 +216,10 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="{StaticResource RadiusControl}"
+                    <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="{StaticResource RadiusPill}"
                             BorderBrush="{DynamicResource TextPrimaryBrush}" BorderThickness="0"
                             Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
                         <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
-                        <Border.Effect>
-                            <DropShadowEffect ShadowDepth="0" BlurRadius="16" Opacity="0.35"
-                                              Color="{Binding Background.Color, RelativeSource={RelativeSource TemplatedParent}}"/>
-                        </Border.Effect>
 
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                           RecognizesAccessKey="True" TextElement.Foreground="{Binding Background, ElementName=Chrome, Converter={StaticResource AccentInk}}"/>
@@ -246,7 +244,6 @@
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>
-                            <Setter TargetName="Chrome" Property="Effect" Value="{x:Null}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -261,7 +258,7 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{StaticResource RadiusControl}"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{StaticResource RadiusPill}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                           RecognizesAccessKey="True"/>
@@ -686,23 +683,23 @@
         <Setter Property="MinHeight" Value="{StaticResource ControlTarget}"/>
         <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-        <Setter Property="Padding" Value="14,9"/>
-        <Setter Property="Margin" Value="0,0,6,0"/>
+        <Setter Property="Padding" Value="16,7"/>
+        <Setter Property="Margin" Value="0,0,2,0"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TabItem">
-                    <Border x:Name="Tab" BorderThickness="1" BorderBrush="Transparent" CornerRadius="{StaticResource RadiusControl}" Background="Transparent" Padding="{TemplateBinding Padding}">
+                    <Border x:Name="Tab" BorderThickness="1" BorderBrush="Transparent" CornerRadius="{StaticResource RadiusPill}" Background="Transparent" Padding="{TemplateBinding Padding}">
                         <Grid>
                             <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
-                            <Border x:Name="Underline" Background="{DynamicResource AccentBrush}" Height="2" CornerRadius="1"
-                                    VerticalAlignment="Bottom" Margin="0,0,0,-9" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+                            <Border x:Name="Underline" Background="{DynamicResource AccentBrush}" Height="2" Width="14" CornerRadius="1"
+                                    VerticalAlignment="Bottom" Margin="0,0,0,-5" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
                                 <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
                             </Border>
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tab" Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/></Trigger>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tab" Property="Background" Value="{DynamicResource CardHoverBrush}"/></Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="Tab" Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
                             <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
@@ -941,7 +938,8 @@
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabControl">
             <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <Border Background="Transparent" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,0,0,4" Margin="0,0,0,16">
+                <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardEdgeBrush}" BorderThickness="1" CornerRadius="21" Padding="3"
+                        Margin="0,0,0,18" HorizontalAlignment="Left">
                     <TabPanel IsItemsHost="True" KeyboardNavigation.TabIndex="1"/>
                 </Border>
                 <Border Grid.Row="1" Background="Transparent" Padding="0">

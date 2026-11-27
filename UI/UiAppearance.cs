@@ -10,6 +10,7 @@ using System.Windows.Data;
 using Brushes = System.Windows.Media.Brushes;
 using SystemColors = System.Windows.SystemColors;
 using Controls = System.Windows.Controls;
+using WallpaperProfiles.Infrastructure;
 
 namespace WallpaperProfiles.UI;
 
@@ -17,6 +18,15 @@ internal sealed record UiTheme(string Name, string Background, string Surface, s
     string Border, string StrongBorder, string Text, string Secondary, string Muted, string Accent, string Subtle)
 {
     public ImageSource Icon => UiAppearance.RenderIcon(this, 32);
+    /// <summary>Colours a theme file may set for errors, success and warnings; left out, they follow light or dark.</summary>
+    public string? Danger { get; init; }
+    public string? Good { get; init; }
+    public string? Signal { get; init; }
+    /// <summary>Set by a theme file; otherwise worked out from the background.</summary>
+    public bool? IsLight { get; init; }
+    /// <summary>The file a person's own theme came from; null for the built-in ones.</summary>
+    public string? FileName { get; init; }
+    public bool Light => IsLight ?? AccentInkConverter.Luminance((Color)System.Windows.Media.ColorConverter.ConvertFromString(Background)) > .4;
 }
 
 internal static class UiAppearance
@@ -29,7 +39,7 @@ internal static class UiAppearance
                 System.Windows.Application.Current.Dispatcher.Invoke(() => Apply(Current.Name));
         };
     }
-    public static IReadOnlyList<UiTheme> Themes { get; } = new[]
+    public static IReadOnlyList<UiTheme> BuiltIn { get; } = new[]
     {
         new UiTheme("Sage", "#111613", "#191F1B", "#232B25", "#303B32", "#364239", "#718E83", "#F3F5EC", "#C0CFC7", "#9AACAA", "#DDF79D", "#303D26"),
         new UiTheme("Midnight", "#111318", "#191D25", "#232A35", "#303A48", "#384354", "#62779A", "#EDF3FF", "#BACAE2", "#9BACBF", "#ABCFFF", "#263447"),
@@ -45,13 +55,34 @@ internal static class UiAppearance
         new UiTheme("Tokyo", "#141522", "#1C1E30", "#272A40", "#333751", "#414660", "#858EB8", "#EEF0FF", "#C9CDEE", "#ADB3D8", "#AFA0FF", "#342D50"),
         new UiTheme("Sunset", "#1B1314", "#271C1D", "#342729", "#423335", "#524044", "#AB848A", "#FFF1E9", "#E4C6BE", "#C6A59E", "#FFA58C", "#4C302A")
     };
-    public static UiTheme Current { get; private set; } = Themes[0];
+    private static List<UiTheme> _userThemes = new();
+    /// <summary>The built-in themes, then the ones people wrote in the themes folder.</summary>
+    public static IReadOnlyList<UiTheme> Themes => _userThemes.Count == 0 ? BuiltIn : BuiltIn.Concat(_userThemes).ToList();
+    /// <summary>Theme files that could not be used, and why.</summary>
+    public static IReadOnlyList<string> ThemeProblems { get; private set; } = Array.Empty<string>();
+    public static UiTheme Current { get; private set; } = BuiltIn[0];
     public static event Action? Changed;
+    /// <summary>Raised when the themes folder changed the list of themes.</summary>
+    public static event Action? ThemesChanged;
+    /// <summary>The theme asked for, kept even while its file is missing or broken so it comes back once fixed.</summary>
+    private static string? _requested;
 
-    public static UiTheme Find(string? name) => Themes.FirstOrDefault(theme => theme.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) ?? Themes[0];
+    public static UiTheme Find(string? name) => Themes.FirstOrDefault(theme => theme.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) ?? BuiltIn[0];
+
+    /// <summary>Reads the themes folder again and redraws with the chosen theme, which may have just changed.</summary>
+    public static void LoadUserThemes(string folder)
+    {
+        var (themes, problems) = UserThemes.Read(folder, BuiltIn.Select(theme => theme.Name).ToList());
+        _userThemes = themes; ThemeProblems = problems;
+        foreach (var problem in problems) Logger.Warn("Theme file skipped: " + problem);
+        if (System.Windows.Application.Current != null && _requested != null && (Current.FileName != null || !Find(_requested).Equals(Current)))
+            Apply(_requested);
+        ThemesChanged?.Invoke();
+    }
 
     public static void Apply(string? name)
     {
+        _requested = name ?? _requested;
         Current = Find(name);
         var resources = FindPalette(System.Windows.Application.Current.Resources);
         var theme = Current;
@@ -60,9 +91,9 @@ internal static class UiAppearance
             ("BgBrush", theme.Background), ("SurfaceBrush", theme.Surface), ("SurfaceRaisedBrush", theme.Raised),
             ("SurfaceHoverBrush", theme.Hover), ("BorderBrush", theme.Border), ("BorderStrongBrush", theme.StrongBorder),
             ("TextPrimaryBrush", theme.Text), ("TextSecondaryBrush", theme.Secondary), ("TextTertiaryBrush", theme.Muted),
-            ("DangerBrush", theme.Name == "Daylight" ? "#AD4040" : "#E49B94"),
-            ("GoodBrush", theme.Name == "Daylight" ? "#34724B" : "#98CAA5"),
-            ("SignalBrush", theme.Name == "Daylight" ? "#80551B" : "#D9AF6E")
+            ("DangerBrush", theme.Danger ?? (theme.Light ? "#AD4040" : "#E49B94")),
+            ("GoodBrush", theme.Good ?? (theme.Light ? "#34724B" : "#98CAA5")),
+            ("SignalBrush", theme.Signal ?? (theme.Light ? "#80551B" : "#D9AF6E"))
         }) resources[key] = new SolidColorBrush(Parse(hex));
         resources["BgColor"] = Parse(theme.Background);
         var accent = Parse(theme.Accent);
@@ -124,7 +155,7 @@ internal static class UiAppearance
         var edge = Parse(theme.Border);
         resources["PaneEdgeBrush"] = Frozen(new SolidColorBrush(level == Persistence.GlassLevel.Off ? edge : WithAlpha(Mix(edge, Colors.White, .12), .75)));
         // Cards inside a pane lighten the glass a little instead of covering it.
-        var light = theme.Name == "Daylight";
+        var light = theme.Light;
         resources["CardBrush"] = Frozen(new SolidColorBrush(level == Persistence.GlassLevel.Off ? surface : WithAlpha(Colors.White, light ? .45 : .055)));
         resources["CardHoverBrush"] = Frozen(new SolidColorBrush(level == Persistence.GlassLevel.Off ? Parse(theme.Hover) : WithAlpha(Colors.White, light ? .65 : .10)));
         resources["CardEdgeBrush"] = Frozen(new SolidColorBrush(level == Persistence.GlassLevel.Off ? edge : WithAlpha(light ? Colors.Black : Colors.White, light ? .08 : .09)));
@@ -153,7 +184,7 @@ internal static class UiAppearance
     internal static System.Windows.Media.Brush ReadableAccent(Color accent)
     {
         var surfaces = new[] { Current.Background, Current.Surface, Current.Raised, Current.Subtle }.Select(Parse).ToArray();
-        var target = Current.Name == "Daylight" ? Colors.Black : Colors.White;
+        var target = Current.Light ? Colors.Black : Colors.White;
         for (var step = 0; step <= 20; step++)
         {
             var candidate = Mix(accent, target, step / 20d);
@@ -173,7 +204,7 @@ internal static class UiAppearance
         throw new InvalidOperationException("The UI palette is unavailable.");
     }
     private static Color Parse(string hex) => (Color)System.Windows.Media.ColorConverter.ConvertFromString(hex);
-    private static Color Mix(Color color, Color target, double amount) => Color.FromRgb(
+    internal static Color Mix(Color color, Color target, double amount) => Color.FromRgb(
         (byte)(color.R * (1 - amount) + target.R * amount), (byte)(color.G * (1 - amount) + target.G * amount), (byte)(color.B * (1 - amount) + target.B * amount));
 
     public static BitmapSource RenderIcon(UiTheme theme, int size)
@@ -187,7 +218,7 @@ internal static class UiAppearance
             drawing.DrawRoundedRectangle(tile, null, new Rect(8, 8, 240, 240), 62, 62);
             // Open counters keep the Belie monogram readable at tray sizes.
             var mark = Geometry.Parse("M 70,58 L 137,58 C 180,58 195,78 195,101 C 195,117 186,126 174,132 C 191,138 201,150 201,166 C 201,189 182,203 141,203 L 70,203 Z M 104,87 L 104,118 L 137,118 C 154,118 162,113 162,102 C 162,92 154,87 137,87 Z M 104,147 L 104,174 L 141,174 C 159,174 168,170 168,161 C 168,152 159,147 141,147 Z");
-            var ink = Parse(theme.Name == "Daylight" ? "#244333" : theme.Background);
+            var ink = theme.Name == "Daylight" && theme.FileName == null ? Parse("#244333") : theme.Light ? Mix(Parse(theme.Text), Parse(theme.Accent), .2) : Parse(theme.Background);
             drawing.DrawGeometry(new SolidColorBrush(ink), null, mark);
             drawing.Pop();
         }
@@ -230,14 +261,12 @@ internal static class UiAppearance
         dialog.SetResourceReference(Window.FontFamilyProperty, "AppFont");
         dialog.SetResourceReference(Window.BackgroundProperty, glass ? "PaneBrush" : "BgBrush");
         dialog.SetResourceReference(Window.ForegroundProperty, "TextPrimaryBrush");
-        dialog.SetResourceReference(Window.BorderBrushProperty, "BorderBrush");
+        dialog.SetResourceReference(Window.BorderBrushProperty, "BorderStrongBrush");
         var layout = new Controls.Grid();
         layout.RowDefinitions.Add(new Controls.RowDefinition { Height = new GridLength(48) });
         layout.RowDefinitions.Add(new Controls.RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        var header = new Controls.Border { BorderThickness = new Thickness(0, 0, 0, 1) };
-        if (glass) header.Background = Brushes.Transparent;
-        else header.SetResourceReference(Controls.Border.BackgroundProperty, "SurfaceBrush");
-        header.SetResourceReference(Controls.Border.BorderBrushProperty, "BorderBrush");
+        // The title sits on the dialog itself, as on the main window, with no strip or rule under it.
+        var header = new Controls.Border { Background = Brushes.Transparent };
         header.MouseLeftButtonDown += (_, args) =>
         {
             if (args.LeftButton == System.Windows.Input.MouseButtonState.Pressed) dialog.DragMove();
@@ -354,7 +383,7 @@ internal static class UiAppearance
     {
         var handle = new WindowInteropHelper(window).Handle;
         if (handle == IntPtr.Zero) return false;
-        var dark = Current.Name == "Daylight" ? 0 : 1;
+        var dark = Current.Light ? 0 : 1;
         DwmSetWindowAttribute(handle, 20, ref dark, sizeof(int));
         var border = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE removes the system's bright outline.
         var borderResult = DwmSetWindowAttribute(handle, 34, ref border, sizeof(int));

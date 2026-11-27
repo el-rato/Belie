@@ -143,6 +143,7 @@ internal partial class App : System.Windows.Application
             var settings = settingsStore.Load();
             UiAppearance.Glass = ShellStore.Default.Load().Glass;
             UiAppearance.Apply(settings.UiTheme);
+            UserThemes.Start(); // The person's own themes, which may include the one just asked for.
             var profileStore = new ProfileStore(AppPaths.ProfilesDir);
 
             _coordinator = new WallpaperCoordinator(profileStore, settingsStore, settings);

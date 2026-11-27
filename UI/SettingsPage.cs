@@ -31,6 +31,8 @@ internal abstract class SettingsPage<T> : System.Windows.Controls.UserControl wh
     private readonly DispatcherTimer _saving = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private readonly List<Action<T>> _apply = new();
     private StackPanel _panel = new();
+    /// <summary>The card that rows are going into; a heading or any other element starts a new one.</summary>
+    private StackPanel? _group;
     private bool _building;
 
     protected SettingsPage(string title, string description)
@@ -42,10 +44,11 @@ internal abstract class SettingsPage<T> : System.Windows.Controls.UserControl wh
         about.SetResourceReference(StyleProperty, "WorkspaceCaption");
         _status.SetResourceReference(StyleProperty, "HintText");
         AutomationProperties.SetLiveSetting(_status, AutomationLiveSetting.Polite);
-        var top = new StackPanel { Margin = new Thickness(0, 0, 0, 16) };
+        var top = new StackPanel { Margin = new Thickness(0, 0, 0, 18) };
         top.Children.Add(heading); top.Children.Add(about); top.Children.Add(_status);
         _status.Margin = new Thickness(0, 6, 0, 0);
-        var layout = new DockPanel { Margin = new Thickness(24, 20, 24, 12), MaxWidth = 860, HorizontalAlignment = HorizontalAlignment.Stretch };
+        _status.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+        var layout = new DockPanel { Margin = new Thickness(36, 26, 36, 14), MaxWidth = 940, HorizontalAlignment = HorizontalAlignment.Stretch };
         DockPanel.SetDock(top, Dock.Top);
         layout.Children.Add(top); layout.Children.Add(_tabs);
         Content = layout;
@@ -103,6 +106,7 @@ internal abstract class SettingsPage<T> : System.Windows.Controls.UserControl wh
     protected void Tab(string name)
     {
         _panel = new StackPanel { Margin = new Thickness(0, 0, 14, 24) };
+        _group = null;
         // Tabs color their own text, which must not reach what is inside.
         _panel.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "TextPrimaryBrush");
         _tabs.Items.Add(new TabItem { Header = name, Content = new ScrollViewer { Content = _panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled } });
@@ -111,28 +115,46 @@ internal abstract class SettingsPage<T> : System.Windows.Controls.UserControl wh
     /// <summary>Puts what is added meanwhile into a panel of its own.</summary>
     protected void Into(StackPanel panel, Action build)
     {
-        var outer = _panel;
-        _panel = panel;
+        var (outer, group) = (_panel, _group);
+        (_panel, _group) = (panel, null);
         try { build(); }
-        finally { _panel = outer; }
+        finally { (_panel, _group) = (outer, group); }
     }
 
-    protected void Add(UIElement element) => _panel.Children.Add(element);
+    protected void Add(UIElement element) { _group = null; _panel.Children.Add(element); }
+
+    /// <summary>Settings sit together on a glass card, the way the rest of the app groups things.</summary>
+    private void AddToGroup(UIElement element)
+    {
+        if (_group == null)
+        {
+            _group = new StackPanel();
+            var card = new Border { Child = _group, Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(0, 0, 0, 12) };
+            card.SetResourceReference(StyleProperty, "GlassCard");
+            _panel.Children.Add(card);
+        }
+        _group.Children.Add(element);
+    }
     protected void OnSave(Action<T> apply) => _apply.Add(apply);
 
-    protected void Heading(string text) => Add(new TextBlock { Text = text, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, _panel.Children.Count == 0 ? 0 : 22, 0, 8) });
+    protected void Heading(string text)
+    {
+        var heading = new TextBlock { Text = text, FontWeight = FontWeights.SemiBold, Margin = new Thickness(2, _panel.Children.Count == 0 ? 0 : 14, 0, 8) };
+        heading.SetResourceReference(TextBlock.FontSizeProperty, "TypeSection");
+        Add(heading);
+    }
 
     protected TextBlock Hint(string text)
     {
         var hint = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontSize = 12, Margin = new Thickness(0, 2, 0, 8) };
         hint.SetResourceReference(StyleProperty, "HintText");
-        Add(hint);
+        if (_group != null) _group.Children.Add(hint); else _panel.Children.Add(hint);
         return hint;
     }
 
     protected DockPanel Row(string label, string id, FrameworkElement control, FrameworkElement? extra = null)
     {
-        var row = new DockPanel { Margin = new Thickness(0, 4, 0, 4), MinHeight = 34 };
+        var row = new DockPanel { Margin = new Thickness(0, 3, 0, 3), MinHeight = 38 };
         FrameworkElement right = control;
         if (extra != null)
         {
@@ -146,7 +168,7 @@ internal abstract class SettingsPage<T> : System.Windows.Controls.UserControl wh
         AutomationProperties.SetName(control, label);
         row.Children.Add(right);
         row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 16, 0) });
-        Add(row);
+        AddToGroup(row);
         return row;
     }
 
@@ -229,7 +251,8 @@ internal abstract class SettingsPage<T> : System.Windows.Controls.UserControl wh
 
     protected Button Press(string text, string id, Action click)
     {
-        var button = new Button { Content = text, Padding = new Thickness(12, 7, 12, 7), Margin = new Thickness(0, 0, 8, 8) };
+        var button = new Button { Content = text, Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(0, 0, 8, 8) };
+        button.SetResourceReference(StyleProperty, "PillButton");
         AutomationProperties.SetAutomationId(button, id);
         button.Click += (_, _) => click();
         return button;
