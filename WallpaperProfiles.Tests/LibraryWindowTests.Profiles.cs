@@ -83,87 +83,6 @@ public sealed partial class LibraryWindowTests
         ((ScrollViewer)main.FindName("ProfileDetailsScroll")).ScrollToTop();
     }
 
-    private static void CheckEditorLibrary(LibraryStore store, string imagePath, string secondWallpaper)
-    {
-        Exception? failure = null;
-        var model = new WallpaperProfile { Name = "Picker check", SlideshowIntervalMinutes = 0 };
-        var editor = new ProfileEditorWindow(model, isNew: true, libraryStore: store)
-            { ShowInTaskbar = false, Opacity = 0 };
-        editor.Loaded += (_, _) =>
-        {
-            editor.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(async () =>
-            {
-                var picker = System.Windows.Application.Current.Windows.OfType<LibraryWindow>().Single(w => w.Owner == editor);
-                try
-                {
-                    await WaitUntil(() => ((Button)picker.FindName("ImportFilesButton")).IsEnabled);
-                    var gallery = (ListBox)picker.FindName("Gallery");
-                    var search = (TextBox)picker.FindName("SearchBox");
-                    foreach (var query in new[] { "Forest retreat", "Sky beyond" })
-                    {
-                        search.Text = query;
-                        picker.UpdateLayout();
-                        VisualChildren(gallery).OfType<CheckBox>().Single().IsChecked = true;
-                    }
-                    Assert.Equal("Add 2 wallpapers", ((Button)picker.FindName("UseButton")).Content);
-                    Assert.Contains("Picker check", ((TextBlock)picker.FindName("LibrarySelectionText")).Text);
-                    Click(picker, "UseButton");
-                }
-                catch (Exception ex) { failure = ex; picker.Close(); }
-            }));
-            try
-            {
-                Click(editor, "AddFromLibraryButton");
-                if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
-                Assert.Equal(imagePath, ((TextBox)editor.FindName("FolderBox")).Text);
-                Assert.Equal("5", ((TextBox)editor.FindName("IntervalBox")).Text);
-                var wallpapers = (ItemsControl)editor.FindName("ProfileWallpaperList");
-                PumpUntil(() => wallpapers.Items.Count == 2);
-                Assert.Equal(new[] { imagePath, secondWallpaper }, wallpapers.Items.Cast<string>());
-                Assert.Empty(model.AdditionalWallpaperPaths);
-                Assert.Equal("", model.FolderPath);
-                RenderWorkspace(editor, "profile-editor-library", 680, 720);
-                MoveWallpaper(editor, secondWallpaper, "-1");
-                PumpUntil(() => wallpapers.Items.Cast<string>().SequenceEqual(new[] { secondWallpaper, imagePath }));
-                Assert.Empty(model.WallpaperOrder);
-                typeof(ProfileEditorWindow).GetMethod("Save_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
-                    .Invoke(editor, new object[] { editor, new RoutedEventArgs() });
-            }
-            catch (Exception ex) { failure = ex; editor.ChooseDraftAction = () => DraftChoice.Discard; editor.Close(); }
-        };
-        var saved = editor.ShowDialog();
-        if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
-        Assert.True(saved);
-        Assert.Empty(model.AdditionalWallpaperPaths);
-        Assert.Empty(model.FolderPath);
-        model = editor.Result!;
-        Assert.Equal(new[] { secondWallpaper }, model.AdditionalWallpaperPaths);
-        Assert.Equal(imagePath, model.FolderPath);
-        Assert.Equal(new[] { secondWallpaper, imagePath }, model.WallpaperOrder);
-
-        var cancelEditor = new ProfileEditorWindow(model, isNew: false, libraryStore: store)
-            { ShowInTaskbar = false, Opacity = 0, ChooseDraftAction = () => DraftChoice.Discard };
-        cancelEditor.Loaded += (_, _) =>
-        {
-            try
-            {
-                cancelEditor.UpdateLayout();
-                var list = (ItemsControl)cancelEditor.FindName("ProfileWallpaperList");
-                PumpUntil(() => list.Items.Count == 2);
-                Assert.Equal(new[] { secondWallpaper, imagePath }, list.Items.Cast<string>());
-                MoveWallpaper(cancelEditor, secondWallpaper, "1");
-                PumpUntil(() => list.Items.Cast<string>().SequenceEqual(new[] { imagePath, secondWallpaper }));
-            }
-            catch (Exception ex) { failure = ex; }
-            finally { cancelEditor.Close(); }
-        };
-        Assert.False(cancelEditor.ShowDialog());
-        if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
-        Assert.Equal(new[] { secondWallpaper }, model.AdditionalWallpaperPaths);
-        Assert.Equal(new[] { secondWallpaper, imagePath }, model.WallpaperOrder);
-        Assert.True(File.Exists(secondWallpaper));
-    }
-
     private static void CheckTrayMenuTheme(MainWindow main, UiTheme theme)
     {
         using var menu = TrayIconManager.CreateThemedMenu();
@@ -254,12 +173,7 @@ public sealed partial class LibraryWindowTests
         main.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         Assert.Equal(WindowState.Normal, main.WindowState);
         Assert.Equal("Maximize", ((Button)main.FindName("MaximizeButton")).ToolTip);
-        profile.SceneAccent = "#B7CDBC";
-        coordinator.SwitchManually(profile.Id);
         picker.SelectedItem = UiAppearance.Find("Midnight");
-        Assert.Equal((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#B7CDBC"), System.Windows.Application.Current.Resources["SceneAccentColor"]);
-        profile.SceneAccent = "";
-        coordinator.SwitchManually(profile.Id);
         Assert.Equal((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(UiAppearance.Current.Accent), System.Windows.Application.Current.Resources["SceneAccentColor"]);
         picker.SelectedItem = UiAppearance.Find("Sage");
     }

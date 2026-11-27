@@ -52,13 +52,7 @@ internal partial class MainWindow
         RandomBox.IsChecked = _selected.SlideshowRandom;
         VideoMuteBox.IsChecked = _selected.VideoMuted;
         IconSafeBox.IsChecked = _selected.IconFriendlyLive;
-        ScheduleSummary.Text = _selected.Schedule.Count > 0
-            ? string.Join(Environment.NewLine, _selected.Schedule.Select(DescribeSchedule)) : "No schedules";
-        TriggerSummary.Text = _selected.EventTriggers.Count > 0
-            ? string.Join(Environment.NewLine, _selected.EventTriggers.Select(t => $"{t.Describe()} · priority {t.Priority}")) : "No triggers";
-        EditRulesButton.Content = _selected.Schedule.Count + _selected.EventTriggers.Count > 0 ? "Edit schedules & triggers" : "Add schedules or triggers";
-        SceneSummary.Text = (_selected.SceneAccent.Length > 0 ? "Scene accent: " + _selected.SceneAccent : "Default accent")
-            + (_selected.AmbientAudioPath.Length > 0 ? " · ambient: " + Path.GetFileNameWithoutExtension(_selected.AmbientAudioPath) : " · no ambient track");
+        LoadRules(_selected);
         _loadingDraft = false;
         _savedDraft = DraftSnapshot();
         ProfileMessage.Text = _selected.Id == _coordinator.ActiveProfileId ? "Applied" : "Not applied";
@@ -68,7 +62,7 @@ internal partial class MainWindow
     private string DraftSnapshot() => DraftGuard.Snapshot(new { NameBox.Text, Path = FolderBox.Text,
         Interval = IntervalBox.Text, Fit = FitCombo.SelectedItem, Random = RandomBox.IsChecked,
         Muted = VideoMuteBox.IsChecked, Icons = IconSafeBox.IsChecked,
-        Additional = _additionalWallpapers.Select(a => a.FilePath).ToArray(), Order = _wallpaperOrder.ToArray() });
+        Additional = _additionalWallpapers.Select(a => a.FilePath).ToArray(), Order = _wallpaperOrder.ToArray(), Rules = RulesSnapshot() });
     internal bool IsDraftDirty => !_loadingDraft && _selected != null && _savedDraft != DraftSnapshot();
     private void UpdateDraftState()
     {
@@ -180,16 +174,6 @@ internal partial class MainWindow
         if (_selected?.Id == id) _selected.KeyboardShortcut = _coordinator.Profiles.First(p => p.Id == id).KeyboardShortcut;
         UpdateShortcutButton();
         CloseShortcut();
-    }
-
-    private static string DescribeSchedule(ScheduleRule rule)
-    {
-        var days = rule.DaysOfWeek.Count == 7 ? "Every day"
-            : rule.DaysOfWeek.Count == 0 ? "No days selected"
-            : string.Join(", ", rule.DaysOfWeek.OrderBy(day => ((int)day + 6) % 7)
-                .Select(day => CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName(day)));
-        var duration = rule.StartTime == rule.EndTime ? " · inactive" : rule.StartTime > rule.EndTime ? " · overnight" : "";
-        return $"{days} · {rule.StartTime:HH:mm} – {rule.EndTime:HH:mm}{duration}";
     }
 
     private void RefreshActiveGlow()

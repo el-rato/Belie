@@ -170,63 +170,21 @@ public sealed class ActivityAndSceneTests
         Assert.Equal(20, fixture.Coordinator.GetActivitySnapshot().Recent.Count);
     }
 
-    [Fact]
-    public void SceneAccent_SwitchAndStop_RestoreOriginalTheme()
-    {
-        var keys = new[] { "SceneAccentColor", "SceneAccentHoverColor", "SceneAccentPressedColor", "SceneAccentSubtleColor" };
-        var resources = new ResourceDictionary();
-        for (var i = 0; i < keys.Length; i++) resources[keys[i]] = System.Windows.Media.Color.FromRgb((byte)(100 + i), 110, 120);
-        var original = keys.Select(key => resources[key]).ToArray();
-        using var scene = new SceneController(resources);
-        scene.Apply(ScenePresets.Create("Focus"));
-        Assert.True(SceneController.TryParseAccent("#B7CDBC", out var focus));
-        Assert.Equal(focus, resources[keys[0]]);
-        scene.Apply(ScenePresets.Create("Gaming"));
-        Assert.NotEqual(focus, resources[keys[0]]);
-        scene.Apply(new WallpaperProfile());
-        Assert.Equal(original, keys.Select(key => resources[key]).ToArray());
-        scene.Apply(ScenePresets.Create("Evening"));
-        scene.Dispose();
-        Assert.Equal(original, keys.Select(key => resources[key]).ToArray());
-    }
-
     [Theory]
     [InlineData("#12zz34")]
     [InlineData("#123")]
     [InlineData("red")]
     [InlineData("#80112233")]
-    public void SceneAccent_RejectsInvalidInput(string input) => Assert.False(SceneController.TryParseAccent(input, out _));
+    public void HexColor_RejectsInvalidInput(string input) => Assert.False(HexColor.TryParse(input, out _));
 
     [Fact]
-    public void MissingAmbientTrack_DoesNotBreakSceneActivation()
-    {
-        using var scene = new SceneController(new ResourceDictionary());
-        scene.Apply(new WallpaperProfile { AmbientAudioPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".mp3") });
-        Assert.False(scene.HasAudio);
-        Assert.Contains("missing", scene.AudioStatus);
-        scene.Apply(new WallpaperProfile());
-        Assert.Equal("No ambient track", scene.AudioStatus);
-    }
-
-    [Fact]
-    public void SceneSettings_RoundTrip_AndLegacyProfilesKeepDefaults()
+    public void Profiles_saved_with_old_mood_settings_still_load()
     {
         using var fixture = new CoordinatorFixture();
-        var scene = ScenePresets.Create("Evening");
-        scene.AmbientAudioPath = @"C:\Audio\rain.wav";
-        fixture.Profiles.Save(scene);
-        var loaded = fixture.Profiles.LoadAll().Single(p => p.Id == scene.Id);
-        Assert.Equal(scene.SceneAccent, loaded.SceneAccent);
-        Assert.Equal(scene.AmbientAudioPath, loaded.AmbientAudioPath);
-        Assert.Equal(35, loaded.AmbientVolume);
         var legacyId = Guid.NewGuid();
         File.WriteAllText(Path.Combine(fixture.ProfileDirectory, legacyId + ".json"),
-            "{\"Id\":\"" + legacyId + "\",\"Name\":\"Legacy\"}");
-        var legacy = fixture.Profiles.LoadAll().Single(p => p.Id == legacyId);
-        Assert.Equal("", legacy.SceneAccent);
-        Assert.Equal("", legacy.AmbientAudioPath);
-        Assert.Equal(30, legacy.AmbientVolume);
-        Assert.False(legacy.AmbientMuted);
+            "{\"Id\":\"" + legacyId + "\",\"Name\":\"Legacy\",\"SceneAccent\":\"#B7CDBC\",\"AmbientAudioPath\":\"C:\\\\rain.wav\",\"AmbientVolume\":35}");
+        Assert.Equal("Legacy", fixture.Profiles.LoadAll().Single(p => p.Id == legacyId).Name);
     }
 
     private static ScheduleRule DailyRule(int startHour, int startMinute, int endHour, int endMinute) => new()

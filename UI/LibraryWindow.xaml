@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:WallpaperProfiles.UI"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
         x:ClassModifier="internal" Title="Wallpaper library" Width="1000" Height="720"
         MinWidth="900" MinHeight="600" WindowStartupLocation="CenterOwner"
         WindowStyle="None" Background="{DynamicResource BgBrush}"
@@ -40,7 +41,7 @@
                     <Button x:Name="ImportFilesButton" Content="+  Import" Style="{StaticResource PrimaryButton}" ToolTip="Import images or videos" Click="ImportFiles_Click" Margin="0,0,8,0"/>
                     <Button x:Name="ImportFolderButton" Content="&#xE8B7;" FontFamily="{StaticResource IconFont}" ToolTip="Import folder" AutomationProperties.Name="Import folder" Click="ImportFolder_Click"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal">
+                <StackPanel x:Name="LibraryTabs" Orientation="Horizontal">
                     <Button x:Name="LocalLibraryTab" Content="My collection" Background="{DynamicResource AccentSubtleBrush}" Click="LocalLibrary_Click" Margin="0,0,8,0" Padding="16,10"/>
                     <Button x:Name="MarketplaceTab" Content="Discover wallpapers" Click="Marketplace_Click" Padding="16,10"/>
                 </StackPanel>
@@ -62,44 +63,49 @@
                           VerticalAlignment="Center" Checked="Filter_Changed" Unchecked="Filter_Changed"/>
             </Grid>
             <StackPanel x:Name="MarketFilters" Visibility="Collapsed" Margin="0,16,0,0">
-                <TextBlock x:Name="MarketDiscoveryTitle" Text="Discover on Wallhaven" FontSize="22" FontWeight="SemiBold"/>
-                <TextBlock x:Name="MarketSearchHint" Text="Search website tags · +nature +mountains to combine · -anime to exclude" Style="{StaticResource HintText}" Margin="0,5,0,10" TextWrapping="Wrap"/>
                 <DockPanel>
-                    <Button x:Name="MarketSearchButton" DockPanel.Dock="Right" Content="Search" Style="{StaticResource PrimaryButton}" Click="MarketSearch_Click" Margin="8,0,0,0"/>
-                    <TextBox x:Name="MarketSearchBox" KeyDown="MarketSearch_KeyDown" AutomationProperties.Name="Search Wallhaven tags" ToolTip="Search by website tag or keyword, for example nature or streaming"/>
+                    <Button x:Name="MarketSearchButton" DockPanel.Dock="Right" Content="Search" Style="{StaticResource AccentPillButton}" Click="MarketSearch_Click" Margin="10,0,0,0" Padding="18,8"/>
+                    <Grid>
+                        <TextBox x:Name="MarketSearchBox" KeyDown="MarketSearch_KeyDown" AutomationProperties.Name="Search Wallhaven tags" Padding="34,0,10,0" Height="40" VerticalContentAlignment="Center"
+                                 ToolTip="Search by tag or keyword. +nature +mountains combines tags, -anime leaves one out."/>
+                        <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="13,0,0,0" IsHitTestVisible="False"/>
+                        <TextBlock Text="Search wallpapers · +nature +mountains · -anime" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="36,0,0,0" IsHitTestVisible="False">
+                            <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers>
+                                <DataTrigger Binding="{Binding Text, ElementName=MarketSearchBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                            </Style.Triggers></Style></TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
                 </DockPanel>
                 <DockPanel Margin="0,10,0,0">
-                    <ComboBox x:Name="MarketResolution" DockPanel.Dock="Right" SelectedIndex="0" Width="160" Margin="10,0,0,0" SelectionChanged="MarketFilter_Changed" ToolTip="Minimum resolution" AutomationProperties.Name="Minimum resolution">
-                        <ComboBoxItem Content="Any resolution" Tag=""/>
-                        <ComboBoxItem Content="Full HD and above" Tag="1920x1080"/>
-                        <ComboBoxItem Content="1440p and above" Tag="2560x1440"/>
-                        <ComboBoxItem Content="4K and above" Tag="3840x2160"/>
-                    </ComboBox>
-                    <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="10">
-                        <UniformGrid x:Name="MarketSortBar" Columns="4" AutomationProperties.Name="Sort wallpapers">
-                            <Button x:Name="MarketTopSortButton" Content="Top this month" Tag="toplist" Click="MarketSort_Click" Background="{DynamicResource AccentSubtleBrush}" BorderThickness="0" Padding="5,7" FontSize="12"/>
-                            <Button x:Name="MarketNewestSortButton" Content="Newest" Tag="date_added" Click="MarketSort_Click" BorderThickness="0" Padding="5,7" FontSize="12"/>
-                            <Button x:Name="MarketFavoritesSortButton" Content="Most favorited" Tag="favorites" Click="MarketSort_Click" BorderThickness="0" Padding="5,7" FontSize="12"/>
-                            <Button x:Name="MarketRelevantSortButton" Content="Relevant" Tag="relevance" Click="MarketSort_Click" BorderThickness="0" Padding="5,7" FontSize="12"/>
-                        </UniformGrid>
-                    </Border>
-                </DockPanel>
-                <DockPanel Margin="0,10,0,0">
-                    <Button x:Name="MarketApiKeyButton" DockPanel.Dock="Right" Content="Wallhaven API key" Click="MarketApiKey_Click" Margin="8,0,0,0" Padding="10,6" FontSize="12"
-                            ToolTip="Add or remove your Wallhaven API key. Wallhaven requires it for NSFW results."/>
-                    <ComboBox x:Name="MarketPurity" DockPanel.Dock="Right" SelectedIndex="0" Width="170" Margin="10,0,0,0" SelectionChanged="MarketPurity_Changed"
-                              ToolTip="Content rating. NSFW results need your Wallhaven API key." AutomationProperties.Name="Content rating">
-                        <ComboBoxItem Content="Safe only" Tag="100"/>
-                        <ComboBoxItem Content="Safe + sketchy" Tag="110"/>
-                        <ComboBoxItem Content="Sketchy only" Tag="010"/>
-                        <ComboBoxItem Content="NSFW only" Tag="001"/>
-                        <ComboBoxItem Content="Sketchy + NSFW" Tag="011"/>
-                        <ComboBoxItem Content="Everything" Tag="111"/>
-                    </ComboBox>
-                    <CheckBox x:Name="MarketLandscapeOnly" Content="Landscape only" VerticalAlignment="Center"
-                              Checked="MarketOrientation_Changed" Unchecked="MarketOrientation_Changed"
-                              ToolTip="Hide portrait wallpapers made for phones; include wide and ultrawide wallpapers."
-                              AutomationProperties.Name="Landscape wallpapers only, hide phone wallpapers"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <CheckBox x:Name="MarketLandscapeOnly" Content="Landscape" VerticalAlignment="Center" Margin="0,0,12,0"
+                                  Checked="MarketOrientation_Changed" Unchecked="MarketOrientation_Changed"
+                                  ToolTip="Hide portrait wallpapers made for phones; include wide and ultrawide wallpapers."
+                                  AutomationProperties.Name="Landscape wallpapers only, hide phone wallpapers"/>
+                        <ComboBox x:Name="MarketResolution" SelectedIndex="0" Width="150" Margin="0,0,8,0" SelectionChanged="MarketFilter_Changed" ToolTip="Minimum resolution" AutomationProperties.Name="Minimum resolution">
+                            <ComboBoxItem Content="Any size" Tag=""/>
+                            <ComboBoxItem Content="Full HD+" Tag="1920x1080"/>
+                            <ComboBoxItem Content="1440p+" Tag="2560x1440"/>
+                            <ComboBoxItem Content="4K+" Tag="3840x2160"/>
+                        </ComboBox>
+                        <ComboBox x:Name="MarketPurity" SelectedIndex="0" Width="150" Margin="0,0,8,0" SelectionChanged="MarketPurity_Changed"
+                                  ToolTip="Content rating. NSFW results need your Wallhaven API key." AutomationProperties.Name="Content rating">
+                            <ComboBoxItem Content="Safe only" Tag="100"/>
+                            <ComboBoxItem Content="Safe + sketchy" Tag="110"/>
+                            <ComboBoxItem Content="Sketchy only" Tag="010"/>
+                            <ComboBoxItem Content="NSFW only" Tag="001"/>
+                            <ComboBoxItem Content="Sketchy + NSFW" Tag="011"/>
+                            <ComboBoxItem Content="Everything" Tag="111"/>
+                        </ComboBox>
+                        <Button x:Name="MarketApiKeyButton" Content="&#xE8D7;" FontFamily="{StaticResource IconFont}" Style="{StaticResource PillButton}" Click="MarketApiKey_Click" Padding="10,8"
+                                ToolTip="Wallhaven API key. Wallhaven needs it for NSFW results." AutomationProperties.Name="Wallhaven API key"/>
+                    </StackPanel>
+                    <WrapPanel x:Name="MarketSortBar" VerticalAlignment="Center" AutomationProperties.Name="Sort wallpapers">
+                        <Button x:Name="MarketTopSortButton" Content="Top this month" Tag="toplist" Click="MarketSort_Click" Style="{StaticResource PillButton}" Background="{DynamicResource AccentSubtleBrush}" Margin="0,0,6,0"/>
+                        <Button x:Name="MarketNewestSortButton" Content="Newest" Tag="date_added" Click="MarketSort_Click" Style="{StaticResource PillButton}" Margin="0,0,6,0"/>
+                        <Button x:Name="MarketFavoritesSortButton" Content="Most loved" Tag="favorites" Click="MarketSort_Click" Style="{StaticResource PillButton}" Margin="0,0,6,0"/>
+                        <Button x:Name="MarketRelevantSortButton" Content="Relevant" Tag="relevance" Click="MarketSort_Click" Style="{StaticResource PillButton}"/>
+                    </WrapPanel>
                 </DockPanel>
             </StackPanel>
         </StackPanel>
@@ -220,44 +226,77 @@
         <Grid x:Name="MarketPane" Grid.Row="2" Grid.RowSpan="2" Margin="20,0,20,18" Visibility="Collapsed">
             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <Grid.ColumnDefinitions><ColumnDefinition x:Name="MarketGalleryColumn" Width="*"/><ColumnDefinition x:Name="MarketDetailsColumn" Width="0"/></Grid.ColumnDefinitions>
-            <Grid Margin="0,0,12,0">
-                <ListBox x:Name="MarketGallery" Background="{DynamicResource PaneBaseBrush}" BorderThickness="0"
+            <Grid Grid.ColumnSpan="2" Margin="0,12,0,0">
+                <ListBox x:Name="MarketGallery" Background="Transparent" BorderThickness="0" Padding="0" Margin="-5,0,-5,0"
                          Foreground="{DynamicResource TextPrimaryBrush}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         ItemContainerStyle="{Binding ItemContainerStyle, ElementName=Gallery}"
+                         VirtualizingPanel.ScrollUnit="Pixel" SizeChanged="MarketGallery_SizeChanged"
                          SelectionChanged="MarketGallery_SelectionChanged" ScrollViewer.ScrollChanged="MarketGallery_ScrollChanged">
+                    <ListBox.Resources>
+                        <sys:Double x:Key="TileWidth">300</sys:Double>
+                        <sys:Double x:Key="TileHeight">169</sys:Double>
+                    </ListBox.Resources>
                     <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="AutomationProperties.Name" Value="{Binding Wallpaper.Name}"/>
+                            <Setter Property="Template"><Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Ring" Margin="4" Padding="1" CornerRadius="12" BorderThickness="2" BorderBrush="Transparent"><ContentPresenter/></Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="True"><Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+                                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value></Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Width="194" ToolTip="{Binding Wallpaper.Name}">
-                                <Grid Height="140">
-                                    <Border Background="{DynamicResource SurfaceRaisedBrush}" CornerRadius="13,13,0,0"/>
+                            <Border Width="{DynamicResource TileWidth}" Height="{DynamicResource TileHeight}" CornerRadius="9" Background="{DynamicResource SurfaceRaisedBrush}"
+                                    local:RoundedClip.Radius="9" ToolTip="{Binding Wallpaper.Name}">
+                                <Grid>
                                     <TextBlock Text="{Binding PreviewStatus}" Style="{StaticResource HintText}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    <Border CornerRadius="13,13,0,0"><Border.Background><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/></Border.Background></Border>
+                                    <Rectangle><Rectangle.Fill><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/></Rectangle.Fill></Rectangle>
+                                    <Border x:Name="Info" VerticalAlignment="Bottom" Padding="10,22,10,8" Opacity="0" IsHitTestVisible="False">
+                                        <Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Color="#00000000" Offset="0"/><GradientStop Color="#B3000000" Offset="1"/>
+                                        </LinearGradientBrush></Border.Background>
+                                        <TextBlock Text="{Binding Wallpaper.Caption}" Foreground="White" FontFamily="{StaticResource MonoFont}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                    </Border>
                                 </Grid>
-                                <StackPanel Margin="13,12">
-                                    <TextBlock Text="{Binding Wallpaper.Name}" FontWeight="SemiBold" FontSize="14"/>
-                                    <TextBlock Text="{Binding Wallpaper.Caption}" Style="{StaticResource HintText}" Margin="0,4,0,0"/>
-                                </StackPanel>
-                            </StackPanel>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                    <Setter TargetName="Info" Property="Opacity" Value="1"/>
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
                 <TextBlock x:Name="MarketEmptyText" Text="Search tags to discover wallpapers" Style="{StaticResource HintText}" TextAlignment="Center" TextWrapping="Wrap" VerticalAlignment="Center" Margin="25" IsHitTestVisible="False"/>
             </Grid>
-            <Border x:Name="MarketDetails" Grid.Column="1" Visibility="Collapsed" Background="Transparent" CornerRadius="0" Padding="16,0,0,0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+            <Border x:Name="MarketDetails" Grid.ColumnSpan="2" Panel.ZIndex="5" Visibility="Collapsed" Background="{DynamicResource BgBrush}" Padding="0,12,0,0">
                 <Grid>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <DockPanel Margin="0,0,0,12">
-                        <Button x:Name="MarketBackToGalleryButton" DockPanel.Dock="Right" Content="← All wallpapers" Click="MarketBackToGallery_Click" VerticalAlignment="Top" Margin="10,0,0,0" Padding="8,5" FontSize="12"/>
+                        <Button x:Name="MarketBackToGalleryButton" DockPanel.Dock="Right" Click="MarketBackToGallery_Click" Style="{StaticResource PillButton}" VerticalAlignment="Top" Margin="10,0,0,0"
+                                ToolTip="Back to all wallpapers (Esc)" AutomationProperties.Name="Back to all wallpapers">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80A;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBlock Text="All wallpapers" VerticalAlignment="Center"/></StackPanel>
+                        </Button>
+                        <TextBlock x:Name="MarketPositionText" DockPanel.Dock="Right" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <StackPanel>
-                            <TextBlock x:Name="MarketNameText" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                            <TextBlock x:Name="MarketInfoText" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                            <TextBlock x:Name="MarketUploaderText" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="MarketNameText" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBlock x:Name="MarketInfoText" Style="{StaticResource HintText}"/>
+                                <TextBlock x:Name="MarketUploaderText" Style="{StaticResource HintText}" Margin="14,0,0,0"/>
+                            </StackPanel>
                         </StackPanel>
                     </DockPanel>
                     <Grid Grid.Row="1">
-                    <Button x:Name="MarketExpandPreviewButton" Click="MarketExpandPreview_Click" Padding="0" BorderThickness="0" ToolTip="Open full-screen preview" AutomationProperties.Name="Open large wallpaper preview" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
-                            <Grid Background="{DynamicResource BgBrush}">
+                    <Button x:Name="MarketExpandPreviewButton" Click="MarketExpandPreview_Click" Padding="0" BorderThickness="0" Background="Transparent" ToolTip="Open full-screen preview" AutomationProperties.Name="Open large wallpaper preview" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand">
+                            <Button.Template><ControlTemplate TargetType="Button"><ContentPresenter/></ControlTemplate></Button.Template>
+                            <Grid Background="#000000" local:RoundedClip.Radius="12">
                                 <Image x:Name="MarketPreview" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
                                 <TextBlock x:Name="MarketPreviewStatus" Style="{StaticResource HintText}" VerticalAlignment="Bottom" Margin="10" IsHitTestVisible="False"/>
                                 <Border Background="{DynamicResource SurfaceRaisedBrush}" CornerRadius="8" Padding="9,5" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8">
@@ -265,6 +304,12 @@
                                 </Border>
                             </Grid>
                     </Button>
+                        <Button x:Name="MarketPreviousButton" Click="MarketPrevious_Click" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0"
+                                Style="{StaticResource PillButton}" Padding="12,12" Content="&#xE76B;" FontFamily="{StaticResource IconFont}" FontSize="16"
+                                ToolTip="Previous wallpaper (←)" AutomationProperties.Name="Previous wallpaper"/>
+                        <Button x:Name="MarketNextButton" Click="MarketNext_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"
+                                Style="{StaticResource PillButton}" Padding="12,12" Content="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="16"
+                                ToolTip="Next wallpaper (→)" AutomationProperties.Name="Next wallpaper"/>
                         <Button x:Name="MarketTagsButton"
                                 Click="MarketTags_Click" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" Padding="12,6"
                                 Background="{DynamicResource SurfaceRaisedBrush}" ToolTip="Browse and search wallpaper tags" AutomationProperties.Name="Browse wallpaper tags">
@@ -292,9 +337,9 @@
                         </Popup>
                     </Grid>
                     <WrapPanel Grid.Row="2" Margin="0,10,0,0">
-                        <Button x:Name="MarketDownloadButton" Content="Download to library" Style="{StaticResource PrimaryButton}" Click="MarketDownload_Click" IsEnabled="False" Margin="0,0,8,4"/>
-                        <Button x:Name="MarketUseButton" Content="Use in profile" Click="MarketUse_Click" Visibility="Collapsed" Margin="0,0,8,4"/>
-                        <Button x:Name="MarketSourceButton" Content="View on Wallhaven ↗" Click="MarketSource_Click" Margin="0,0,0,4" ToolTip="Images belong to their original owners. Downloads are saved to your Belie library."/>
+                        <Button x:Name="MarketDownloadButton" Content="Download to library" Style="{StaticResource AccentPillButton}" Click="MarketDownload_Click" IsEnabled="False" Margin="0,0,8,4" Padding="18,9"/>
+                        <Button x:Name="MarketUseButton" Content="Use in profile" Click="MarketUse_Click" Style="{StaticResource PillButton}" Visibility="Collapsed" Margin="0,0,8,4"/>
+                        <Button x:Name="MarketSourceButton" Content="View on Wallhaven ↗" Click="MarketSource_Click" Style="{StaticResource PillButton}" Margin="0,0,0,4" ToolTip="Images belong to their original owners. Downloads are saved to your Belie library."/>
                     </WrapPanel>
                 </Grid>
             </Border>

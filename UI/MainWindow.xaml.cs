@@ -124,6 +124,8 @@ internal partial class MainWindow : Window
         DashboardPane.IsVisibleChanged += (_, _) => _dashboardTimer.IsEnabled = DashboardPane.IsVisible;
 
         Loaded += OnLoaded;
+        KeyDown += Window_KeyDown;
+        ShowLauncherKeys();
         Closing += OnClosing;
         Closed += (_, _) =>
         {
@@ -139,6 +141,7 @@ internal partial class MainWindow : Window
         foreach (var box in new[] { RandomBox, VideoMuteBox, IconSafeBox })
         { box.Checked += (_, _) => UpdateDraftState(); box.Unchecked += (_, _) => UpdateDraftState(); }
         _additionalWallpapers.CollectionChanged += (_, _) => UpdateDraftState();
+        SetUpRuleEditing();
         SizeChanged += (_, _) => UpdatePreviewFit();
         ProfilePane.SizeChanged += (_, _) => UpdatePreviewFit();
         UpdateDraftState();

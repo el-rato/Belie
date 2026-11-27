@@ -82,7 +82,7 @@ internal sealed class WallpaperSwitcher : Window
     }
 
     private static SolidColorBrush Brush(Color color) { var brush = new SolidColorBrush(color); brush.Freeze(); return brush; }
-    private System.Windows.Media.Brush Outline() => SceneController.TryParseAccent(_settings.SwitcherOutlineColor, out var color) ? Brush(color) : Brush(Color.FromArgb(220, 12, 13, 16));
+    private System.Windows.Media.Brush Outline() => HexColor.TryParse(_settings.SwitcherOutlineColor, out var color) ? Brush(color) : Brush(Color.FromArgb(220, 12, 13, 16));
     private static bool Animates => SystemParameters.ClientAreaAnimation;
 
     /// <param name="current">The wallpaper to begin at.</param>

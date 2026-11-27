@@ -15,6 +15,7 @@ internal partial class MainWindow
         UpdateNotice.ToolTip = updates.Status + " Open settings to update.";
         UpdateNotice.Visibility = SettingsUpdateButton.Visibility = AvailableReleaseNotesButton.Visibility = updates.Available != null ? Visibility.Visible : Visibility.Collapsed;
         CheckUpdatesButton.IsEnabled = SettingsUpdateButton.IsEnabled = !updates.Busy;
+        UpdateShellLayout();
     }
 
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)

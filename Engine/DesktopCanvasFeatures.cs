@@ -112,7 +112,7 @@ internal sealed class DesktopSketch : Grid
         size.SelectionChanged += (_, _) => { _ink.DefaultDrawingAttributes.Width = _ink.DefaultDrawingAttributes.Height = (int)size.SelectedItem; };
         tools.Children.Add(size);
         Children.Add(tools); Grid.SetRow(_ink, 1); Children.Add(_ink);
-        _ink.DefaultDrawingAttributes = new DrawingAttributes { Color = SceneController.TryParseAccent(widget.TextColor, out var inkColor) ? inkColor : Colors.White, Width = 4, Height = 4, FitToCurve = true };
+        _ink.DefaultDrawingAttributes = new DrawingAttributes { Color = HexColor.TryParse(widget.TextColor, out var inkColor) ? inkColor : Colors.White, Width = 4, Height = 4, FitToCurve = true };
         _ink.EditingMode = InkCanvasEditingMode.Ink;
         LoadDrawing();
         _ink.Strokes.StrokesChanged += Changed;

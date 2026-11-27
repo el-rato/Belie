@@ -468,7 +468,7 @@ internal sealed class DesktopWidgetWindow : Window
     }
 
     private static SolidColorBrush ColorBrush(string text, Color fallback)
-        => new(SceneController.TryParseAccent(text, out var color) ? color : fallback);
+        => new(HexColor.TryParse(text, out var color) ? color : fallback);
 
     private void UpdateGlassClip()
     {

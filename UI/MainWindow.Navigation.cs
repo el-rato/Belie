@@ -23,7 +23,11 @@ internal partial class MainWindow
         ShowPane(ProfilePane, ProfilesNavButton, "/  Profiles");
     }
 
-    private void OpenLibrary_Click(object sender, RoutedEventArgs e)
+    private void OpenLibrary_Click(object sender, RoutedEventArgs e) => OpenLibrary(discover: false);
+    private void OpenDiscover_Click(object sender, RoutedEventArgs e) => OpenLibrary(discover: true);
+
+    /// <summary>Library and Discover are two tabs over one view: your wallpapers, or new ones online.</summary>
+    private void OpenLibrary(bool discover)
     {
         if (!TryLeaveWidgetDraft()) return;
         try
@@ -38,7 +42,11 @@ internal partial class MainWindow
                 _libraryView = view;
             }
             _libraryView.SetTargetProfile(_selected?.Name);
-            ShowPane(LibraryPane, LibraryNavButton, "/  Library");
+            // A download in progress keeps Discover on screen until it finishes.
+            if (discover) _libraryView.ShowDiscover();
+            else if (_libraryView.DiscoverShown && !_libraryView.IsWorking) _libraryView.ShowCollection();
+            discover = _libraryView.DiscoverShown;
+            ShowPane(LibraryPane, discover ? DiscoverNavButton : LibraryNavButton, discover ? "/  Discover" : "/  Library");
         }
         catch (Exception ex)
         {
@@ -170,27 +178,59 @@ internal partial class MainWindow
     private void MoreNav_Click(object sender, RoutedEventArgs e) => MorePopup.IsOpen = !MorePopup.IsOpen;
 
     private System.Windows.Controls.Button[] NavigationButtons => new[]
-    { DashboardNavButton, CanvasNavButton, ProfilesNavButton, LibraryNavButton, TopBarNavButton, WorkspacesNavButton, TransitionsNavButton, TeamNavButton, SwitcherNavButton };
+    { DashboardNavButton, CanvasNavButton, ProfilesNavButton, LibraryNavButton, DiscoverNavButton, TopBarNavButton, WorkspacesNavButton, TransitionsNavButton, TeamNavButton, SwitcherNavButton };
 
     private bool? _shellCompact;
 
+    /// <summary>
+    /// Fits the top bar to the window. When it runs out of room it lets go of extras one step at a time:
+    /// the key hint and brand name, then the profile name, then the page names (icons stay, names move to tooltips).
+    /// </summary>
     private void UpdateShellLayout()
     {
         var compact = ActualWidth < 1000;
-        if (_shellCompact == compact) return;
-        _shellCompact = compact;
-        // Narrow windows keep the bar to icons; names stay in tooltips and screen reader labels.
-        foreach (var button in new[] { DashboardNavButton, ProfilesNavButton, CanvasNavButton, LibraryNavButton, MoreNavButton })
+        if (_shellCompact != compact)
+        {
+            _shellCompact = compact;
+            if (SidebarFrame.Visibility == Visibility.Visible) SidebarColumn.Width = new GridLength(compact ? 200 : 236);
+            foreach (var entry in _railEntries) entry.Monitor.ShowName = false;
+        }
+        var available = TopBar.ActualWidth;
+        if (available <= 0) return;
+        var level = 0;
+        for (; level < 3; level++)
+        {
+            ApplyShellLevel(level);
+            if (TopBarWidth() <= available) break;
+        }
+        ApplyShellLevel(level);
+    }
+
+    private double TopBarWidth()
+    {
+        var total = 0d;
+        foreach (UIElement part in TopBar.Children)
+        {
+            if (part.Visibility == Visibility.Collapsed || part is System.Windows.Controls.Primitives.Popup) continue;
+            part.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+            total += part.DesiredSize.Width;
+        }
+        TopBar.InvalidateMeasure();
+        return total + 8; // A little air so pills never touch.
+    }
+
+    private void ApplyShellLevel(int level)
+    {
+        SearchPillKeys.Visibility = BrandName.Visibility = level >= 1 ? Visibility.Collapsed : Visibility.Visible;
+        ActivePillName.Visibility = level >= 2 ? Visibility.Collapsed : Visibility.Visible;
+        var iconsOnly = level >= 3;
+        foreach (var button in new[] { DashboardNavButton, ProfilesNavButton, CanvasNavButton, LibraryNavButton, DiscoverNavButton, MoreNavButton })
         {
             button.ToolTip ??= System.Windows.Automation.AutomationProperties.GetName(button);
             if (button.Content is not System.Windows.Controls.StackPanel content) continue;
-            content.Children[1].Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-            ((FrameworkElement)content.Children[0]).Margin = compact ? new Thickness(0) : new Thickness(0, 0, 8, 0);
+            content.Children[1].Visibility = iconsOnly ? Visibility.Collapsed : Visibility.Visible;
+            ((FrameworkElement)content.Children[0]).Margin = iconsOnly ? new Thickness(0) : new Thickness(0, 0, 8, 0);
         }
-        BrandName.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        ActivePillName.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        if (SidebarFrame.Visibility == Visibility.Visible) SidebarColumn.Width = new GridLength(compact ? 200 : 236);
-        foreach (var entry in _railEntries) entry.Monitor.ShowName = false;
     }
 
     private void EditActiveProfile_Click(object sender, RoutedEventArgs e)

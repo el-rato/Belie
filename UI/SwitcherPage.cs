@@ -97,7 +97,7 @@ internal sealed class SwitcherPage : SettingsPage<AppSettings>
         Hint("Add the Wallpaper module on the Top bar page: click it to open the switcher, scroll over it to step through the wallpapers.");
 
         _look = () => new SwitcherLook(((Choice<SwitcherLayout>)layout.SelectedItem).Value, size.Value / 100, slant.Value, spacing.Value * .4, radius.Value * .4, outline.Value * .7, (int)sides.Value, speed.Value / 100);
-        _outline = () => new SolidColorBrush(SceneController.TryParseAccent(color.Text, out var chosen) ? chosen : System.Windows.Media.Color.FromRgb(12, 13, 16));
+        _outline = () => new SolidColorBrush(HexColor.TryParse(color.Text, out var chosen) ? chosen : System.Windows.Media.Color.FromRgb(12, 13, 16));
         void Show() => _deck.Apply(_look(), _outline());
         layout.SelectionChanged += (_, _) => Show();
         foreach (var slider in new[] { size, slant, sides, spacing, radius, outline, speed }) slider.ValueChanged += (_, _) => Show();

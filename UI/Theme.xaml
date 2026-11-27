@@ -110,7 +110,6 @@
         <Setter Property="UseLayoutRounding" Value="True"/>
     </Style>
 
-    <Style TargetType="{x:Type local:ProfileEditorWindow}" BasedOn="{StaticResource {x:Type Window}}"/>
     <Style TargetType="{x:Type local:LibraryWindow}" BasedOn="{StaticResource {x:Type Window}}"/>
 
     <Style x:Key="FieldLabel" TargetType="TextBlock">

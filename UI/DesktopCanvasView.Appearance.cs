@@ -31,7 +31,7 @@ internal sealed partial class DesktopCanvasView
         choose.Click += (_, _) =>
         {
             using var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true };
-            if (SceneController.TryParseAccent(input.Text, out var color)) dialog.Color = System.Drawing.Color.FromArgb(color.R, color.G, color.B);
+            if (HexColor.TryParse(input.Text, out var color)) dialog.Color = System.Drawing.Color.FromArgb(color.R, color.G, color.B);
             var window = Window.GetWindow(this);
             if (window == null) return;
             if (dialog.ShowDialog(new ColorOwner(new System.Windows.Interop.WindowInteropHelper(window).Handle)) == System.Windows.Forms.DialogResult.OK)

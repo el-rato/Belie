@@ -412,5 +412,5 @@ internal sealed class NowPlayingView : System.Windows.Controls.UserControl
 
     internal static Thickness ItalicRoom(bool italic, double fontSize) => new(0, 0, italic ? Math.Ceiling(fontSize * .25) : 0, 0);
 
-    private static SolidColorBrush ColorBrush(string value, Color fallback) => new(SceneController.TryParseAccent(value, out var color) ? color : fallback);
+    private static SolidColorBrush ColorBrush(string value, Color fallback) => new(HexColor.TryParse(value, out var color) ? color : fallback);
 }

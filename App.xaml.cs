@@ -91,7 +91,7 @@ internal partial class App : System.Windows.Application
             var barIndex = Array.FindIndex(e.Args, a => a.Equals(TopBarProcess.HostArgument, StringComparison.OrdinalIgnoreCase));
             if (barIndex >= 0 || e.Args.Any(a => a.Equals("--widget-host", StringComparison.OrdinalIgnoreCase)))
             {
-                ConfigureRendering(liveWallpaper: false);
+                ConfigureRendering(interactiveShell: false);
                 // Widgets and bars come and go; only the hosts decide when to end.
                 ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 string? Argument(int index) => index >= 0 && index + 1 < e.Args.Length ? e.Args[index + 1] : null;
@@ -134,7 +134,7 @@ internal partial class App : System.Windows.Application
             }
 
             var settingsStore = new SettingsStore(AppPaths.SettingsFile);
-            ConfigureRendering(liveWallpaper: false, interactiveShell: true);
+            ConfigureRendering(interactiveShell: true);
             _exitEvent = LocalIpc.Event(EventResetMode.AutoReset, @"Local\Belie.Exit");
             _canvasActivateEvent = LocalIpc.Event(EventResetMode.AutoReset, @"Local\Belie.Canvas.Open");
             _barSettingsEvent = LocalIpc.Event(EventResetMode.AutoReset, TopBarProcess.SettingsEventName);
@@ -390,10 +390,12 @@ internal partial class App : System.Windows.Application
         _main.Activate();
     }
 
-    internal static void ConfigureRendering(bool liveWallpaper, bool interactiveShell = false)
+    internal static void ConfigureRendering(bool interactiveShell)
     {
         // Keep the background widget process lean without forcing the interactive shell to render on the CPU.
-        System.Windows.Media.RenderOptions.ProcessRenderMode = liveWallpaper || interactiveShell
+        // The main window must never be switched to the CPU later: a see-through window drawn without the
+        // graphics card stutters on every hover and scroll.
+        System.Windows.Media.RenderOptions.ProcessRenderMode = interactiveShell
             ? System.Windows.Interop.RenderMode.Default
             : System.Windows.Interop.RenderMode.SoftwareOnly;
     }

@@ -148,7 +148,7 @@ internal sealed class WallpaperTransition : IDisposable
         var field = TransitionField.For(options, columns, rows, () =>
             ((cutout is { } cut ? SubjectFinder.FromCutout(cut.Map, cut.Place, width, height) : null) ?? SubjectFinder.Find(small, width, height)) is { } mask
             ? SubjectFinder.Scale(mask, width, height, columns, rows) : null, random);
-        var glow = SceneController.TryParseAccent(options.GlowColor, out var chosen) ? Color.FromArgb(chosen.R, chosen.G, chosen.B) : Vivid(small);
+        var glow = HexColor.TryParse(options.GlowColor, out var chosen) ? Color.FromArgb(chosen.R, chosen.G, chosen.B) : Vivid(small);
         return (field, glow, Lightest(small), options with { Cell = cell });
     }
 

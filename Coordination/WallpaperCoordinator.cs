@@ -26,7 +26,6 @@ internal sealed class WallpaperCoordinator : IDisposable
     private readonly ProfileResolver _resolver;
     private readonly TimeProvider _timeProvider;
     private readonly List<ActivityEntry> _recent = new();
-    private readonly SceneController _scene = new();
     private readonly Action<WallpaperProfile> _applyWallpaper;
     private readonly SlideshowController _slideshow;
     private string _currentMediaPath = "";
@@ -56,7 +55,6 @@ internal sealed class WallpaperCoordinator : IDisposable
         _resolver = new ProfileResolver(_timeProvider);
         _applyWallpaper = applyWallpaper ?? ApplyWallpaper;
         _slideshow = new SlideshowController(ApplyMedia);
-        _scene.StateChanged += () => StateChanged?.Invoke();
         _triggers = new TriggerManager();
         _triggers.TriggerStateChanged += OnTriggerStateChanged;
         _tickTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
@@ -74,10 +72,6 @@ internal sealed class WallpaperCoordinator : IDisposable
 
     public string Summary => _summary;
     public DateTime LocalNow => _timeProvider.GetLocalNow().DateTime;
-    public string AmbientStatus => _scene.AudioStatus;
-    public bool HasAmbientAudio => _scene.HasAudio;
-    public bool AmbientIsMuted => _scene.IsMuted;
-    public void ToggleAmbientMuted() => _scene.ToggleMuted();
     public void CheckNow() => Evaluate("periodic check");
 
     public void Init()
@@ -219,7 +213,6 @@ internal sealed class WallpaperCoordinator : IDisposable
         {
             Logger.Warn("Active profile was deleted; leaving wallpaper unchanged until the next automatic choice.");
             _currentId = null;
-            _scene.Dispose();
             _settings.LastActiveProfileId = "";
             settingsChanged = true;
         }
@@ -329,7 +322,6 @@ internal sealed class WallpaperCoordinator : IDisposable
     {
         _currentId = profile.Id;
         _source = source;
-        _scene.Apply(profile);
         _applyWallpaper(profile);
         // A workspace's profile is not where Belie should start next time.
         var temporary = source == ResolutionSource.Workspace || source == ResolutionSource.Manual && _resolver.GetManualOverride(_profiles)?.IsTimed == true;
@@ -366,7 +358,6 @@ internal sealed class WallpaperCoordinator : IDisposable
         // GIFs discovered in a folder retain their existing static slideshow behavior.
         var live = WallpaperEngine.IsLiveFile(path) && (!Directory.Exists(profile.FolderPath)
             || profile.AdditionalWallpaperPaths.Contains(path, StringComparer.OrdinalIgnoreCase));
-        App.ConfigureRendering(live);
         var generation = WallpaperEngine.NextApplyGeneration();
         if (live)
         {
@@ -469,6 +460,5 @@ internal sealed class WallpaperCoordinator : IDisposable
         _transition.Dispose();
         _live.Dispose();
         _iconSafeLive.Dispose();
-        _scene.Dispose();
     }
 }

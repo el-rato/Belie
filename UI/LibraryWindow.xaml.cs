@@ -39,10 +39,21 @@ internal partial class LibraryWindow : Window
         LibraryRoot.RowDefinitions[0].Height = new GridLength(0);
         LibraryTitle.Visibility = Visibility.Collapsed;
         LibraryCloseButton.Visibility = Visibility.Collapsed;
+        // Inside the app, Library and Discover are separate tabs in the top bar.
+        LibraryTabs.Visibility = Visibility.Collapsed;
         var root = (FrameworkElement)Content;
         Content = null;
         return root;
     }
+
+    /// <summary>Shows your own wallpapers.</summary>
+    public void ShowCollection() => LocalLibrary_Click(this, new RoutedEventArgs());
+
+    /// <summary>Shows wallpapers to discover online.</summary>
+    public void ShowDiscover() => Marketplace_Click(this, new RoutedEventArgs());
+
+    /// <summary>True while Discover is showing rather than your own wallpapers.</summary>
+    public bool DiscoverShown => MarketPane.Visibility == Visibility.Visible;
 
     public WallpaperAsset? Result { get; private set; }
     public IReadOnlyList<WallpaperAsset> SelectedAssets { get; private set; } = Array.Empty<WallpaperAsset>();

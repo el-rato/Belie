@@ -79,7 +79,7 @@ internal sealed class ClockWidgetView : System.Windows.Controls.UserControl
     {
         _widget = widget;
         if (_skin != widget.ClockSkin) BuildSkin(widget.ClockSkin);
-        Foreground = SceneController.TryParseAccent(widget.TextColor, out var color) ? new SolidColorBrush(color) : Brushes.White;
+        Foreground = HexColor.TryParse(widget.TextColor, out var color) ? new SolidColorBrush(color) : Brushes.White;
         var script = widget.ClockSkin == ClockSkin.Script;
         foreach (var text in new[] { _day, _date, _time, _greeting })
         {

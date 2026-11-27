@@ -531,10 +531,10 @@ internal sealed partial class DesktopCanvasView : UserControl
             throw new InvalidOperationException("Enter a complete http:// or https:// website address.");
         if (_selected.Kind == DesktopWidgetKind.Image && (!File.Exists(content) || !WallpaperEngine.IsImageFile(content)))
             throw new InvalidOperationException("Choose an existing image file.");
-        if (!SceneController.TryParseAccent(_textColor.Text.Trim(), out _) || !SceneController.TryParseAccent(_backgroundColor.Text.Trim(), out _)
-            || !SceneController.TryParseAccent(_borderColor.Text.Trim(), out _))
+        if (!HexColor.TryParse(_textColor.Text.Trim(), out _) || !HexColor.TryParse(_backgroundColor.Text.Trim(), out _)
+            || !HexColor.TryParse(_borderColor.Text.Trim(), out _))
             throw new InvalidOperationException("Use #RRGGBB for text and background colors, or choose a color.");
-        if ((_selected.Kind == DesktopWidgetKind.NowPlaying || IsInfo(_selected.Kind)) && !SceneController.TryParseAccent(_musicAccent.Text.Trim(), out _))
+        if ((_selected.Kind == DesktopWidgetKind.NowPlaying || IsInfo(_selected.Kind)) && !HexColor.TryParse(_musicAccent.Text.Trim(), out _))
             throw new InvalidOperationException("Use #RRGGBB for the accent, or choose a color.");
         var target = _selected.Target;
         if (_selected.Kind == DesktopWidgetKind.Countdown)

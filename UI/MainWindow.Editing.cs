@@ -26,6 +26,7 @@ internal partial class MainWindow
         {
             return InvalidField("Slideshow interval must be a whole number between 0 and 1440 minutes.", IntervalBox, 1);
         }
+        if (!TryCollectRules(out var rules, out var triggers)) return false;
 
         profile.Name = name;
         profile.FolderPath = FolderBox.Text.Trim();
@@ -38,6 +39,8 @@ internal partial class MainWindow
         profile.SlideshowRandom = RandomBox.IsChecked == true;
         profile.VideoMuted = VideoMuteBox.IsChecked != false;
         profile.IconFriendlyLive = IconSafeBox.IsChecked == true;
+        profile.Schedule = rules;
+        profile.EventTriggers = triggers;
         return true;
     }
 
@@ -171,44 +174,32 @@ internal partial class MainWindow
             ++_pathVersion;
             NameBox.Text = "";
             FolderBox.Text = "";
-            ScheduleSummary.Text = "";
-            TriggerSummary.Text = "";
+            LoadRules(null);
             SetPathStatus("TextTertiaryBrush", "No location set");
             PreviewMon.ScreenSource = null;
             PreviewMon.IsVideo = false;
         }
     }
 
+    /// <summary>
+    /// Makes the profile straight away and opens it on the Profiles page, name ready to type over,
+    /// so there is no separate window to fill in first.
+    /// </summary>
     private void AddProfile(WallpaperAsset? asset = null, WallpaperProfile? template = null)
     {
-        var model = template ?? new WallpaperProfile { Name = asset?.Name ?? "", FolderPath = asset?.FilePath ?? "" };
-        var editor = new ProfileEditorWindow(model, isNew: true, libraryStore: _libraryStore) { Owner = this };
-        if (editor.ShowDialog() == true && editor.Result != null)
-        {
-            if (!TrySaveProfile(editor.Result))
-            {
-                return;
-            }
-            _coordinator.ProfilesEdited();
-            SearchBox.Clear();
-            BuildRail();
-            Select(editor.Result.Id);
-        }
-    }
-
-    private void EditRules_Click(object sender, RoutedEventArgs e)
-    {
-        if (_selected == null) return;
-        var draft = DraftGuard.Clone(_selected);
-        if (!CollectFields(draft)) return;
-        var editor = new ProfileEditorWindow(draft, isNew: false, libraryStore: _libraryStore) { Owner = this };
-        ((System.Windows.Controls.TabControl)editor.FindName("EditorTabs")).SelectedIndex =
-            ((sender as FrameworkElement)?.Tag as string) switch { "Mood" => 3, "Rules" => 2, "Playback" => 1, _ => 0 };
-        if (editor.ShowDialog() == true && editor.Result != null && TrySaveProfile(editor.Result))
-        {
-            _coordinator.ProfilesEdited();
-            _savedDraft = DraftSnapshot(); BuildRail(); SelectProfile(editor.Result.Id, true);
-            ProfileMessage.Text = "Changes saved"; ShowToast("Saved " + editor.Result.Name);
-        }
+        var profile = template ?? new WallpaperProfile { Name = asset?.Name ?? "", FolderPath = asset?.FilePath ?? "" };
+        var baseName = string.IsNullOrWhiteSpace(profile.Name) ? "New profile" : profile.Name.Trim();
+        profile.Name = baseName;
+        for (var suffix = 2; _coordinator.Profiles.Any(p => string.Equals(p.Name, profile.Name, StringComparison.CurrentCultureIgnoreCase)); suffix++)
+            profile.Name = $"{baseName} {suffix}";
+        if (!TrySaveProfile(profile)) return;
+        _coordinator.ProfilesEdited();
+        SearchBox.Clear();
+        BuildRail();
+        Select(profile.Id);
+        ProfileTabs.SelectedIndex = 0;
+        ProfileMessage.Text = string.IsNullOrWhiteSpace(profile.FolderPath) && profile.AdditionalWallpaperPaths.Count == 0
+            ? "Name it and pick a wallpaper" : "Created";
+        Dispatcher.BeginInvoke(() => { NameBox.Focus(); NameBox.SelectAll(); }, System.Windows.Threading.DispatcherPriority.Input);
     }
 }

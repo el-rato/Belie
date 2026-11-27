@@ -21,17 +21,12 @@ public sealed partial class LibraryWindowTests
     private static void CheckActivityAndSceneControls(MainWindow main, WallpaperCoordinator coordinator, TestClock clock,
         WallpaperProfile profile, string imagePath)
     {
-        profile.SceneAccent = ScenePresets.Create("Focus").SceneAccent;
         coordinator.SwitchManually(profile.Id);
         Click(main, "DashboardNavButton");
         Assert.Equal(Visibility.Visible, ((FrameworkElement)main.FindName("DashboardPane")).Visibility);
         Assert.Equal(Visibility.Collapsed, ((FrameworkElement)main.FindName("ProfilePane")).Visibility);
         Assert.Equal("Focus", ((TextBlock)main.FindName("ActiveProfileText")).Text);
         Assert.Equal("Manual choice", ((TextBlock)main.FindName("ActivationReasonText")).Text);
-        Assert.True(WallpaperProfiles.Engine.SceneController.TryParseAccent(profile.SceneAccent, out var color));
-        Assert.Equal(color, (System.Windows.Media.Color)System.Windows.Application.Current.Resources["SceneAccentColor"]);
-        main.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
-        Assert.Equal(color, ((SolidColorBrush)main.FindResource("AccentBrush")).Color);
         Click(main, "StartOverrideButton");
         Assert.True(coordinator.GetActivitySnapshot().ManualOverride?.IsTimed);
         Assert.Contains("60 min left", ((TextBlock)main.FindName("OverrideStatusText")).Text);
@@ -83,26 +78,5 @@ public sealed partial class LibraryWindowTests
         Click(main, "SettingsButton");
         RenderWorkspace(main, "activity-scrolled", 880, 650);
         dashboard.ScrollToTop(); main.UpdateLayout();
-
-        var editor = new ProfileEditorWindow(new WallpaperProfile { FolderPath = imagePath }, isNew: true)
-            { ShowInTaskbar = false, Opacity = 0, ChooseDraftAction = () => DraftChoice.Discard };
-        editor.Loaded += (_, _) =>
-        {
-            ((ComboBox)editor.FindName("PresetCombo")).SelectedItem = "Gaming";
-            Assert.Equal("Gaming", ((TextBox)editor.FindName("NameBox")).Text);
-            Assert.Equal("#ADBDF4", ((TextBox)editor.FindName("SceneAccentBox")).Text);
-            Assert.True(((CheckBox)editor.FindName("AmbientMuteBox")).IsChecked);
-            Assert.Equal(15, ((Slider)editor.FindName("AmbientVolumeSlider")).Value);
-            ((TextBox)editor.FindName("AudioPathBox")).Text = Path.Combine(Path.GetDirectoryName(imagePath)!, "ambient.wav");
-            ((TabControl)editor.FindName("EditorTabs")).SelectedIndex = 3;
-            RenderWorkspace(editor, "scene-editor", 680, 720);
-            typeof(ProfileEditorWindow).GetMethod("Save_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .Invoke(editor, new object[] { editor, new RoutedEventArgs() });
-        };
-        Assert.True(editor.ShowDialog());
-        Assert.Equal("#ADBDF4", editor.Result?.SceneAccent);
-        Assert.Equal(15, editor.Result?.AmbientVolume);
-        Assert.True(editor.Result?.AmbientMuted);
-        Assert.EndsWith("ambient.wav", editor.Result?.AmbientAudioPath);
     }
 }

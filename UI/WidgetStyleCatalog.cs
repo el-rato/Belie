@@ -317,8 +317,8 @@ internal sealed class WidgetStyleCatalogWindow : Window
             if (preset == null || string.IsNullOrWhiteSpace(preset.Name) || preset.Name.Length > 100 || preset.Style == null
                 || !Categories.Any(category => category.Kinds.Contains(preset.Style.Kind))
                 || !Enum.IsDefined(preset.Style.ClockSkin) || !Enum.IsDefined(preset.Style.SpectrumSkin)
-                || !SceneController.TryParseAccent(preset.Style.TextColor, out _) || !SceneController.TryParseAccent(preset.Style.BackgroundColor, out _)
-                || !SceneController.TryParseAccent(preset.Style.BorderColor, out _)) throw new InvalidDataException("Choose a valid Belie widget skin.");
+                || !HexColor.TryParse(preset.Style.TextColor, out _) || !HexColor.TryParse(preset.Style.BackgroundColor, out _)
+                || !HexColor.TryParse(preset.Style.BorderColor, out _)) throw new InvalidDataException("Choose a valid Belie widget skin.");
             preset.Style.FontSize = double.IsFinite(preset.Style.FontSize) ? Math.Clamp(preset.Style.FontSize, 10, 96) : 36;
             preset.Style.Width = double.IsFinite(preset.Style.Width) ? Math.Clamp(preset.Style.Width, 120, 1600) : 460;
             preset.Style.Height = double.IsFinite(preset.Style.Height) ? Math.Clamp(preset.Style.Height, 80, 1200) : 280;

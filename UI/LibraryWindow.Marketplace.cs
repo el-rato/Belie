@@ -64,6 +64,8 @@ internal partial class LibraryWindow
     private void InitializeMarketplace()
     {
         MarketGallery.ItemsSource = _marketEntries;
+        _marketEntries.CollectionChanged += (_, _) => UpdateMarketSteps();
+        LibraryRoot.PreviewKeyDown += MarketViewer_KeyDown;
         LibraryRoot.Unloaded += (_, _) => CancelMarketRequests();
         Closed += (_, _) => CancelMarketRequests();
         LibraryRoot.Loaded += async (_, _) =>
@@ -287,6 +289,7 @@ internal partial class LibraryWindow
                 MarketEmptyText.Visibility = _marketEntries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                 MarketLoadMoreButton.Visibility = _marketPage < _marketLastPage ? Visibility.Visible : Visibility.Collapsed;
                 MarketLoadMoreButton.IsEnabled = true;
+                UpdateMarketSteps();
                 MarketDownloadButton.IsEnabled = _marketSelected != null && _marketMetadata.ContainsKey(_marketSelected.Id)
                     && _marketDownloadedAsset == null && !_marketDownloading;
             }
@@ -372,9 +375,9 @@ internal partial class LibraryWindow
         MarketTagStatus.Text = "Loading website tags…";
         MarketUploaderText.Text = "";
         MarketDetails.Visibility = entry == null ? Visibility.Collapsed : Visibility.Visible;
-        MarketDiscoveryTitle.Visibility = MarketSearchHint.Visibility = entry == null ? Visibility.Visible : Visibility.Collapsed;
-        MarketGalleryColumn.Width = entry == null ? new GridLength(1, GridUnitType.Star) : new GridLength(236);
-        MarketDetailsColumn.Width = entry == null ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        // The viewer takes the whole page; the search bar comes back with the grid.
+        MarketFilters.Visibility = entry == null ? Visibility.Visible : Visibility.Collapsed;
+        UpdateMarketSteps();
         _marketPreviewIsFullSize = false;
         MarketPreviewStatus.Text = entry == null ? "" : "Loading large preview…";
         MarketPreview.Source = entry?.Thumbnail;
@@ -409,6 +412,54 @@ internal partial class LibraryWindow
             if (!token.IsCancellationRequested && !_closed && _marketSelected?.Id == entry.Wallpaper.Id)
                 MarketPreviewStatus.Text = "Showing thumbnail · Expand to retry full-size preview";
         }
+    }
+
+    /// <summary>Tiles keep a 16:9 shape and stretch so each row fills the page edge to edge.</summary>
+    private void MarketGallery_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var width = Math.Max(200, e.NewSize.Width - 18); // Room for the scroll bar.
+        var columns = Math.Max(1, (int)Math.Round(width / 300));
+        var tile = Math.Floor(width / columns) - 14; // Ring, padding and margin around each tile.
+        MarketGallery.Resources["TileWidth"] = tile;
+        MarketGallery.Resources["TileHeight"] = Math.Round(tile * 9 / 16);
+    }
+
+    private bool MarketHasMorePages => _marketPage < _marketLastPage;
+
+    private void UpdateMarketSteps()
+    {
+        var index = MarketGallery.SelectedIndex;
+        MarketPreviousButton.IsEnabled = index > 0 && !_marketDownloading;
+        MarketNextButton.IsEnabled = index >= 0 && (index < _marketEntries.Count - 1 || MarketHasMorePages) && !_marketDownloading;
+        MarketPositionText.Text = index < 0 ? "" : $"{index + 1} of {Math.Max(_marketTotal, _marketEntries.Count):N0}";
+    }
+
+    private void MarketPrevious_Click(object sender, RoutedEventArgs e) => _ = StepMarketAsync(-1);
+    private void MarketNext_Click(object sender, RoutedEventArgs e) => _ = StepMarketAsync(1);
+
+    /// <summary>Moves the viewer to the neighbouring wallpaper, fetching the next page when it runs out.</summary>
+    private async Task StepMarketAsync(int by)
+    {
+        if (_marketDownloading || _busy || MarketGallery.SelectedIndex < 0) return;
+        var target = MarketGallery.SelectedIndex + by;
+        if (target >= _marketEntries.Count && MarketHasMorePages && !_marketLoading
+            && _marketSearchCancellation is { IsCancellationRequested: false } request)
+            await LoadMarketPageAsync(request);
+        if (target < 0 || target >= _marketEntries.Count) return;
+        MarketGallery.SelectedIndex = target;
+    }
+
+    private void MarketViewer_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (MarketDetails.Visibility != Visibility.Visible || MarketTagsPopup.IsOpen || e.OriginalSource is System.Windows.Controls.TextBox) return;
+        switch (e.Key)
+        {
+            case System.Windows.Input.Key.Left: _ = StepMarketAsync(-1); break;
+            case System.Windows.Input.Key.Right: _ = StepMarketAsync(1); break;
+            case System.Windows.Input.Key.Escape: MarketBackToGallery_Click(this, e); break;
+            default: return;
+        }
+        e.Handled = true;
     }
 
     private void MarketBackToGallery_Click(object sender, RoutedEventArgs e)
@@ -554,6 +605,7 @@ internal partial class LibraryWindow
         _marketDownloading = true;
         SetBusy(true);
         LocalLibraryTab.IsEnabled = MarketFilters.IsEnabled = MarketGallery.IsEnabled = MarketTags.IsEnabled = false;
+        UpdateMarketSteps();
         MarketDownloadButton.IsEnabled = MarketUseButton.IsEnabled = MarketLoadMoreButton.IsEnabled = false;
         MarketCancelButton.Visibility = Visibility.Visible;
         _marketDownloadCancellation?.Dispose();
@@ -603,6 +655,7 @@ internal partial class LibraryWindow
             {
                 SetBusy(false);
                 LocalLibraryTab.IsEnabled = MarketFilters.IsEnabled = MarketGallery.IsEnabled = MarketTags.IsEnabled = true;
+                UpdateMarketSteps();
                 MarketDownloadButton.IsEnabled = _marketDownloadedAsset == null;
                 MarketUseButton.IsEnabled = MarketLoadMoreButton.IsEnabled = true;
                 MarketCancelButton.Visibility = MarketProgress.Visibility = Visibility.Collapsed;

@@ -10,9 +10,14 @@ internal sealed class ShellSettings
 {
     public GlassLevel Glass { get; set; } = GlassLevel.Strong;
 
+    /// <summary>Keys that open the launcher while Belie's window is focused.</summary>
+    public List<string> LauncherKeys { get; set; } = new() { "Ctrl+Space", "Ctrl+K" };
+
     public ShellSettings Normalize()
     {
         if (!Enum.IsDefined(Glass)) Glass = GlassLevel.Strong;
+        LauncherKeys = LauncherKeys?.Where(key => !string.IsNullOrWhiteSpace(key)).Select(key => key.Trim()).Distinct().ToList() ?? new();
+        if (LauncherKeys.Count == 0) LauncherKeys = new() { "Ctrl+Space", "Ctrl+K" };
         return this;
     }
 }

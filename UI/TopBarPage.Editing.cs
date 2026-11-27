@@ -91,7 +91,7 @@ internal sealed partial class TopBarPage
     /// <summary>Includes the colors the stylesheet names.</summary>
     private BarPalette Palette()
     {
-        static System.Windows.Media.Color Of(string text) => SceneController.TryParseAccent(text, out var color) ? color : System.Windows.Media.Colors.Gray;
+        static System.Windows.Media.Color Of(string text) => HexColor.TryParse(text, out var color) ? color : System.Windows.Media.Colors.Gray;
         var palette = new BarPalette(Of(_shown.BackgroundColor), Of(_shown.TextColor), Of(_shown.AccentColor), Of(_shown.BorderColor));
         palette.Define(BarStylesheet.Parse(_css.Text).Colors);
         return palette;

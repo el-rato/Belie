@@ -38,7 +38,7 @@
                     <TextBlock Text="dev" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="{DynamicResource SignalBrush}" VerticalAlignment="Center"/>
                 </Border>
             </StackPanel>
-            <Border Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="19" Padding="4"
+            <Border x:Name="NavBar" Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="19" Padding="4"
                     Background="{DynamicResource PaneBrush}" BorderBrush="{DynamicResource PaneEdgeBrush}" BorderThickness="1">
                 <StackPanel Orientation="Horizontal">
                         <Button x:Name="DashboardNavButton" AutomationProperties.Name="Home" Style="{StaticResource NavPill}" Click="ShowDashboard_Click">
@@ -52,6 +52,9 @@
                         </Button>
                         <Button x:Name="LibraryNavButton" AutomationProperties.Name="Library" Style="{StaticResource NavPill}" Click="OpenLibrary_Click" ToolTip="Wallpaper library">
                             <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B9;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBlock Text="Library" VerticalAlignment="Center"/></StackPanel>
+                        </Button>
+                        <Button x:Name="DiscoverNavButton" AutomationProperties.Name="Discover" Style="{StaticResource NavPill}" Click="OpenDiscover_Click" ToolTip="Find new wallpapers online">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE774;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBlock Text="Discover" VerticalAlignment="Center"/></StackPanel>
                         </Button>
                     <Grid>
                         <Button x:Name="MoreNavButton" AutomationProperties.Name="More sections" Style="{StaticResource NavPill}" Click="MoreNav_Click" ToolTip="Top bar, workspaces, transitions, team and switcher">
@@ -81,7 +84,13 @@
                     </Grid>
                 </StackPanel>
             </Border>
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel x:Name="StatusPills" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="SearchPill" Style="{StaticResource StatusPill}" Click="Search_Click" AutomationProperties.Name="Search">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SearchPillKeys" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="9,0,0,0"/>
+                    </StackPanel>
+                </Button>
                 <Button x:Name="UpdateNotice" Style="{StaticResource StatusPill}" Click="Settings_Click" Visibility="Collapsed" AutomationProperties.Name="Update available">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE896;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentTextBrush}" VerticalAlignment="Center" Margin="0,0,7,0"/><TextBlock Text="Update" VerticalAlignment="Center"/></StackPanel>
                 </Button>
@@ -361,21 +370,88 @@
                             <Border Style="{StaticResource SettingsCard}"><DockPanel><CheckBox DockPanel.Dock="Right" x:Name="IconSafeBox" Style="{StaticResource SwitchStyle}" VerticalAlignment="Center" AutomationProperties.Name="Keep icons visible" ToolTip="Plays video at a reduced frame rate, keeping icons and taskbar visible."/><StackPanel Margin="0,0,14,0"><TextBlock Text="Keep icons visible" FontWeight="SemiBold"/></StackPanel></DockPanel></Border>
                         </StackPanel>
                 </TabItem>
-                <TabItem Header="Automation"><StackPanel>
-                            <TextBlock Text="Automation" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold"/>
-                            <Border Style="{StaticResource SettingsCard}"><StackPanel>
-                            <TextBlock Text="Schedules" Style="{StaticResource FieldLabel}"/>
-                            <TextBlock x:Name="ScheduleSummary" TextWrapping="Wrap"/>
-                            </StackPanel></Border><Border Style="{StaticResource SettingsCard}"><StackPanel>
-                            <TextBlock Text="Triggers" Style="{StaticResource FieldLabel}" Margin="0,16,0,6"/>
-                            <TextBlock x:Name="TriggerSummary" TextWrapping="Wrap"/>
-                            </StackPanel></Border>
-                            <Button x:Name="EditRulesButton" Content="Edit schedules &amp; triggers" Tag="Rules" Click="EditRules_Click" HorizontalAlignment="Left" Margin="0,16,0,0"/>
-                </StackPanel></TabItem>
-                <TabItem Header="Mood"><StackPanel>
-                    <TextBlock Text="Appearance &amp; audio" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold"/>
-                    <Button Content="Edit mood" Tag="Mood" Click="EditRules_Click" HorizontalAlignment="Left" Padding="16,10"/>
-                <TextBlock x:Name="SceneSummary" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                <TabItem Header="Automation"><StackPanel Margin="0,14,0,8">
+                    <StackPanel.Resources>
+                        <!-- One round chip per day; lit when the schedule runs that day. -->
+                        <Style x:Key="DayChip" TargetType="CheckBox">
+                            <Setter Property="Width" Value="30"/><Setter Property="Height" Value="30"/><Setter Property="Margin" Value="0,0,5,0"/>
+                            <Setter Property="Cursor" Value="Hand"/><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+                            <Setter Property="Template"><Setter.Value>
+                                <ControlTemplate TargetType="CheckBox">
+                                    <Border x:Name="Chip" CornerRadius="15" Background="Transparent" BorderBrush="{DynamicResource CardEdgeBrush}" BorderThickness="1">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextBlock.FontSize="12" TextBlock.FontWeight="SemiBold"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chip" Property="Background" Value="{DynamicResource CardHoverBrush}"/></Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Chip" Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
+                                            <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value></Setter>
+                        </Style>
+                        <Style x:Key="RowRemove" TargetType="Button" BasedOn="{StaticResource PillButton}">
+                            <Setter Property="Padding" Value="9,6"/><Setter Property="Margin" Value="12,0,0,0"/><Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="ToolTip" Value="Remove"/><Setter Property="Content" Value="&#xE711;"/><Setter Property="FontFamily" Value="{StaticResource IconFont}"/>
+                        </Style>
+                    </StackPanel.Resources>
+
+                    <DockPanel>
+                        <Button x:Name="AddRuleButton" DockPanel.Dock="Right" Content="+  Add schedule" Click="AddRule_Click" Style="{StaticResource PillButton}" VerticalAlignment="Center"/>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Schedules" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Show this profile on these days, between these times" Style="{StaticResource HintText}" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <ItemsControl x:Name="RulesList" Margin="0,12,0,0" AutomationProperties.Name="Schedules">
+                        <ItemsControl.ItemTemplate><DataTemplate>
+                            <Border Style="{StaticResource GlassCard}" Padding="14,10" Margin="0,0,0,8">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource RowRemove}" Click="RemoveRule_Click" AutomationProperties.Name="Remove schedule"/>
+                                    <WrapPanel VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Margin="0,3,14,3"><CheckBox Content="M" IsChecked="{Binding Days[1]}" Style="{StaticResource DayChip}"/><CheckBox Content="T" IsChecked="{Binding Days[2]}" Style="{StaticResource DayChip}"/><CheckBox Content="W" IsChecked="{Binding Days[3]}" Style="{StaticResource DayChip}"/><CheckBox Content="T" IsChecked="{Binding Days[4]}" Style="{StaticResource DayChip}"/><CheckBox Content="F" IsChecked="{Binding Days[5]}" Style="{StaticResource DayChip}"/><CheckBox Content="S" IsChecked="{Binding Days[6]}" Style="{StaticResource DayChip}"/><CheckBox Content="S" IsChecked="{Binding Days[0]}" Style="{StaticResource DayChip}"/></StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
+                                            <ComboBox Width="88" ItemsSource="{x:Static local:EnumLists.Times}" SelectedItem="{Binding StartTimeText}" AutomationProperties.Name="Start time"/>
+                                            <TextBlock Text="to" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="10,0"/>
+                                            <ComboBox Width="88" ItemsSource="{x:Static local:EnumLists.Times}" SelectedItem="{Binding EndTimeText}" AutomationProperties.Name="End time"/>
+                                        </StackPanel>
+                                    </WrapPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="NoRulesHint" Text="No schedules yet" Style="{StaticResource HintText}" Margin="0,2,0,0"/>
+
+                    <DockPanel Margin="0,28,0,0">
+                        <Button x:Name="AddTriggerButton" DockPanel.Dock="Right" Content="+  Add trigger" Click="AddTrigger_Click" Style="{StaticResource PillButton}" VerticalAlignment="Center"/>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Triggers" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Or show it when something happens on your PC" Style="{StaticResource HintText}" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <ItemsControl x:Name="TriggersList" Margin="0,12,0,0" AutomationProperties.Name="Triggers">
+                        <ItemsControl.ItemTemplate><DataTemplate>
+                            <Border Style="{StaticResource GlassCard}" Padding="14,10" Margin="0,0,0,8">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource RowRemove}" Click="RemoveTrigger_Click" AutomationProperties.Name="Remove trigger"/>
+                                    <WrapPanel VerticalAlignment="Center">
+                                        <ComboBox Width="240" Margin="0,3,12,3" ItemsSource="{x:Static local:EnumLists.TriggerTypes}" SelectedValue="{Binding Type}"
+                                                  SelectedValuePath="Key" DisplayMemberPath="Value" AutomationProperties.Name="When"/>
+                                        <TextBox Width="140" Margin="0,3,12,3" Text="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" ToolTip="{Binding Hint}" AutomationProperties.Name="Value"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3" ToolTip="When several rules match, the higher priority wins (1–99)">
+                                            <TextBlock Text="priority" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBox Width="48" Text="{Binding PriorityText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Priority"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Hint}" Style="{StaticResource HintText}" FontSize="12" VerticalAlignment="Center" Margin="0,3,0,3" Width="Auto"/>
+                                    </WrapPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="NoTriggersHint" Text="No triggers yet" Style="{StaticResource HintText}" Margin="0,2,0,0"/>
                 </StackPanel></TabItem>
                 </TabControl>
             </StackPanel>
@@ -387,7 +463,7 @@
 
         <ScrollViewer x:Name="DashboardPane" Visibility="Collapsed"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="28,26" MaxWidth="760">
+            <StackPanel Margin="36,26,36,28" MaxWidth="1320">
                 <Grid Margin="0,0,0,22">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,12,0">
@@ -397,58 +473,72 @@
                         <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B9;" FontFamily="{StaticResource IconFont}" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock Text="Explore library"/></StackPanel>
                     </Button>
                 </Grid>
-                <Border CornerRadius="20" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                            <GradientStop Color="{DynamicResource SceneAccentSubtleColor}" Offset="0"/>
-                            <GradientStop Color="{DynamicResource BgColor}" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                    <Grid MinHeight="270">
-                        <Border CornerRadius="19">
-                            <Border.Background><LinearGradientBrush StartPoint="0,1" EndPoint="1,0">
-                                <GradientStop Color="#123D40" Offset="0"/><GradientStop Color="#658F78" Offset="0.55"/><GradientStop Color="#D7BD91" Offset="1"/>
-                            </LinearGradientBrush></Border.Background>
-                        </Border>
-                        <Border CornerRadius="19" Opacity="1">
-                            <Border.Background><ImageBrush x:Name="ActivityWallpaperBrush" Stretch="UniformToFill"/></Border.Background>
-                        </Border>
-                        <Border CornerRadius="19" IsHitTestVisible="False">
-                            <Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#05090F0B" Offset="0"/>
-                                <GradientStop Color="#D9090F0B" Offset="1"/>
-                            </LinearGradientBrush></Border.Background>
-                        </Border>
-                        <Grid Margin="24">
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <DockPanel>
-                                <TextBlock DockPanel.Dock="Right" Text="YOUR DESKTOP" Foreground="#F3F8F1" FontSize="12" FontWeight="SemiBold"/>
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse x:Name="ActiveStateDot" Width="6" Height="6" Fill="{DynamicResource TextTertiaryBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="ActiveStateText" Text="NO PROFILE APPLIED" Foreground="#E1EBE4" FontSize="12" FontWeight="SemiBold"/>
-                                </StackPanel>
-                            </DockPanel>
-                            <StackPanel Grid.Row="2">
-                                <Grid>
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <StackPanel Margin="0,0,12,0">
-                                        <TextBlock x:Name="ActiveProfileText" Foreground="White" FontSize="{StaticResource TypeTitle}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                        <TextBlock x:Name="ActivationReasonText" Foreground="#C9D5CD" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Margin="0,6,0,0"/>
-                                    </StackPanel>
-                                    <Button x:Name="EditActiveProfileButton" Grid.Column="1" Content="Edit profile  →" Click="EditActiveProfile_Click"
-                                            Style="{StaticResource PrimaryButton}" VerticalAlignment="Bottom" Padding="14,9"/>
-                                </Grid>
-                                <DockPanel Margin="0,14,0,0">
-                                    <Button x:Name="AmbientMuteButton" DockPanel.Dock="Right" Content="Mute ambient" Click="AmbientMute_Click"
-                                            Foreground="White" Background="#402C3930" BorderBrush="#607D9384" Margin="12,0,0,0" Padding="10,5"/>
-                                    <TextBlock x:Name="AmbientStatusText" Foreground="#C9D5CD" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                <!-- The wallpaper on your desktop, full size, with its own colours glowing softly around the card. -->
+                <Grid SizeChanged="Hero_SizeChanged">
+                    <Rectangle x:Name="HeroGlow" Margin="-6,18,-6,-30" Opacity="0.55" IsHitTestVisible="False" RenderOptions.BitmapScalingMode="Linear">
+                        <Rectangle.CacheMode><BitmapCache/></Rectangle.CacheMode>
+                        <Rectangle.Fill><ImageBrush x:Name="HeroGlowBrush" Stretch="Fill"/></Rectangle.Fill>
+                        <Rectangle.OpacityMask>
+                            <RadialGradientBrush RadiusX="0.5" RadiusY="0.5">
+                                <GradientStop Color="#FF000000" Offset="0.55"/><GradientStop Color="#00000000" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Rectangle.OpacityMask>
+                    </Rectangle>
+                    <Border x:Name="HeroCard" Height="380" CornerRadius="22" BorderBrush="#2EFFFFFF" BorderThickness="1" Background="#0B0E0C" local:RoundedClip.Radius="22">
+                        <Grid>
+                            <Border>
+                                <Border.Background><LinearGradientBrush StartPoint="0,1" EndPoint="1,0">
+                                    <GradientStop Color="#123D40" Offset="0"/><GradientStop Color="#658F78" Offset="0.55"/><GradientStop Color="#D7BD91" Offset="1"/>
+                                </LinearGradientBrush></Border.Background>
+                            </Border>
+                            <Rectangle x:Name="HeroImage">
+                                <Rectangle.Fill><ImageBrush x:Name="ActivityWallpaperBrush" Stretch="UniformToFill"/></Rectangle.Fill>
+                            </Rectangle>
+                            <!-- Shade only where text sits: a little at the top, more at the bottom left. -->
+                            <Rectangle IsHitTestVisible="False">
+                                <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#66000000" Offset="0"/><GradientStop Color="#00000000" Offset="0.28"/>
+                                    <GradientStop Color="#00000000" Offset="0.45"/><GradientStop Color="#C7000000" Offset="1"/>
+                                </LinearGradientBrush></Rectangle.Fill>
+                            </Rectangle>
+                            <Rectangle IsHitTestVisible="False">
+                                <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#59000000" Offset="0"/><GradientStop Color="#00000000" Offset="0.55"/>
+                                </LinearGradientBrush></Rectangle.Fill>
+                            </Rectangle>
+                            <Grid Margin="30,26,30,28">
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <DockPanel>
+                                    <Border DockPanel.Dock="Right" CornerRadius="13" Background="#40000000" BorderBrush="#33FFFFFF" BorderThickness="1" Padding="11,5">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE7F4;" FontFamily="{StaticResource IconFont}" FontSize="12" Foreground="#E6FFFFFF" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Text="your desktop" FontFamily="{StaticResource MonoFont}" Foreground="#E6FFFFFF" FontSize="12" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border HorizontalAlignment="Left" CornerRadius="13" Background="#40000000" BorderBrush="#33FFFFFF" BorderThickness="1" Padding="11,5">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse x:Name="ActiveStateDot" Width="7" Height="7" Fill="{DynamicResource TextTertiaryBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="ActiveStateText" Text="NO PROFILE APPLIED" FontFamily="{StaticResource MonoFont}" Foreground="#E6FFFFFF" FontSize="12" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
                                 </DockPanel>
-                            </StackPanel>
+                                <Grid Grid.Row="2">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Bottom">
+                                        <TextBlock x:Name="ActiveProfileText" Foreground="White" FontSize="40" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="ActivationReasonText" Foreground="#E0FFFFFF" FontSize="15" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom">
+                                        <Button x:Name="EditActiveProfileButton" Content="Edit profile  →" Click="EditActiveProfile_Click"
+                                                Style="{StaticResource AccentPillButton}" VerticalAlignment="Center" Padding="18,9"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Grid>
                         </Grid>
-                    </Grid>
-                </Border>
+                    </Border>
+                </Grid>
                 <!-- What happens next and whether automation is running, side by side in one slim strip. -->
-                <Border Style="{StaticResource GlassCard}" Padding="18,13" Margin="0,12,0,0">
+                <Border Style="{StaticResource GlassCard}" Padding="18,13" Margin="0,20,0,0">
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <Grid>
@@ -533,6 +623,78 @@
         <ContentControl x:Name="SwitcherPane" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
         </Grid>
         </ContentControl>
+
+        <!-- The launcher: type what you want, press Enter. Covers the whole window and closes on Esc or a click outside. -->
+        <Grid x:Name="LauncherLayer" Grid.RowSpan="2" Grid.ColumnSpan="2" Panel.ZIndex="20" Visibility="Collapsed" Background="#59000000"
+              MouseLeftButtonDown="LauncherLayer_MouseDown">
+            <Border x:Name="LauncherCard" Width="580" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="20,84,20,20"
+                    Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource PaneEdgeBrush}" BorderThickness="1" CornerRadius="16"
+                    Effect="{DynamicResource FloatElevation}" RenderTransformOrigin="0.5,0">
+                <Border.RenderTransform><ScaleTransform x:Name="LauncherScale"/></Border.RenderTransform>
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid Margin="20,6,20,6">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{DynamicResource AccentTextBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                        <TextBlock x:Name="LauncherHint" Grid.Column="1" Text="Type a profile, a page or an action" FontSize="16" Foreground="{DynamicResource TextTertiaryBrush}"
+                                   VerticalAlignment="Center" IsHitTestVisible="False" Margin="2,0,0,0"/>
+                        <TextBox x:Name="LauncherBox" Grid.Column="1" FontSize="16" Background="Transparent" BorderThickness="0" VerticalContentAlignment="Center"
+                                 CaretBrush="{DynamicResource TextPrimaryBrush}" Foreground="{DynamicResource TextPrimaryBrush}"
+                                 TextChanged="LauncherBox_TextChanged" PreviewKeyDown="LauncherBox_PreviewKeyDown" AutomationProperties.Name="Search Belie">
+                            <TextBox.Template>
+                                <ControlTemplate TargetType="TextBox"><ScrollViewer x:Name="PART_ContentHost" Padding="0,14" VerticalAlignment="Center"/></ControlTemplate>
+                            </TextBox.Template>
+                        </TextBox>
+                    </Grid>
+                    <Border Grid.Row="1" BorderBrush="{DynamicResource CardEdgeBrush}" BorderThickness="0,1">
+                        <Grid>
+                            <TextBlock x:Name="LauncherEmpty" Text="Nothing matches" Style="{StaticResource HintText}" HorizontalAlignment="Center" Margin="0,22" Visibility="Collapsed"/>
+                            <ListBox x:Name="LauncherList" MaxHeight="380" Background="Transparent" BorderThickness="0" Padding="8,6" Focusable="False"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" PreviewMouseLeftButtonUp="LauncherList_Click" AutomationProperties.Name="Results">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Focusable" Value="False"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+                                        <Setter Property="AutomationProperties.Name" Value="{Binding Title}"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <Border x:Name="Row" Background="Transparent" CornerRadius="10" Padding="12,9">
+                                                        <ContentPresenter/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource CardHoverBrush}"/></Trigger>
+                                                        <Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource AccentSubtleBrush}"/></Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Title}" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding Group}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                            <Border Grid.Column="3" CornerRadius="6" Padding="7,2" Margin="10,0,0,0" BorderThickness="1" BorderBrush="{DynamicResource CardEdgeBrush}" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border"><Style.Triggers><DataTrigger Binding="{Binding Keys}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style>
+                                                </Border.Style>
+                                                <TextBlock Text="{Binding Keys}" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+                    <TextBlock Grid.Row="2" Text="&#x2191;&#x2193; move    enter run    esc close" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                               Foreground="{DynamicResource TextTertiaryBrush}" Margin="20,10,20,12"/>
+                </Grid>
+            </Border>
+        </Grid>
 
         <StackPanel x:Name="ToastHost" Grid.Column="1" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,30,30" IsHitTestVisible="False" Panel.ZIndex="10"/>
 

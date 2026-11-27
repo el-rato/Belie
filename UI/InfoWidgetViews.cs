@@ -68,7 +68,7 @@ internal abstract class InfoWidgetView : System.Windows.Controls.UserControl
 
     protected static Brush Paint(string value, Color fallback)
     {
-        var brush = new SolidColorBrush(SceneController.TryParseAccent(value, out var color) ? color : fallback);
+        var brush = new SolidColorBrush(HexColor.TryParse(value, out var color) ? color : fallback);
         brush.Freeze();
         return brush;
     }

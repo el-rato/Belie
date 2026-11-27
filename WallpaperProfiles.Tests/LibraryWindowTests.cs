@@ -29,10 +29,11 @@ public sealed partial class LibraryWindowTests
             System.Windows.Application? app = null;
             try
             {
-                App.ConfigureRendering(liveWallpaper: false, interactiveShell: true);
-                Assert.Equal(System.Windows.Interop.RenderMode.Default, RenderOptions.ProcessRenderMode);
-                App.ConfigureRendering(liveWallpaper: false);
+                App.ConfigureRendering(interactiveShell: false);
                 Assert.Equal(System.Windows.Interop.RenderMode.SoftwareOnly, RenderOptions.ProcessRenderMode);
+                // The main window runs like the real app: drawn by the graphics card.
+                App.ConfigureRendering(interactiveShell: true);
+                Assert.Equal(System.Windows.Interop.RenderMode.Default, RenderOptions.ProcessRenderMode);
                 app = new System.Windows.Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 app.Resources.MergedDictionaries.Add(new ResourceDictionary
                 {
@@ -147,7 +148,6 @@ public sealed partial class LibraryWindowTests
                     CheckWallpaperStudio(dir, imagePath);
                     CheckTopBar(dir);
                     CheckRice(dir);
-                    CheckAmbientPlayback(dir);
                 }
             }
             catch (Exception ex) { failure ??= ex; }
@@ -155,7 +155,6 @@ public sealed partial class LibraryWindowTests
             {
                 if (app != null)
                 {
-                    foreach (var editor in app.Windows.OfType<ProfileEditorWindow>()) editor.ChooseDraftAction = () => DraftChoice.Discard;
                     foreach (var main in app.Windows.OfType<MainWindow>()) main.ChooseDraftAction = () => DraftChoice.Discard;
                 }
                 app?.Shutdown();
@@ -272,61 +271,6 @@ public sealed partial class LibraryWindowTests
             yield return child;
             foreach (var descendant in VisualChildren(child)) yield return descendant;
         }
-    }
-
-    private static void CheckAmbientPlayback(string dir)
-    {
-        // Hosted CI runners have no audio output; keep the rest of the gallery test active.
-        using (var devices = new NAudio.CoreAudioApi.MMDeviceEnumerator())
-        {
-            if (!devices.HasDefaultAudioEndpoint(NAudio.CoreAudioApi.DataFlow.Render,
-                    NAudio.CoreAudioApi.Role.Multimedia)) return;
-        }
-        var path = Path.Combine(dir, "silent-ambient.wav");
-        var samples = new byte[3200]; // 200 ms of silent 8 kHz, mono, 16-bit PCM.
-        using (var output = new BinaryWriter(File.Create(path)))
-        {
-            output.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
-            output.Write(36 + samples.Length);
-            output.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt "));
-            output.Write(16);
-            output.Write((ushort)1);
-            output.Write((ushort)1);
-            output.Write(8000);
-            output.Write(16000);
-            output.Write((ushort)2);
-            output.Write((ushort)16);
-            output.Write(System.Text.Encoding.ASCII.GetBytes("data"));
-            output.Write(samples.Length);
-            output.Write(samples);
-        }
-        using var scene = new WallpaperProfiles.Engine.SceneController(new ResourceDictionary());
-        scene.Apply(new WallpaperProfile { AmbientAudioPath = path, AmbientVolume = 25, AmbientMuted = true });
-        var player = (MediaPlayer)typeof(WallpaperProfiles.Engine.SceneController)
-            .GetField("_player", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(scene)!;
-        Assert.NotNull(player);
-        Assert.Equal(0.25, player.Volume);
-        Assert.True(player.IsMuted);
-        var loops = 0;
-        player.MediaEnded += (_, _) => loops++;
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        var deadline = DateTime.UtcNow.AddSeconds(60);
-        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
-        timer.Tick += (_, _) =>
-        {
-            if (loops >= 2 || !scene.HasAudio || DateTime.UtcNow >= deadline) frame.Continue = false;
-        };
-        timer.Start();
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
-        timer.Stop();
-        Assert.True(loops >= 2, "The silent ambient track did not loop: " + scene.AudioStatus);
-        scene.ToggleMuted();
-        Assert.False(scene.IsMuted);
-        Assert.False(player.IsMuted);
-        Assert.StartsWith("Playing", scene.AudioStatus);
-        scene.Apply(new WallpaperProfile());
-        Assert.False(scene.HasAudio);
-        Assert.Equal("No ambient track", scene.AudioStatus);
     }
 
     private static void MoveWallpaper(Window window, string path, string step)

@@ -206,13 +206,13 @@ internal abstract class SettingsPage<T> : System.Windows.Controls.UserControl wh
         var paint = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9) };
         swatch.Content = paint;
         AutomationProperties.SetName(swatch, "Choose " + label.ToLowerInvariant() + " color");
-        void Show() => paint.Background = SceneController.TryParseAccent(box.Text, out var color) ? new SolidColorBrush(color) : System.Windows.Media.Brushes.Transparent;
+        void Show() => paint.Background = HexColor.TryParse(box.Text, out var color) ? new SolidColorBrush(color) : System.Windows.Media.Brushes.Transparent;
         Show();
         box.TextChanged += (_, _) => { Show(); Changed(); };
         swatch.Click += (_, _) =>
         {
             using var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true };
-            if (SceneController.TryParseAccent(box.Text, out var color)) dialog.Color = System.Drawing.Color.FromArgb(color.R, color.G, color.B);
+            if (HexColor.TryParse(box.Text, out var color)) dialog.Color = System.Drawing.Color.FromArgb(color.R, color.G, color.B);
             if (Window.GetWindow(this) is not { } window) return;
             if (dialog.ShowDialog(new Owner(new WindowInteropHelper(window).Handle)) == System.Windows.Forms.DialogResult.OK)
                 box.Text = $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
@@ -220,7 +220,7 @@ internal abstract class SettingsPage<T> : System.Windows.Controls.UserControl wh
         OnSave(settings =>
         {
             var text = box.Text.Trim();
-            set(settings, optional && text.Length == 0 || SceneController.TryParseAccent(text, out _) ? text
+            set(settings, optional && text.Length == 0 || HexColor.TryParse(text, out _) ? text
                 : throw new FormatException($"{label} must look like #DDF79D."));
         });
         Row(label, id, box, swatch);

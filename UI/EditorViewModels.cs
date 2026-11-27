@@ -108,3 +108,47 @@ public sealed class TriggerVm : INotifyPropertyChanged
 
     private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
+
+/// <summary>Turns what is typed in the schedule and trigger rows into rules, or says what is wrong.</summary>
+internal static class RuleEditing
+{
+    public static bool TryBuild(IEnumerable<ScheduleRuleVm> ruleRows, IEnumerable<TriggerVm> triggerRows,
+        out List<ScheduleRule> rules, out List<EventTrigger> triggers, out string error)
+    {
+        rules = new(); triggers = new(); error = "";
+        foreach (var row in ruleRows)
+        {
+            if (!TimeOnly.TryParseExact(row.StartTimeText, "HH:mm", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var start)
+                || !TimeOnly.TryParseExact(row.EndTimeText, "HH:mm", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var end))
+            { error = "A schedule has invalid times (use HH:mm, e.g. 09:00)."; return false; }
+            if (start == end)
+            { error = "A schedule starts and ends at the same time, so it would never match. Pick two different times."; return false; }
+            var days = Enumerable.Range(0, 7).Where(day => row.Days[day]).Select(day => (DayOfWeek)day).ToHashSet();
+            if (days.Count == 0) { error = "A schedule has no days selected."; return false; }
+            // New objects, so a failed save or a duplicate never changes the rows being edited.
+            rules.Add(new ScheduleRule { Id = row.Model.Id, CreatedAtUtc = row.Model.CreatedAtUtc, StartTime = start, EndTime = end, DaysOfWeek = days });
+        }
+        foreach (var row in triggerRows)
+        {
+            var trigger = new EventTrigger
+            {
+                Id = row.Model.Id, Type = row.Type, Condition = (row.Condition ?? "").Trim(),
+                Priority = int.TryParse((row.PriorityText ?? "").Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var priority)
+                    ? Math.Clamp(priority, 1, 99) : 5
+            };
+            switch (trigger.Type)
+            {
+                case TriggerType.BelowBatteryPercent:
+                case TriggerType.IdleForMinutes:
+                    if (!double.TryParse(trigger.Condition, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var number) || number <= 0)
+                    { error = $"The '{trigger.Type}' trigger needs a positive number in the 'when' box."; return false; }
+                    break;
+                case TriggerType.ProcessLaunch:
+                    if (trigger.Condition.Length == 0) { error = "The program trigger needs a program name, e.g. notepad.exe"; return false; }
+                    break;
+            }
+            triggers.Add(trigger);
+        }
+        return true;
+    }
+}

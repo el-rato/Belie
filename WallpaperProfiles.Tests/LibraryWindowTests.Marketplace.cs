@@ -57,11 +57,20 @@ public sealed partial class LibraryWindowTests
         await WaitUntil(() => ((TextBlock)window.FindName("MarketPreviewStatus")).Text.Length == 0);
         window.UpdateLayout();
         var previewButton = (FrameworkElement)window.FindName("MarketExpandPreviewButton");
-        Assert.True(previewButton.ActualWidth > gallery.ActualWidth * 2);
-        var firstThumbnail = (FrameworkElement)gallery.ItemContainerGenerator.ContainerFromIndex(0);
-        var secondThumbnail = (FrameworkElement)gallery.ItemContainerGenerator.ContainerFromIndex(1);
-        Assert.Equal(firstThumbnail.TranslatePoint(new System.Windows.Point(), gallery).X,
-            secondThumbnail.TranslatePoint(new System.Windows.Point(), gallery).X);
+        // The viewer covers the whole grid, with the search bar out of the way.
+        var viewer = (FrameworkElement)window.FindName("MarketDetails");
+        Assert.True(viewer.ActualWidth >= gallery.ActualWidth - 20, $"Viewer {viewer.ActualWidth} vs grid {gallery.ActualWidth}");
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)window.FindName("MarketFilters")).Visibility);
+        Assert.False(((Button)window.FindName("MarketPreviousButton")).IsEnabled);
+        Assert.True(((Button)window.FindName("MarketNextButton")).IsEnabled);
+        Assert.Equal("1 of 2", ((TextBlock)window.FindName("MarketPositionText")).Text);
+        Click(window, "MarketNextButton");
+        await WaitUntil(() => gallery.SelectedIndex == 1);
+        Assert.False(((Button)window.FindName("MarketNextButton")).IsEnabled);
+        Click(window, "MarketPreviousButton");
+        await WaitUntil(() => gallery.SelectedIndex == 0);
+        await WaitUntil(() => ((Button)window.FindName("MarketDownloadButton")).IsEnabled);
+        await WaitUntil(() => ((TextBlock)window.FindName("MarketPreviewStatus")).Text.Length == 0);
         RenderWorkspace(window, "marketplace-focus", 1000, 720);
         window.Width = 900; window.Height = 650; window.UpdateLayout();
         var compactDetails = (FrameworkElement)window.FindName("MarketDetails");
@@ -72,6 +81,11 @@ public sealed partial class LibraryWindowTests
         window.Width = 1000; window.Height = 720; window.UpdateLayout();
         Click(window, "MarketBackToGalleryButton");
         Assert.Equal(Visibility.Collapsed, ((FrameworkElement)window.FindName("MarketDetails")).Visibility);
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)window.FindName("MarketFilters")).Visibility);
+        var firstTile = (FrameworkElement)gallery.ItemContainerGenerator.ContainerFromIndex(0);
+        var secondTile = (FrameworkElement)gallery.ItemContainerGenerator.ContainerFromIndex(1);
+        Assert.Equal(firstTile.TranslatePoint(new System.Windows.Point(), gallery).Y, secondTile.TranslatePoint(new System.Windows.Point(), gallery).Y);
+        RenderWorkspace(window, "marketplace-grid", 1000, 720);
         Assert.Equal(2, gallery.Items.Count);
 
         search.Text = "slow";
@@ -85,7 +99,6 @@ public sealed partial class LibraryWindowTests
         var tags = (ItemsControl)window.FindName("MarketTags");
         Assert.Equal("nature", Assert.IsType<WallhavenTag>(tags.Items[0]).Name);
         window.UpdateLayout();
-        Assert.Same(((ListBox)window.FindName("Gallery")).ItemContainerStyle, gallery.ItemContainerStyle);
         Click(window, "MarketTagsButton");
         window.UpdateLayout();
         var tagsPopup = (System.Windows.Controls.Primitives.Popup)window.FindName("MarketTagsPopup");

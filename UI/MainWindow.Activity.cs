@@ -22,6 +22,58 @@ internal partial class MainWindow
         if (CanvasPane.Content is DesktopCanvasView canvas) canvas.RefreshProfiles();
     }
 
+    private string? _heroKey;
+
+    /// <summary>
+    /// The Overview card shows the wallpaper that is on the desktop at full size. The small profile thumbnail
+    /// stands in while the large one loads, and it also feeds the soft glow around the card.
+    /// </summary>
+    private void RefreshHero(WallpaperProfile? active)
+    {
+        var current = _coordinator.CurrentMediaPath;
+        var key = active == null ? null : active.Id + "|" + current;
+        var monitor = _railEntries.FirstOrDefault(entry => entry.Id == active?.Id)?.Monitor;
+        if (key == _heroKey && ReferenceEquals(monitor, _activityPreviewMonitor)) return;
+        _activityPreviewMonitor = monitor;
+        _heroKey = key;
+        HeroGlowBrush.ImageSource = null;
+        BindingOperations.ClearBinding(ActivityWallpaperBrush, ImageBrush.ImageSourceProperty);
+        if (monitor != null)
+            BindingOperations.SetBinding(ActivityWallpaperBrush, ImageBrush.ImageSourceProperty,
+                new System.Windows.Data.Binding(nameof(MonitorThumbnail.ScreenSource)) { Source = monitor });
+        else ActivityWallpaperBrush.ImageSource = null;
+        if (active == null) return;
+        var profile = active;
+        _ = LoadHeroAsync(key!, profile, current);
+    }
+
+    private async Task LoadHeroAsync(string key, WallpaperProfile profile, string current)
+    {
+        (ImageSource? Image, ImageSource? Glow) loaded;
+        try
+        {
+            loaded = await Task.Run(() =>
+            {
+                var path = !string.IsNullOrEmpty(current) && File.Exists(current) ? current : Engine.WallpaperEngine.GetProfileMedia(profile).FirstOrDefault();
+                // The glow is the same picture only a few dozen pixels wide; stretched up, it is already soft.
+                return (ThumbnailLoader.Load(path, 1920), ThumbnailLoader.Load(path, 24));
+            });
+        }
+        catch (Exception ex) { Infrastructure.Logger.Error("Loading the Overview wallpaper failed.", ex); return; }
+        if (key != _heroKey || Dispatcher.HasShutdownStarted) return;
+        HeroGlowBrush.ImageSource = loaded.Glow;
+        if (loaded.Image == null) return;
+        BindingOperations.ClearBinding(ActivityWallpaperBrush, ImageBrush.ImageSourceProperty);
+        ActivityWallpaperBrush.ImageSource = loaded.Image;
+    }
+
+    private void Hero_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Tall enough to feel like the desktop itself, never so tall that the rest of the page disappears.
+        var height = Math.Clamp(e.NewSize.Width * 0.4, 300, 520);
+        if (Math.Abs(HeroCard.Height - height) > 1) HeroCard.Height = height;
+    }
+
     private void RefreshDashboard()
     {
         var snapshot = _coordinator.GetActivitySnapshot();
@@ -30,23 +82,9 @@ internal partial class MainWindow
         ActiveStateText.Text = snapshot.ActiveProfile == null ? "NO PROFILE APPLIED" : "APPLIED PROFILE";
         ActiveStateDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, snapshot.ActiveProfile == null ? "TextTertiaryBrush" : "GoodBrush");
         EditActiveProfileButton.IsEnabled = snapshot.ActiveProfile != null;
-        var previewMonitor = _railEntries.FirstOrDefault(entry => entry.Id == snapshot.ActiveProfile?.Id)?.Monitor;
-        if (!ReferenceEquals(previewMonitor, _activityPreviewMonitor))
-        {
-            _activityPreviewMonitor = previewMonitor;
-            BindingOperations.ClearBinding(ActivityWallpaperBrush, ImageBrush.ImageSourceProperty);
-            if (previewMonitor != null)
-                BindingOperations.SetBinding(ActivityWallpaperBrush, ImageBrush.ImageSourceProperty,
-                    new System.Windows.Data.Binding(nameof(MonitorThumbnail.ScreenSource)) { Source = previewMonitor });
-            else ActivityWallpaperBrush.ImageSource = null;
-        }
+        RefreshHero(snapshot.ActiveProfile);
+        UpdateShellLayout();
         ActivationReasonText.Text = snapshot.Reason;
-        AmbientStatusText.Text = _coordinator.AmbientStatus;
-        var hasAmbient = !string.IsNullOrWhiteSpace(snapshot.ActiveProfile?.AmbientAudioPath);
-        AmbientStatusText.Visibility = AmbientMuteButton.Visibility = hasAmbient ? Visibility.Visible : Visibility.Collapsed;
-        AmbientMuteButton.IsEnabled = _coordinator.HasAmbientAudio;
-        AmbientMuteButton.Visibility = _coordinator.HasAmbientAudio ? Visibility.Visible : Visibility.Collapsed;
-        AmbientMuteButton.Content = _coordinator.AmbientIsMuted ? "Unmute ambient" : "Mute ambient";
         AutomationModeText.Text = snapshot.Paused ? "Paused" : "Running";
         AutomationHintText.Text = snapshot.Paused ? "Manual choices available" : "Schedules & triggers enabled";
         PauseAutomationButton.Content = snapshot.Paused ? "Resume" : "Pause";
@@ -105,14 +143,4 @@ internal partial class MainWindow
 
     private void PauseAutomation_Click(object sender, RoutedEventArgs e) => _coordinator.TogglePaused();
     private void ResumeAutomatic_Click(object sender, RoutedEventArgs e) => _coordinator.ResumeAutomatic();
-    private void AmbientMute_Click(object sender, RoutedEventArgs e) => _coordinator.ToggleAmbientMuted();
-
-    private void CreateScene_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not System.Windows.Controls.Button { Tag: string name }) return;
-        var preset = ScenePresets.Create(name, _selected?.FolderPath ?? "");
-        for (var suffix = 2; _coordinator.Profiles.Any(p => p.Name.Equals(preset.Name, StringComparison.CurrentCultureIgnoreCase)); suffix++)
-            preset.Name = name + " " + suffix;
-        AddProfile(template: preset);
-    }
 }

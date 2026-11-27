@@ -25,7 +25,6 @@ public sealed partial class LibraryWindowTests
         var secondWallpaper = Path.Combine(otherFolder, "sky.png");
         File.Copy(imagePath, secondWallpaper);
         libraryStore.Save(libraryStore.Load().Append(new WallpaperAsset { Name = "Sky beyond", FilePath = secondWallpaper }));
-        CheckEditorLibrary(libraryStore, imagePath, secondWallpaper);
         var profiles = new ProfileStore(Path.Combine(dir, "profiles"));
         var settings = new SettingsStore(Path.Combine(dir, "settings.json"));
         var profile = new WallpaperProfile { Name = "Focus", SlideshowIntervalMinutes = 5 };
@@ -49,29 +48,36 @@ public sealed partial class LibraryWindowTests
             StartTime = new TimeOnly(22, 0), EndTime = new TimeOnly(6, 0) });
         profile.EventTriggers.Add(new WallpaperProfiles.Models.EventTrigger { Type = TriggerType.BelowBatteryPercent, Condition = "15", Priority = 8 });
         typeof(MainWindow).GetMethod("Select", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, new object[] { profile.Id });
-        Assert.Contains("22:00 – 06:00 · overnight", ((TextBlock)main.FindName("ScheduleSummary")).Text);
-        Assert.Contains(CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName(DayOfWeek.Monday), ((TextBlock)main.FindName("ScheduleSummary")).Text);
-        Assert.Equal("battery ≤ 15% · priority 8", ((TextBlock)main.FindName("TriggerSummary")).Text);
-        Assert.Equal("Edit schedules & triggers", ((Button)main.FindName("EditRulesButton")).Content);
-        ((TabControl)main.FindName("ProfileTabs")).SelectedIndex = 2;
+        // Schedules and triggers are edited right on the Automation tab.
+        var tabs = (TabControl)main.FindName("ProfileTabs");
+        var ruleRows = (System.Collections.ObjectModel.ObservableCollection<ScheduleRuleVm>)((ItemsControl)main.FindName("RulesList")).ItemsSource;
+        var triggerRows = (System.Collections.ObjectModel.ObservableCollection<TriggerVm>)((ItemsControl)main.FindName("TriggersList")).ItemsSource;
+        Assert.Equal("22:00", Assert.Single(ruleRows).StartTimeText);
+        Assert.True(ruleRows[0].Days[(int)DayOfWeek.Monday]);
+        Assert.Equal("15", Assert.Single(triggerRows).Condition);
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)main.FindName("NoRulesHint")).Visibility);
+        tabs.SelectedIndex = 2;
         RenderWorkspace(main, "profile-rules", 880, 650);
-        foreach (var (button, tab) in new[] { ("EditRulesButton", 2) })
-        {
-            Exception? editorFailure = null;
-            main.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
-            {
-                var editor = System.Windows.Application.Current.Windows.OfType<ProfileEditorWindow>().Single(window => window.Owner == main);
-                try
-                {
-                    Assert.Equal(tab, ((TabControl)editor.FindName("EditorTabs")).SelectedIndex);
-                    Assert.Single(((ItemsControl)editor.FindName("RulesList")).Items);
-                }
-                catch (Exception ex) { editorFailure = ex; }
-                finally { editor.Close(); }
-            }));
-            Click(main, button);
-            if (editorFailure != null) throw editorFailure;
-        }
+        Click(main, "AddRuleButton");
+        Assert.Equal(2, ruleRows.Count);
+        Assert.True(main.IsDraftDirty);
+        triggerRows[0].Condition = "";
+        tabs.SelectedIndex = 0;
+        Click(main, "SaveProfileButton");
+        Assert.Equal(2, tabs.SelectedIndex);
+        Assert.Contains("positive number", ((TextBlock)main.FindName("ProfileMessage")).Text);
+        Assert.True(main.IsDraftDirty);
+        triggerRows[0].Condition = "20";
+        Click(main, "SaveProfileButton");
+        Assert.False(main.IsDraftDirty);
+        var savedRules = profiles.LoadAll().Single(p => p.Id == profile.Id);
+        Assert.Equal(2, savedRules.Schedule.Count);
+        Assert.Equal("20", savedRules.EventTriggers.Single().Condition);
+        ruleRows.Clear(); triggerRows.Clear();
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)main.FindName("NoRulesHint")).Visibility);
+        Click(main, "SaveProfileButton");
+        Assert.Empty(profiles.LoadAll().Single(p => p.Id == profile.Id).Schedule);
+        profile = coordinator.Profiles.Single(p => p.Id == profile.Id);
         profile.Schedule.Clear(); profile.EventTriggers.Clear();
         typeof(MainWindow).GetMethod("Select", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, new object[] { profile.Id });
         ((TabControl)main.FindName("ProfileTabs")).SelectedIndex = 0;
@@ -152,7 +158,7 @@ public sealed partial class LibraryWindowTests
         Assert.Equal(new[] { secondWallpaper }, Assert.Single(profiles.LoadAll()).AdditionalWallpaperPaths);
         profile = coordinator.Profiles.Single(p => p.Id == profile.Id);
         var profileTabs = (TabControl)main.FindName("ProfileTabs");
-        Assert.Equal(4, profileTabs.Items.Count);
+        Assert.Equal(3, profileTabs.Items.Count);
         profileTabs.SelectedIndex = 1;
         RenderWorkspace(main, "profiles-playback", 1040, 790);
         Assert.Equal("Focus", ((TextBox)main.FindName("NameBox")).Text);
@@ -215,6 +221,49 @@ public sealed partial class LibraryWindowTests
         VisualChildren(page).OfType<Button>().Single(button => Equals(button.Content, "Pixel colonies")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.True(page.SaveNow());
         Assert.Equal(WallpaperTransitionStyle.Colonies, settings.Load().WallpaperTransition);
+
+        // The top bar never lets the page pills slide under the status pills, at any width.
+        var navBar = (FrameworkElement)main.FindName("NavBar");
+        var statusPills = (FrameworkElement)main.FindName("StatusPills");
+        var topBar = (FrameworkElement)main.FindName("TopBar");
+        foreach (var width in new[] { 1600, 1460, 1180, 1000, 860, 700 })
+        {
+            main.Width = width; main.UpdateLayout();
+            typeof(MainWindow).GetMethod("UpdateShellLayout", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, null);
+            main.UpdateLayout();
+            var navRight = navBar.TranslatePoint(new System.Windows.Point(navBar.ActualWidth, 0), topBar).X;
+            var statusLeft = statusPills.TranslatePoint(new System.Windows.Point(), topBar).X;
+            Assert.True(navRight <= statusLeft, $"At {width}px the page pills end at {navRight:0} but the status pills start at {statusLeft:0}.");
+        }
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)main.FindName("BrandName")).Visibility);
+        main.Width = 1600; main.UpdateLayout();
+        typeof(MainWindow).GetMethod("UpdateShellLayout", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, null);
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)main.FindName("BrandName")).Visibility);
+        RenderWorkspace(main, "shell-topbar-1460", 1460, 820);
+        RenderWorkspace(main, "shell-topbar-1100", 1100, 820);
+        main.Width = 1180; main.UpdateLayout();
+
+        // The launcher: open it, type, and the best match runs on Enter.
+        main.OpenLauncher();
+        var box = (TextBox)main.FindName("LauncherBox");
+        var results = (ListBox)main.FindName("LauncherList");
+        Assert.True(main.LauncherOpen);
+        Assert.NotEmpty(results.Items);
+        RenderWorkspace(main, "shell-launcher", 1180, 820);
+        box.Text = "lib";
+        Assert.Equal("Library", ((LauncherCommand)results.SelectedItem).Title);
+        RenderWorkspace(main, "shell-launcher-typed", 1180, 820);
+        box.Text = "zzzz nothing";
+        Assert.Empty(results.Items);
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)main.FindName("LauncherEmpty")).Visibility);
+        box.Text = "lib";
+        typeof(MainWindow).GetMethod("RunLauncherCommand", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, new[] { results.SelectedItem });
+        Assert.False(main.LauncherOpen);
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)main.FindName("LibraryPane")).Visibility);
+        Click(main, "SearchPill");
+        Assert.True(main.LauncherOpen);
+        main.CloseLauncher();
+        Assert.False(main.LauncherOpen);
         Click(main, "ProfilesNavButton");
         RenderWorkspace(main, "shell-profiles", 1180, 820);
         RenderWorkspace(main, "shell-profiles-compact", 700, 650);
