@@ -147,11 +147,27 @@ internal partial class MainWindow
 
     private void UpdateNavigation(System.Windows.Controls.Button selected)
     {
+        MorePopup.IsOpen = false;
+        // The profile list is its own pane beside the profile editor; other sections use the whole width.
         var profilesVisible = selected == ProfilesNavButton;
-        ProfileSearchArea.Visibility = ProfileRailArea.Visibility = NewProfileButton.Visibility = profilesVisible ? Visibility.Visible : Visibility.Collapsed;
+        SidebarFrame.Visibility = profilesVisible ? Visibility.Visible : Visibility.Collapsed;
+        SidebarColumn.Width = new GridLength(profilesVisible ? (_shellCompact == true ? 200 : 236) : 0);
+        ContentFrame.Margin = profilesVisible ? new Thickness(3, 0, 12, 12) : new Thickness(12, 0, 12, 12);
         foreach (var button in NavigationButtons)
             button.Tag = button == selected ? "Selected" : null;
+        // Sections behind More light up the More pill and lend it their name.
+        var inMore = MoreSections.Contains(selected);
+        MoreNavButton.Tag = inMore ? "Selected" : null;
+        if (inMore) MoreNavButton.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "AccentSubtleBrush");
+        else MoreNavButton.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+        MoreNavLabel.Text = inMore ? System.Windows.Automation.AutomationProperties.GetName(selected) is "Wallpaper switcher" ? "Switcher"
+            : System.Windows.Automation.AutomationProperties.GetName(selected) : "More";
     }
+
+    private System.Windows.Controls.Button[] MoreSections => new[]
+    { TopBarNavButton, WorkspacesNavButton, TransitionsNavButton, TeamNavButton, SwitcherNavButton };
+
+    private void MoreNav_Click(object sender, RoutedEventArgs e) => MorePopup.IsOpen = !MorePopup.IsOpen;
 
     private System.Windows.Controls.Button[] NavigationButtons => new[]
     { DashboardNavButton, CanvasNavButton, ProfilesNavButton, LibraryNavButton, TopBarNavButton, WorkspacesNavButton, TransitionsNavButton, TeamNavButton, SwitcherNavButton };
@@ -163,30 +179,18 @@ internal partial class MainWindow
         var compact = ActualWidth < 1000;
         if (_shellCompact == compact) return;
         _shellCompact = compact;
-        SidebarColumn.Width = new GridLength(compact ? 80 : 200);
-        ProfileSearchHint.Text = compact ? "\uE721" : "Search profiles";
-        ProfileSearchHint.FontFamily = (System.Windows.Media.FontFamily)FindResource(compact ? "IconFont" : "AppFont");
-        SidebarTop.Margin = compact ? new Thickness(8, 16, 8, 8) : new Thickness(16, 24, 16, 16);
-        SidebarBottom.Margin = compact ? new Thickness(8) : new Thickness(16);
-        SidebarHeading.Visibility = ProfileRailHeading.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        foreach (var button in NavigationButtons.Append(SettingsButton))
+        // Narrow windows keep the bar to icons; names stay in tooltips and screen reader labels.
+        foreach (var button in new[] { DashboardNavButton, ProfilesNavButton, CanvasNavButton, LibraryNavButton, MoreNavButton })
         {
             button.ToolTip ??= System.Windows.Automation.AutomationProperties.GetName(button);
             if (button.Content is not System.Windows.Controls.StackPanel content) continue;
             content.Children[1].Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-            ((FrameworkElement)content.Children[0]).Margin = compact ? new Thickness(0) : new Thickness(0, 0, 12, 0);
-            button.HorizontalContentAlignment = compact ? System.Windows.HorizontalAlignment.Center : System.Windows.HorizontalAlignment.Left;
+            ((FrameworkElement)content.Children[0]).Margin = compact ? new Thickness(0) : new Thickness(0, 0, 8, 0);
         }
-        NewProfileButton.Content = compact ? "+" : "+  New profile";
-        System.Windows.Automation.AutomationProperties.SetName(NewProfileButton, "New profile");
-        ProfileRailArea.Margin = compact ? new Thickness(8, 0, 8, 0) : new Thickness(10, 0, 10, 0);
-        foreach (var entry in _railEntries)
-        {
-            entry.Monitor.ShowName = false;
-            entry.Card.Padding = compact ? new Thickness(4) : new Thickness(8);
-            if (entry.Card.Child is System.Windows.Controls.Grid row)
-                row.Children[1].Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        }
+        BrandName.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        ActivePillName.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        if (SidebarFrame.Visibility == Visibility.Visible) SidebarColumn.Width = new GridLength(compact ? 200 : 236);
+        foreach (var entry in _railEntries) entry.Monitor.ShowName = false;
     }
 
     private void EditActiveProfile_Click(object sender, RoutedEventArgs e)

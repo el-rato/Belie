@@ -84,6 +84,7 @@ internal partial class MainWindow : Window
         _settingsStore = settingsStore;
         _libraryStore = libraryStore ?? new LibraryStore(Path.Combine(AppPaths.BaseDir, "library.json"));
         _settings = coordinator.Settings;
+        _toastedActive = coordinator.ActiveProfileId;
         if (UiAppearance.Current.Name != UiAppearance.Find(_settings.UiTheme).Name) UiAppearance.Apply(_settings.UiTheme);
         TrySetAppIcon();
         ThemePicker.ItemsSource = UiAppearance.Themes;

@@ -9,8 +9,14 @@ namespace WallpaperProfiles.UI;
 
 internal partial class MainWindow
 {
+    private Guid? _toastedActive;
+
     private void CoordinatorStateChanged()
     {
+        // A short note whenever a different profile reaches the desktop, however it got there.
+        var active = _coordinator.ActiveProfile;
+        if (active != null && _toastedActive != null && active.Id != _toastedActive) ShowToast(active.Name + " is on your desktop");
+        _toastedActive = active?.Id ?? _toastedActive;
         RefreshActiveGlow();
         RefreshDashboard();
         if (CanvasPane.Content is DesktopCanvasView canvas) canvas.RefreshProfiles();
@@ -44,6 +50,13 @@ internal partial class MainWindow
         AutomationModeText.Text = snapshot.Paused ? "Paused" : "Running";
         AutomationHintText.Text = snapshot.Paused ? "Manual choices available" : "Schedules & triggers enabled";
         PauseAutomationButton.Content = snapshot.Paused ? "Resume" : "Pause";
+        ActivePillDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, snapshot.ActiveProfile == null ? "TextTertiaryBrush" : "GoodBrush");
+        AutomationPillIcon.Text = snapshot.Paused ? "\uE769" : snapshot.ManualOverride != null ? "\uE916" : "\uE945";
+        AutomationPillText.Text = snapshot.Paused ? "paused"
+            : snapshot.ManualOverride is { IsTimed: true, EndsAtLocal: { } ends } ? $"override {Math.Max(0, (int)Math.Ceiling((ends - now).TotalMinutes))}m"
+            : snapshot.ManualOverride != null ? "override" : "auto";
+        AutomationPill.ToolTip = snapshot.Paused ? "Automation is paused. Click to resume schedules and triggers."
+            : "Schedules and triggers are on. Click to pause them.";
         NextScheduleText.Text = snapshot.NextScheduleAtLocal is { } next ? FormatWhen(next, now) : "No schedules";
         NextScheduleHint.Text = snapshot.NextScheduleAtLocal == null ? "Add one in Profiles → Automation"
             : snapshot.NextScheduledProfile ?? "Schedule boundary";

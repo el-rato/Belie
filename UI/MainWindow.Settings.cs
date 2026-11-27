@@ -12,9 +12,9 @@ internal partial class MainWindow
         if (System.Windows.Application.Current is not App app) return;
         var updates = app.Updates;
         UpdateStatusText.Text = updates.Status;
-        UpdateNoticeText.Text = updates.Status;
+        UpdateNotice.ToolTip = updates.Status + " Open settings to update.";
         UpdateNotice.Visibility = SettingsUpdateButton.Visibility = AvailableReleaseNotesButton.Visibility = updates.Available != null ? Visibility.Visible : Visibility.Collapsed;
-        CheckUpdatesButton.IsEnabled = UpdateNowButton.IsEnabled = SettingsUpdateButton.IsEnabled = !updates.Busy;
+        CheckUpdatesButton.IsEnabled = SettingsUpdateButton.IsEnabled = !updates.Busy;
     }
 
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
@@ -56,7 +56,7 @@ internal partial class MainWindow
             FontSize = 14,
             ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false, Icon = Icon };
-        UiAppearance.SetDialogContent(dialog, scroll, "Settings");
+        UiAppearance.SetDialogContent(dialog, scroll, "Settings", glass: true);
         dialog.Closed += (_, _) => { scroll.Content = null; SettingsPopup.Child = content; _settingsDialog = null; };
         _settingsDialog = dialog; dialog.Show();
     }

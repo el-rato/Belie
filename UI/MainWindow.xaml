@@ -17,125 +17,92 @@
     </Window.Resources>
     <Grid Background="Transparent">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition x:Name="SidebarColumn" Width="200"/>
+            <ColumnDefinition x:Name="SidebarColumn" Width="0"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="48"/>
+            <RowDefinition Height="60"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.ColumnSpan="2" Background="Transparent" MouseLeftButtonDown="TitleBar_Drag">
-            <Grid>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0" IsHitTestVisible="False">
-                    <Image Source="{Binding Icon, RelativeSource={RelativeSource AncestorType=Window}}"
-                           Width="18" Height="18" RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <TextBlock Text="Belie" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                    <TextBlock x:Name="WorkspaceTitle" Text="/  Profiles" Foreground="{DynamicResource TextTertiaryBrush}"
-                               FontSize="12" VerticalAlignment="Center" Margin="16,0,0,0"/>
-                    <Border x:Name="DevBuildBadge" Visibility="Collapsed" Margin="14,0,0,0" Padding="8,2" CornerRadius="9" VerticalAlignment="Center"
-                            BorderThickness="1" BorderBrush="{DynamicResource SignalBrush}" AutomationProperties.Name="Dev build">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{DynamicResource SignalBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Text="Dev build · test data" FontSize="11" Foreground="{DynamicResource SignalBrush}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
-                    <Button Style="{StaticResource TitleBarButton}" Click="MinBtn_Click" ToolTip="Minimize" AutomationProperties.Name="Minimize">
-                        <Path Data="M0,0 L10,0" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1"/>
-                    </Button>
-                    <Button x:Name="MaximizeButton" Style="{StaticResource TitleBarButton}" Click="Maximize_Click" ToolTip="Maximize" AutomationProperties.Name="Maximize">
-                        <Path x:Name="MaximizeGlyph" Data="M0,0 L10,0 10,10 0,10 Z" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1"/>
-                    </Button>
-                    <Button Style="{StaticResource TitleBarCloseButton}" Click="CloseBtn_Click" ToolTip="Close to tray" AutomationProperties.Name="Close to tray">
-                        <Path Data="M0,0 L9,9 M9,0 L0,9" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1"/>
-                    </Button>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <ContentControl x:Name="SidebarFrame" Grid.Row="1" Style="{StaticResource GlassPane}" Margin="12,0,3,12">
-            <DockPanel>
-                <StackPanel x:Name="SidebarTop" DockPanel.Dock="Top" Margin="16,24,16,16">
-                    <StackPanel x:Name="SidebarHeading" Margin="12,0,0,24">
-                        <TextBlock Text="Menu" FontSize="{StaticResource TypeBody}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </StackPanel>
-                    <Button x:Name="DashboardNavButton" AutomationProperties.Name="Overview" Style="{StaticResource NavigationButton}" Click="ShowDashboard_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80F;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Overview"/></StackPanel>
-                    </Button>
-                    <Button x:Name="CanvasNavButton" AutomationProperties.Name="Widgets" Style="{StaticResource NavigationButton}" Click="ShowCanvas_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xECA5;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Widgets"/></StackPanel>
-                    </Button>
-                    <Button x:Name="ProfilesNavButton" AutomationProperties.Name="Profiles" Style="{StaticResource NavigationButton}" Click="ShowProfiles_Click" Background="{DynamicResource AccentSubtleBrush}">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE771;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Profiles"/></StackPanel>
-                    </Button>
-                    <Button x:Name="LibraryNavButton" AutomationProperties.Name="Library" Style="{StaticResource NavigationButton}" Click="OpenLibrary_Click" ToolTip="Wallpaper library">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B9;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Library"/></StackPanel>
-                    </Button>
-                    <Button x:Name="TopBarNavButton" AutomationProperties.Name="Top bar" Style="{StaticResource NavigationButton}" Click="ShowTopBar_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE90E;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Top bar"/></StackPanel>
-                    </Button>
-                    <Button x:Name="WorkspacesNavButton" AutomationProperties.Name="Workspaces" Style="{StaticResource NavigationButton}" Click="ShowWorkspaces_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7C4;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Workspaces"/></StackPanel>
-                    </Button>
-                    <Button x:Name="TransitionsNavButton" AutomationProperties.Name="Transitions" Style="{StaticResource NavigationButton}" Click="ShowTransitions_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8AB;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Transitions"/></StackPanel>
-                    </Button>
-                    <Button x:Name="TeamNavButton" AutomationProperties.Name="Team" Style="{StaticResource NavigationButton}" Click="ShowTeam_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE716;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Team"/></StackPanel>
-                    </Button>
-                    <Button x:Name="SwitcherNavButton" AutomationProperties.Name="Wallpaper switcher" Style="{StaticResource NavigationButton}" Click="ShowSwitcher_Click" Margin="0,0,0,22">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8EE;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Switcher"/></StackPanel>
-                    </Button>
-                    <Grid x:Name="ProfileSearchArea">
-                        <TextBox x:Name="SearchBox" Height="36" Padding="10,7" TextChanged="SearchBox_TextChanged"
-                                 AutomationProperties.Name="Search profiles" ToolTip="Filter profiles by name"/>
-                        <TextBlock x:Name="ProfileSearchHint" Text="Search profiles" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
-                                   Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+        <!-- One bar, like a desktop status bar: where you are on the left, what is happening on the right. -->
+        <Grid x:Name="TopBar" Grid.ColumnSpan="2" Background="Transparent" MouseLeftButtonDown="TitleBar_Drag" Margin="12,0,6,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,14,0" IsHitTestVisible="False">
+                <Image Source="{Binding Icon, RelativeSource={RelativeSource AncestorType=Window}}"
+                       Width="20" Height="20" RenderOptions.BitmapScalingMode="HighQuality"/>
+                <TextBlock x:Name="BrandName" Text="belie" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" Margin="9,0,0,0"/>
+                <TextBlock x:Name="WorkspaceTitle" Visibility="Collapsed"/>
+                <Border x:Name="DevBuildBadge" Visibility="Collapsed" Margin="10,0,0,0" Padding="7,1" CornerRadius="9" VerticalAlignment="Center"
+                        BorderThickness="1" BorderBrush="{DynamicResource SignalBrush}" AutomationProperties.Name="Dev build">
+                    <TextBlock Text="dev" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="{DynamicResource SignalBrush}" VerticalAlignment="Center"/>
+                </Border>
+            </StackPanel>
+            <Border Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="19" Padding="4"
+                    Background="{DynamicResource PaneBrush}" BorderBrush="{DynamicResource PaneEdgeBrush}" BorderThickness="1">
+                <StackPanel Orientation="Horizontal">
+                        <Button x:Name="DashboardNavButton" AutomationProperties.Name="Home" Style="{StaticResource NavPill}" Click="ShowDashboard_Click">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80F;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBlock Text="Home" VerticalAlignment="Center"/></StackPanel>
+                        </Button>
+                        <Button x:Name="ProfilesNavButton" AutomationProperties.Name="Profiles" Style="{StaticResource NavPill}" Click="ShowProfiles_Click">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE771;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBlock Text="Profiles" VerticalAlignment="Center"/></StackPanel>
+                        </Button>
+                        <Button x:Name="CanvasNavButton" AutomationProperties.Name="Widgets" Style="{StaticResource NavPill}" Click="ShowCanvas_Click">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xECA5;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBlock Text="Widgets" VerticalAlignment="Center"/></StackPanel>
+                        </Button>
+                        <Button x:Name="LibraryNavButton" AutomationProperties.Name="Library" Style="{StaticResource NavPill}" Click="OpenLibrary_Click" ToolTip="Wallpaper library">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B9;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBlock Text="Library" VerticalAlignment="Center"/></StackPanel>
+                        </Button>
+                    <Grid>
+                        <Button x:Name="MoreNavButton" AutomationProperties.Name="More sections" Style="{StaticResource NavPill}" Click="MoreNav_Click" ToolTip="Top bar, workspaces, transitions, team and switcher">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE712;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBlock x:Name="MoreNavLabel" Text="More" VerticalAlignment="Center"/><TextBlock Text="&#xE70D;" FontFamily="{StaticResource IconFont}" FontSize="9" VerticalAlignment="Center" Margin="8,1,0,0"/></StackPanel>
+                        </Button>
+                        <Popup x:Name="MorePopup" PlacementTarget="{Binding ElementName=MoreNavButton}" Placement="Bottom" VerticalOffset="8" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                            <Border Margin="8" Padding="6" CornerRadius="12" MinWidth="210" Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Effect="{StaticResource FloatElevation}">
+                                <StackPanel>
+                                    <Button x:Name="TopBarNavButton" AutomationProperties.Name="Top bar" Style="{StaticResource NavigationButton}" Click="ShowTopBar_Click" Margin="0,0,0,2">
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE90E;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Top bar"/></StackPanel>
+                                    </Button>
+                                    <Button x:Name="WorkspacesNavButton" AutomationProperties.Name="Workspaces" Style="{StaticResource NavigationButton}" Click="ShowWorkspaces_Click" Margin="0,0,0,2">
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7C4;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Workspaces"/></StackPanel>
+                                    </Button>
+                                    <Button x:Name="TransitionsNavButton" AutomationProperties.Name="Transitions" Style="{StaticResource NavigationButton}" Click="ShowTransitions_Click" Margin="0,0,0,2">
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8AB;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Transitions"/></StackPanel>
+                                    </Button>
+                                    <Button x:Name="TeamNavButton" AutomationProperties.Name="Team" Style="{StaticResource NavigationButton}" Click="ShowTeam_Click" Margin="0,0,0,2">
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE716;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Team"/></StackPanel>
+                                    </Button>
+                                    <Button x:Name="SwitcherNavButton" AutomationProperties.Name="Wallpaper switcher" Style="{StaticResource NavigationButton}" Click="ShowSwitcher_Click" Margin="0,0,0,2">
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8EE;" FontFamily="{StaticResource IconFont}" Margin="0,0,12,0" VerticalAlignment="Center"/><TextBlock Text="Switcher"/></StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
                     </Grid>
                 </StackPanel>
-                <StackPanel x:Name="SidebarBottom" DockPanel.Dock="Bottom" Margin="16,16,16,16">
-                    <Button x:Name="DesktopContextButton" Click="EditActiveProfile_Click" Padding="0" Margin="0,0,0,16" HorizontalContentAlignment="Stretch" ToolTip="Edit the profile currently applied to your desktop" AutomationProperties.Name="Edit applied desktop profile">
-                        <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                            <Setter Property="Visibility" Value="Visible"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding ImageSource, ElementName=ActivityWallpaperBrush}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
-                                <DataTrigger Binding="{Binding Visibility, ElementName=ProfilePane}" Value="Visible"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
-                                <Trigger Property="Tag" Value="Compact"><Setter Property="Visibility" Value="Collapsed"/></Trigger>
-                            </Style.Triggers>
-                        </Style></Button.Style>
-                        <StackPanel>
-                            <Border Height="84" CornerRadius="7,7,0,0"><Border.Background><ImageBrush ImageSource="{Binding ImageSource, ElementName=ActivityWallpaperBrush}" Stretch="UniformToFill"/></Border.Background></Border>
-                            <StackPanel Margin="12,9,12,11">
-                                <TextBlock Text="Applied" FontSize="{StaticResource TypeCaption}" Foreground="{DynamicResource TextTertiaryBrush}"/>
-                                <TextBlock Text="{Binding Text, ElementName=ActiveProfileText}" FontSize="{StaticResource TypeBody}" FontWeight="SemiBold" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Button>
-                    <StackPanel x:Name="UpdateNotice" Visibility="Collapsed" Margin="0,0,0,14">
-                        <TextBlock x:Name="UpdateNoticeText" TextWrapping="Wrap" Style="{StaticResource HintText}" Margin="0,0,0,8"/>
-                        <Button Content="Release notes" Tag="Update" Click="ReleaseNotes_Click" Margin="0,0,0,8"/>
-                        <Button x:Name="UpdateNowButton" Content="Update and restart" Click="UpdateNow_Click" Style="{StaticResource PrimaryButton}"/>
-                    </StackPanel>
-                    <Button x:Name="NewProfileButton" Content="+  New profile" ToolTip="New profile" Click="NewProfile_Click" Height="38" HorizontalContentAlignment="Center"/>
-            <Grid Margin="0,10,0,0">
-                <Button x:Name="SettingsButton" AutomationProperties.Name="Settings" Style="{StaticResource NavigationButton}" Click="Settings_Click">
-                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE713;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,12,0"/><TextBlock Text="Settings"/></StackPanel>
+            </Border>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="UpdateNotice" Style="{StaticResource StatusPill}" Click="Settings_Click" Visibility="Collapsed" AutomationProperties.Name="Update available">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE896;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentTextBrush}" VerticalAlignment="Center" Margin="0,0,7,0"/><TextBlock Text="Update" VerticalAlignment="Center"/></StackPanel>
                 </Button>
-                <Popup x:Name="SettingsPopup" PlacementTarget="{Binding ElementName=SettingsButton}" Placement="Top" StaysOpen="False" AllowsTransparency="True" PopupAnimation="None">
-                <Border Padding="24" Background="{DynamicResource BgBrush}">
+                <Button x:Name="ActiveProfilePill" Style="{StaticResource StatusPill}" Click="EditActiveProfile_Click" ToolTip="The profile on your desktop. Click to edit it." AutomationProperties.Name="Edit applied desktop profile">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="ActivePillDot" Width="7" Height="7" Fill="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="ActivePillName" Text="{Binding Text, ElementName=ActiveProfileText}" MaxWidth="160" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="AutomationPill" Style="{StaticResource StatusPill}" Click="PauseAutomation_Click" AutomationProperties.Name="Pause or resume automation">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="AutomationPillIcon" Text="&#xE945;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentTextBrush}" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                        <TextBlock x:Name="AutomationPillText" Text="Auto" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Grid>
+                    <Button x:Name="SettingsButton" AutomationProperties.Name="Settings" Style="{StaticResource StatusPill}" Click="Settings_Click" ToolTip="Settings" Padding="9,6">
+                        <TextBlock Text="&#xE713;" FontFamily="{StaticResource IconFont}" FontSize="14" VerticalAlignment="Center"/>
+                    </Button>
+            <Popup x:Name="SettingsPopup" PlacementTarget="{Binding ElementName=SettingsButton}" Placement="Top" StaysOpen="False" AllowsTransparency="True" PopupAnimation="None">
+                <Border Padding="24" Background="{DynamicResource PaneBaseBrush}">
                 <StackPanel>
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -208,8 +175,44 @@
                     </Grid>
                 </StackPanel>
                 </Border></Popup>
-            </Grid>
-                </StackPanel>
+                </Grid>
+            </StackPanel>
+            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                <Button Style="{StaticResource TitleBarButton}" Click="MinBtn_Click" ToolTip="Minimize" AutomationProperties.Name="Minimize">
+                    <Path Data="M0,0 L10,0" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1"/>
+                </Button>
+                <Button x:Name="MaximizeButton" Style="{StaticResource TitleBarButton}" Click="Maximize_Click" ToolTip="Maximize" AutomationProperties.Name="Maximize">
+                    <Path x:Name="MaximizeGlyph" Data="M0,0 L10,0 10,10 0,10 Z" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1"/>
+                </Button>
+                <Button Style="{StaticResource TitleBarCloseButton}" Click="CloseBtn_Click" ToolTip="Close to tray" AutomationProperties.Name="Close to tray">
+                    <Path Data="M0,0 L9,9 M9,0 L0,9" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1"/>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- The profile list: its own pane, shown next to the profile editor. -->
+        <ContentControl x:Name="SidebarFrame" Grid.Row="1" Style="{StaticResource GlassPane}" Margin="12,0,3,12" Visibility="Collapsed">
+            <DockPanel Margin="10,14,10,12">
+                <Button x:Name="NewProfileButton" DockPanel.Dock="Bottom" Content="+  New profile" ToolTip="New profile" Click="NewProfile_Click" Style="{StaticResource PillButton}" Padding="12,8" Margin="0,10,0,0" AutomationProperties.Name="New profile"/>
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                    <Grid x:Name="ProfileSearchArea">
+                        <TextBox x:Name="SearchBox" Height="36" Padding="10,7" TextChanged="SearchBox_TextChanged"
+                                 AutomationProperties.Name="Search profiles" ToolTip="Filter profiles by name"/>
+                        <TextBlock x:Name="ProfileSearchHint" Text="Search profiles" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                   Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </Grid>
                 <ScrollViewer x:Name="ProfileRailArea" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="10,0,10,0">
                     <StackPanel>
                         <TextBlock x:Name="ProfileRailHeading" Text="Profiles" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextTertiaryBrush}" Margin="18,0,0,10"/>
@@ -221,7 +224,7 @@
             </DockPanel>
         </ContentControl>
 
-        <ContentControl Grid.Column="1" Grid.Row="1" Style="{StaticResource GlassPane}" Margin="3,0,12,12">
+        <ContentControl x:Name="ContentFrame" Grid.Column="1" Grid.Row="1" Style="{StaticResource GlassPane}" Margin="12,0,12,12">
         <Grid x:Name="PaneHost">
         <Grid x:Name="ProfilePane">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -444,27 +447,36 @@
                         </Grid>
                     </Grid>
                 </Border>
-                <Grid Margin="0,12,0,0">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource GlassCard}">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE787;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/><TextBlock Text="Up next" Style="{StaticResource HintText}"/></StackPanel>
-                            <TextBlock x:Name="NextScheduleText" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold" Margin="0,10,0,6" TextWrapping="Wrap"/>
-                            <TextBlock x:Name="NextScheduleHint" Style="{StaticResource HintText}" TextWrapping="Wrap"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Grid.Column="2" Style="{StaticResource GlassCard}">
+                <!-- What happens next and whether automation is running, side by side in one slim strip. -->
+                <Border Style="{StaticResource GlassCard}" Padding="18,13" Margin="0,12,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE945;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/><TextBlock Text="Automation" Style="{StaticResource HintText}"/></StackPanel>
-                                <TextBlock x:Name="AutomationModeText" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold" Margin="0,10,0,6"/>
-                                <TextBlock x:Name="AutomationHintText" Style="{StaticResource HintText}" TextWrapping="Wrap"/>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE787;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{DynamicResource AccentTextBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Up next" Style="{StaticResource HintText}" FontSize="12"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                    <TextBlock x:Name="NextScheduleText" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NextScheduleHint" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="10,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
                             </StackPanel>
-                            <Button Grid.Column="1" x:Name="PauseAutomationButton" Content="Pause automation" Click="PauseAutomation_Click" Style="{StaticResource PillButton}" VerticalAlignment="Top" Margin="10,0,0,0"/>
                         </Grid>
-                    </Border>
-                </Grid>
+                        <Border Grid.Column="1" Width="1" Background="{DynamicResource CardEdgeBrush}" Margin="20,2"/>
+                        <Grid Grid.Column="2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE945;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{DynamicResource AccentTextBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Automation" Style="{StaticResource HintText}" FontSize="12"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                    <TextBlock x:Name="AutomationModeText" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="AutomationHintText" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="10,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <Button Grid.Column="2" x:Name="PauseAutomationButton" Content="Pause automation" Click="PauseAutomation_Click" Style="{StaticResource PillButton}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        </Grid>
+                    </Grid>
+                </Border>
                 <Grid Margin="0,28,0,12">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -480,41 +492,36 @@
                 <Border x:Name="SceneGalleryEmpty" Style="{StaticResource GlassCard}" Visibility="Collapsed">
                     <StackPanel><TextBlock Text="Create your first profile" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold"/><TextBlock Text="Create a profile with a wallpaper, then switch to it in one click." Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,16"/><Button Content="Create a profile  →" Click="NewProfile_Click" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/></StackPanel>
                 </Border>
-                <Border Style="{StaticResource GlassCard}" Margin="0,16,0,0">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE916;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/><TextBlock Text="Take over for a while" FontWeight="SemiBold"/></StackPanel>
-                        <Grid Margin="0,14,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="130"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <ComboBox x:Name="OverrideProfileCombo" DisplayMemberPath="Name" SelectedValuePath="Id" SelectionChanged="OverrideProfile_Changed" AutomationProperties.Name="Profile"/>
-                            <TextBlock Grid.Column="1" Text="for" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="12,0"/>
-                            <ComboBox Grid.Column="2" x:Name="OverrideDurationCombo" DisplayMemberPath="Label" AutomationProperties.Name="Duration"/>
-                            <Button Grid.Column="3" x:Name="StartOverrideButton" Content="Apply" Style="{StaticResource AccentPillButton}" Click="StartOverride_Click" VerticalAlignment="Center" Margin="12,0,0,0" Padding="16,7"/>
-                        </Grid>
-                        <TextBlock x:Name="OverrideStatusText" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,12,0,0"/>
-                        <Button x:Name="ResumeAutomaticButton" Content="Resume automation" Click="ResumeAutomatic_Click" Style="{StaticResource PillButton}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
-                    </StackPanel>
-                </Border>
-                <Border Style="{StaticResource GlassCard}" Margin="0,16,0,0">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10"><TextBlock Text="&#xE81C;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/><TextBlock Text="Recent activity" FontWeight="SemiBold"/></StackPanel>
-                        <TextBlock x:Name="NoActivityText" Text="No activity yet" Style="{StaticResource HintText}" TextWrapping="Wrap"/>
-                        <ItemsControl x:Name="RecentActivityList">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="0,6">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="78"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="{Binding AtLocal, StringFormat={}{0:t}}" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,2,0,0"/>
-                                        <Ellipse Grid.Column="1" Width="7" Height="7" Fill="{DynamicResource AccentBrush}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,6,0,0"/>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="{Binding ProfileName}" FontWeight="SemiBold"/>
-                                            <TextBlock Text="{Binding Reason}" Style="{StaticResource HintText}" Margin="0,3,0,0" TextWrapping="Wrap"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,30,0,12">
+                    <TextBlock Text="Take over for a while" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="show one profile, then go back to your rules" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="12,3,0,0"/>
+                </StackPanel>
+                <WrapPanel Orientation="Horizontal">
+                    <ComboBox x:Name="OverrideProfileCombo" Width="220" DisplayMemberPath="Name" SelectedValuePath="Id" SelectionChanged="OverrideProfile_Changed" AutomationProperties.Name="Profile" Margin="0,0,0,6"/>
+                    <TextBlock Text="for" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="12,0,12,6"/>
+                    <ComboBox x:Name="OverrideDurationCombo" Width="130" DisplayMemberPath="Label" AutomationProperties.Name="Duration" Margin="0,0,0,6"/>
+                    <Button x:Name="StartOverrideButton" Content="Apply" Style="{StaticResource AccentPillButton}" Click="StartOverride_Click" VerticalAlignment="Center" Margin="12,0,0,6" Padding="16,7"/>
+                </WrapPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <TextBlock x:Name="OverrideStatusText" Style="{StaticResource HintText}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                    <Button x:Name="ResumeAutomaticButton" Content="Resume automation" Click="ResumeAutomatic_Click" Style="{StaticResource PillButton}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+
+                <TextBlock Text="Recent" FontSize="{StaticResource TypeSection}" FontWeight="SemiBold" Margin="0,30,0,10"/>
+                <TextBlock x:Name="NoActivityText" Text="Nothing has happened yet" Style="{StaticResource HintText}" TextWrapping="Wrap"/>
+                <ItemsControl x:Name="RecentActivityList" Margin="0,0,0,8">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,5">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding AtLocal, StringFormat={}{0:t}}" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Reason}">
+                                    <Run Text="{Binding ProfileName, Mode=OneWay}" FontWeight="SemiBold"/><Run Text="   "/><Run Text="{Binding Reason, Mode=OneWay}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </TextBlock>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </StackPanel>
         </ScrollViewer>
 
@@ -526,6 +533,8 @@
         <ContentControl x:Name="SwitcherPane" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
         </Grid>
         </ContentControl>
+
+        <StackPanel x:Name="ToastHost" Grid.Column="1" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,30,30" IsHitTestVisible="False" Panel.ZIndex="10"/>
 
     </Grid>
 </Window>

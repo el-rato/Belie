@@ -208,7 +208,7 @@ internal partial class MainWindow
         {
             _coordinator.ProfilesEdited();
             _savedDraft = DraftSnapshot(); BuildRail(); SelectProfile(editor.Result.Id, true);
-            ProfileMessage.Text = "Changes saved";
+            ProfileMessage.Text = "Changes saved"; ShowToast("Saved " + editor.Result.Name);
         }
     }
 }

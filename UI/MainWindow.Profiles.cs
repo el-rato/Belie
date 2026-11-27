@@ -99,7 +99,7 @@ internal partial class MainWindow
         _coordinator.ProfilesEdited();
         _savedDraft = DraftSnapshot();
         BuildRail(); SelectProfile(draft.Id, true);
-        ProfileMessage.Text = "Changes saved";
+        ProfileMessage.Text = "Changes saved"; ShowToast("Saved " + draft.Name);
         return true;
     }
     private void MoreProfile_Click(object sender, RoutedEventArgs e)
@@ -110,7 +110,6 @@ internal partial class MainWindow
     private void UpdatePreviewFit()
     {
         if (PreviewMon == null || PreviewFrame == null) return;
-        DesktopContextButton.Tag = ActualHeight < 760 || ActualWidth < 1000 ? "Compact" : null;
         UpdateShellLayout();
         var fit = FitCombo.SelectedItem is FitMode selected ? selected : FitMode.Fill;
         var screen = fit == FitMode.Span ? System.Windows.Forms.SystemInformation.VirtualScreen : System.Windows.Forms.Screen.PrimaryScreen!.Bounds;

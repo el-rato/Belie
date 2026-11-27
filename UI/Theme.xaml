@@ -1003,6 +1003,52 @@
             </ControlTemplate.Triggers>
         </ControlTemplate></Setter.Value></Setter>
     </Style>
+    <!-- A status module on the top bar: quiet glass until pointed at. -->
+    <Style x:Key="StatusPill" TargetType="Button" BasedOn="{StaticResource PillButton}">
+        <Setter Property="Background" Value="{DynamicResource PaneBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource PaneEdgeBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Padding" Value="11,6"/>
+        <Setter Property="Margin" Value="0,0,6,0"/>
+    </Style>
+    <!-- A section on the top bar. The selected one fills with the accent and grows a short underline. -->
+    <Style x:Key="NavPill" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Padding" Value="13,6"/>
+        <Setter Property="Margin" Value="0,0,2,0"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" CornerRadius="15" Background="{TemplateBinding Background}" BorderBrush="{DynamicResource TextPrimaryBrush}" BorderThickness="0">
+                <Grid>
+                    <ContentPresenter x:Name="Label" Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Border x:Name="Underline" Height="2" Width="14" CornerRadius="1" Background="{DynamicResource AccentBrush}" VerticalAlignment="Bottom"
+                            Margin="0,0,0,3" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
+                    </Border>
+                </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                </Trigger>
+                <Trigger Property="Tag" Value="Selected">
+                    <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource AccentSubtleBrush}"/>
+                    <Setter TargetName="Underline" Property="Visibility" Value="Visible"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
+                    <Trigger.EnterActions><BeginStoryboard><Storyboard FillBehavior="Stop">
+                        <DoubleAnimation Storyboard.TargetName="Underline" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" From="0" To="1" Duration="0:0:0.25" EasingFunction="{StaticResource EasePop}"/>
+                    </Storyboard></BeginStoryboard></Trigger.EnterActions>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.7"/></Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderThickness" Value="1"/></Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
     <Style x:Key="AccentPillButton" TargetType="Button" BasedOn="{StaticResource PillButton}">
         <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>

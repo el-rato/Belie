@@ -221,20 +221,22 @@ internal static class UiAppearance
         return (System.Drawing.Icon)icon.Clone();
     }
 
-    public static void SetDialogContent(Window dialog, UIElement content, string title)
+    /// <param name="glass">True for a dialog that floats as blurred glass, like the settings window.</param>
+    public static void SetDialogContent(Window dialog, UIElement content, string title, bool glass = false)
     {
         dialog.WindowStyle = WindowStyle.None;
         dialog.BorderThickness = new Thickness(1);
         dialog.UseLayoutRounding = true;
         dialog.SetResourceReference(Window.FontFamilyProperty, "AppFont");
-        dialog.SetResourceReference(Window.BackgroundProperty, "BgBrush");
+        dialog.SetResourceReference(Window.BackgroundProperty, glass ? "PaneBrush" : "BgBrush");
         dialog.SetResourceReference(Window.ForegroundProperty, "TextPrimaryBrush");
         dialog.SetResourceReference(Window.BorderBrushProperty, "BorderBrush");
         var layout = new Controls.Grid();
         layout.RowDefinitions.Add(new Controls.RowDefinition { Height = new GridLength(48) });
         layout.RowDefinitions.Add(new Controls.RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         var header = new Controls.Border { BorderThickness = new Thickness(0, 0, 0, 1) };
-        header.SetResourceReference(Controls.Border.BackgroundProperty, "SurfaceBrush");
+        if (glass) header.Background = Brushes.Transparent;
+        else header.SetResourceReference(Controls.Border.BackgroundProperty, "SurfaceBrush");
         header.SetResourceReference(Controls.Border.BorderBrushProperty, "BorderBrush");
         header.MouseLeftButtonDown += (_, args) =>
         {
@@ -265,7 +267,7 @@ internal static class UiAppearance
         Controls.Grid.SetRow(content, 1);
         layout.Children.Add(content);
         dialog.Content = layout;
-        Attach(dialog);
+        Attach(dialog, glass);
     }
 
     private static readonly DependencyProperty GlassHostProperty = DependencyProperty.RegisterAttached("GlassHost", typeof(bool), typeof(UiAppearance));
