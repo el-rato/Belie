@@ -15,17 +15,21 @@ namespace WallpaperProfiles.UI;
 /// <summary>The editors of one module and of one part of the bar.</summary>
 internal sealed partial class TopBarPage
 {
-    private sealed record Field(string Property, string Label, string Hint, bool IsColor = false);
+    /// <param name="Example">A short example, shown greyed in the empty box.</param>
+    private sealed record Field(string Property, string Label, string Hint, string Example, bool IsColor = false);
 
     private static readonly Field[] Fields =
     {
-        new("color", "Text color", "#88c0d0, @accent or linear-gradient(90deg, #f0f, #0ff)", true), new("icon-color", "Icon color", "#f38ba8", true),
-        new("background", "Background", "#1e1e2e, alpha(@background, .6) or linear-gradient(90deg, #f0f, #0ff)", true),
-        new("font-family", "Font", "JetBrainsMono Nerd Font"), new("font-size", "Text size", "14px"), new("font-weight", "Text weight", "bold"),
-        new("border", "Border", "1px solid @accent"), new("border-radius", "Roundness", "12px, or 12px 12px 0 0"),
-        new("padding", "Space inside", "0 12px"), new("margin", "Space around", "4px 0"), new("min-width", "Smallest width", "60px"), new("opacity", "Opacity", "0.8"),
-        new("spacing", "Space between modules", "16px"), new("shape", "Shape", "none, island or notch")
+        new("color", "Text color", "#88c0d0, @accent or linear-gradient(90deg, #f0f, #0ff)", "#88c0d0", true), new("icon-color", "Icon color", "#f38ba8", "#f38ba8", true),
+        new("background", "Background", "#1e1e2e, alpha(@background, .6) or linear-gradient(90deg, #f0f, #0ff)", "#1e1e2e", true),
+        new("font-family", "Font", "JetBrainsMono Nerd Font", ""), new("font-size", "Text size", "14px", "14px"), new("font-weight", "Text weight", "bold", "bold"),
+        new("border", "Border", "1px solid @accent", "1px solid @accent"), new("border-radius", "Roundness", "12px, or 12px 12px 0 0", "12px"),
+        new("padding", "Space inside", "0 12px", "0 12px"), new("margin", "Space around", "4px 0", "4px 0"), new("min-width", "Smallest width", "60px", "60px"),
+        new("opacity", "Opacity", "0.8", "0.8"), new("spacing", "Space between modules", "16px", "16px"), new("shape", "Shape", "none, island or notch", "island")
     };
+
+    /// <summary>The style boxes most people want; the rest wait under "More style".</summary>
+    private static readonly HashSet<string> Everyday = new() { "color", "background", "font-size" };
 
     private static readonly (string Name, string Command)[] Actions =
     {
@@ -42,39 +46,74 @@ internal sealed partial class TopBarPage
     private TextBox Input(string label, string id, string value, string hint, Action<string> set, FrameworkElement? extra = null)
     {
         var box = new TextBox { Text = value, Width = 240, ToolTip = hint.Length > 0 ? "For example: " + hint : null };
+        Placeholder.SetText(box, hint.Length > 0 ? "e.g. " + hint.Split(',')[0] : "");
         box.TextChanged += (_, _) => { set(box.Text); Changed(); };
-        Row(label, id, box, extra);
+        Row(label, id, box, extra ?? Gap());
         return box;
     }
+
+    /// <summary>Stands in for a color or menu button, so every box lines up in one column.</summary>
+    private static FrameworkElement Gap() => new Border { Width = 42 };
+
+    /// <summary>A fold that holds settings few people need, so the editor stays short.</summary>
+    private void Folded(string title, string id, Action build)
+    {
+        var body = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var fold = new Expander { Header = title, Content = body, Margin = new Thickness(2, 0, 0, 10) };
+        AutomationProperties.SetAutomationId(fold, id);
+        Add(fold);
+        Into(body, build);
+    }
+
+    /// <summary>What an empty color box means: the bar's own text or background color.</summary>
+    private string Inherited(string property) => property == "background" ? _shown.BackgroundColor : _shown.TextColor;
 
     /// <summary>Boxes for one set of style declarations. What cannot be understood is marked and not kept.</summary>
     private void StyleFields(string prefix, Dictionary<string, string> style, IEnumerable<string> properties)
     {
         foreach (var field in properties.Select(name => Fields.First(item => item.Property == name)))
+            StyleField(prefix, style, field);
+    }
+
+    private void StyleField(string prefix, Dictionary<string, string> style, Field field)
+    {
         {
             var id = prefix + string.Concat(field.Property.Split('-').Select(word => char.ToUpperInvariant(word[0]) + word[1..]));
             var value = style.GetValueOrDefault(field.Property, "");
             if (field.Property == "font-family")
             {
                 var font = FontBox(value, text => Take(style, "font-family", text, null));
-                Row(field.Label, id, font);
-                continue;
+                font.Loaded += (_, _) =>
+                {
+                    if (font.Template.FindName("PART_EditableTextBox", font) is TextBox typing)
+                        Placeholder.SetText(typing, prefix == "Part" ? "As chosen above" : "Same as the bar");
+                };
+                Row(field.Label, id, font, Gap());
+                return;
             }
-            var box = new TextBox { Text = value, Width = 240, ToolTip = "For example: " + field.Hint };
+            var box = new TextBox { Text = value, Width = 240, ToolTip = "Leave empty to keep the bar's own. For example: " + field.Hint };
+            Placeholder.SetText(box, (prefix == "Part" ? "As chosen above" : "Same as the bar") + (field.Example.Length > 0 && !field.IsColor ? " · e.g. " + field.Example : ""));
             Button? swatch = null;
             if (field.IsColor)
             {
                 swatch = new Button { Width = 34, Height = 34, Padding = new Thickness(0), Margin = new Thickness(8, 0, 0, 0), ToolTip = "Choose a color" };
-                var paint = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9) };
+                var paint = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1) };
+                paint.SetResourceReference(Border.BorderBrushProperty, "BorderStrongBrush");
                 swatch.Content = paint;
                 AutomationProperties.SetName(swatch, "Choose " + field.Label.ToLowerInvariant());
-                void Show() => paint.Background = Palette().TryBrush(box.Text) ?? System.Windows.Media.Brushes.Transparent;
+                // Empty, it shows the color the bar uses instead, a little faded.
+                void Show()
+                {
+                    var own = Palette().TryBrush(box.Text);
+                    paint.Background = own ?? Palette().TryBrush(Inherited(field.Property)) ?? System.Windows.Media.Brushes.Transparent;
+                    paint.Opacity = own != null ? 1 : .6;
+                }
                 Show();
                 box.TextChanged += (_, _) => Show();
                 swatch.Click += (_, _) => PickColor(box);
             }
             box.TextChanged += (_, _) => Take(style, field.Property, box.Text, box);
-            Row(field.Label, id, box, swatch);
+            Row(field.Label, id, box, swatch ?? Gap());
         }
     }
 
@@ -133,6 +172,7 @@ internal sealed partial class TopBarPage
         pick.SetResourceReference(FontFamilyProperty, "IconFont");
         AutomationProperties.SetName(pick, "Choose: " + label);
         var box = Input(label, id, value, "wt.exe, https://example.org or belie:wallpapers", text => set(text.Trim()), pick);
+        Placeholder.SetText(box, "What it usually does");
         pick.Click += (_, _) =>
         {
             var menu = new ContextMenu { PlacementTarget = pick, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
@@ -168,24 +208,40 @@ internal sealed partial class TopBarPage
                     text => { if (int.TryParse(text, out var seconds)) module.Interval = Math.Clamp(seconds, 1, 86400); });
                 Hint("The first line the command writes is shown on the bar, and the rest when you point at it. It runs as you, hidden, and is stopped after ten seconds.");
             }
-            if (kind is not (BarModuleKind.Workspaces or BarModuleKind.Island or BarModuleKind.Visualizer or BarModuleKind.Separator))
+            var icon = kind is not (BarModuleKind.Workspaces or BarModuleKind.Island or BarModuleKind.Visualizer or BarModuleKind.Separator);
+            if (icon)
             {
-                Input("Icon", "ModuleIcon", module.Icon, "any symbol or Nerd Font icon; - for none", text => module.Icon = text.Trim());
-                if (kind is not (BarModuleKind.Media or BarModuleKind.Wallpaper)) Input("Format", "ModuleFormat", module.Format, "{icon} {value}", text => module.Format = text.Trim());
+                var symbol = Input("Icon", "ModuleIcon", module.Icon, "any symbol or Nerd Font icon; - for none", text => module.Icon = text.Trim());
+                Placeholder.SetText(symbol, "Its usual icon (type - for none)");
             }
-            StyleFields("Module", module.Style, kind switch
+            var properties = kind switch
             {
                 BarModuleKind.Workspaces or BarModuleKind.Separator or BarModuleKind.Visualizer => new[] { "color", "background", "border", "border-radius", "padding", "margin", "opacity" },
                 BarModuleKind.Island => new[] { "color", "background", "font-family", "font-size", "font-weight", "border", "border-radius" },
                 _ => new[] { "color", "icon-color", "background", "font-family", "font-size", "font-weight", "border", "border-radius", "padding", "margin", "min-width", "opacity" }
-            });
+            };
+            // The everyday choices first; the rest folded away, so a first look is short.
+            StyleFields("Module", module.Style, properties.Where(Everyday.Contains));
             if (kind != BarModuleKind.Workspaces && kind != BarModuleKind.Launcher) CommandField("Click", "ModuleClick", module.OnClick, text => module.OnClick = text);
-            CommandField("Right-click", "ModuleRightClick", module.OnRightClick, text => module.OnRightClick = text);
-            CommandField("Middle click", "ModuleMiddleClick", module.OnMiddleClick, text => module.OnMiddleClick = text);
-            CommandField("Scroll up", "ModuleScrollUp", module.OnScrollUp, text => module.OnScrollUp = text);
-            CommandField("Scroll down", "ModuleScrollDown", module.OnScrollDown, text => module.OnScrollDown = text);
-            Input("Name in the stylesheet", "ModuleName", module.Name, "mail, to select it as #custom-mail",
-                text => module.Name = string.Concat(text.Where(letter => char.IsLetterOrDigit(letter) || letter is '-' or '_')));
+            Folded("More style", "ModuleMoreStyle", () =>
+            {
+                if (icon && kind is not (BarModuleKind.Media or BarModuleKind.Wallpaper))
+                {
+                    var format = Input("Format", "ModuleFormat", module.Format, "{icon} {value}", text => module.Format = text.Trim());
+                    Placeholder.SetText(format, "Its usual layout · e.g. {icon} {value}");
+                }
+                StyleFields("Module", module.Style, properties.Where(name => !Everyday.Contains(name)));
+                var name = Input("Name in the stylesheet", "ModuleName", module.Name, "mail, to select it as #custom-mail",
+                    text => module.Name = string.Concat(text.Where(letter => char.IsLetterOrDigit(letter) || letter is '-' or '_')));
+                Placeholder.SetText(name, "e.g. mail, for #custom-mail");
+            });
+            Folded("Other clicks and scrolling", "ModuleMoreActions", () =>
+            {
+                CommandField("Right-click", "ModuleRightClick", module.OnRightClick, text => module.OnRightClick = text);
+                CommandField("Middle click", "ModuleMiddleClick", module.OnMiddleClick, text => module.OnMiddleClick = text);
+                CommandField("Scroll up", "ModuleScrollUp", module.OnScrollUp, text => module.OnScrollUp = text);
+                CommandField("Scroll down", "ModuleScrollDown", module.OnScrollDown, text => module.OnScrollDown = text);
+            });
             var done = Press("Done", "ModuleDone", () => Edit(null));
             done.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
             Add(done);

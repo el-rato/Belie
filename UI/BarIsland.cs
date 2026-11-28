@@ -91,7 +91,9 @@ internal sealed class BarIsland : Canvas
         _frame.ClipToBounds = look.Shape != BarShape.Notch;
         var size = look.Size ?? settings.FontSize;
         _clock.FontSize = size * 1.1; _title.FontSize = size; _artist.FontSize = size * .85; _shortText.FontSize = size;
-        _clock.Foreground = _title.Foreground = _artist.Foreground = _shortText.Foreground = look.Color ?? text;
+        _title.Foreground = _artist.Foreground = _shortText.Foreground = look.Color ?? text;
+        // Following the wallpaper, the clock takes its accent, so it changes with the rest; the text color barely does.
+        _clock.Foreground = look.Color ?? (settings.Colors == TopBarColors.Wallpaper ? accent : text);
         if (look.Font is { Length: > 0 } font) SetValue(System.Windows.Documents.TextElement.FontFamilyProperty, BarFonts.Find(font)); else ClearValue(System.Windows.Documents.TextElement.FontFamilyProperty);
         _clock.FontWeight = look.Weight ?? FontWeights.Normal;
         _clock.Visibility = settings.IslandShowsClock ? Visibility.Visible : Visibility.Collapsed;
