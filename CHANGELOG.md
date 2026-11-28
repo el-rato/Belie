@@ -1,5 +1,19 @@
 # Belie patch notes
 
+## [4.3.1] - 2026-11-28 - A clearer module editor
+
+### Changed
+
+- **A clearer module editor.** Under **Top bar → Modules**, every empty box shows a grey example of what goes there, and empty color circles show the color the bar already uses. The everyday choices come first; the rest wait under **More style** and **Other clicks and scrolling**. The boxes line up, and the action menus have the app's rounded look.
+
+### Fixed
+
+- **The island clock follows the wallpaper.** When the bar takes its colors from the wallpaper, the clock now changes color with it too.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
 ## [4.3.0] - 2026-11-28 - A new look, and a livelier team
 
 ### Changed
