@@ -61,7 +61,9 @@ public class CreatureTeamTests
         while (root != null && !File.Exists(Path.Combine(root, "creatures", "pack.json"))) root = Path.GetDirectoryName(root);
         Assert.NotNull(root);
         var creatures = CreaturePack.Parse(File.ReadAllText(Path.Combine(root!, "creatures", "pack.json")));
-        Assert.Equal(6, creatures.Length);
+        Assert.Equal(7, creatures.Length);
+        Assert.Equal("gliscor", creatures[0].Id); // First, so new teams include it.
+        Assert.Equal("hang", creatures[0].Motion);
         foreach (var frame in creatures.SelectMany(creature => creature.Frames))
             Assert.True(File.Exists(Path.Combine(root!, "creatures", frame)), frame);
     }

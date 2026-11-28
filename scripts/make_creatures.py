@@ -186,12 +186,20 @@ def save(grid, path):
 
 # Each type's color on the Team panel; a pack may name its own types and colors.
 COLORS = {"Leaf": "#7CCB6F", "Ember": "#F08A4B", "Tide": "#64AAF0", "Spark": "#F5D547",
-          "Bug": "#B5C04A", "Shade": "#9A6ED2", "Air": "#B8A8F0", "Stone": "#A0A0AA"}
+          "Bug": "#B5C04A", "Shade": "#9A6ED2", "Air": "#B8A8F0", "Stone": "#A0A0AA",
+          "Ground": "#E2BF65", "Flying": "#A98FF3"}
+
+# Creatures whose frames are kept as they are in creatures/ instead of being drawn here. They come first,
+# because a new team takes the first six creatures in the pack.
+KEPT = [
+    {"id": "gliscor", "name": "Gliscor", "types": ["Ground", "Flying"], "frames": ["gliscor-0.png", "gliscor-1.png"],
+     "motion": "hang", "mouth": [0.47, 0.34]},
+]
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    pack = {"name": "Belie critters", "colors": COLORS, "creatures": []}
+    pack = {"name": "Belie critters", "colors": COLORS, "creatures": [dict(creature) for creature in KEPT]}
     for key, name, types, draw in CREATURES:
         frames = []
         for frame in (0, 1):

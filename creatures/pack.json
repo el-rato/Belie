@@ -8,9 +8,28 @@
     "Bug": "#B5C04A",
     "Shade": "#9A6ED2",
     "Air": "#B8A8F0",
-    "Stone": "#A0A0AA"
+    "Stone": "#A0A0AA",
+    "Ground": "#E2BF65",
+    "Flying": "#A98FF3"
   },
   "creatures": [
+    {
+      "id": "gliscor",
+      "name": "Gliscor",
+      "types": [
+        "Ground",
+        "Flying"
+      ],
+      "frames": [
+        "gliscor-0.png",
+        "gliscor-1.png"
+      ],
+      "motion": "hang",
+      "mouth": [
+        0.47,
+        0.34
+      ]
+    },
     {
       "id": "mossbun",
       "name": "Mossbun",
