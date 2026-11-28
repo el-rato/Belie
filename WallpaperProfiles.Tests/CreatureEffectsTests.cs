@@ -19,7 +19,11 @@ public sealed class CreatureEffectsTests
     {
         Assert.Equal(CreaturePower.Fire, CreatureEffects.PowerOf(new[] { "Dragon", "Flying" }));
         Assert.Equal(CreaturePower.Lightning, CreatureEffects.PowerOf(new[] { "Electric", "Flying" }));
-        Assert.Equal(CreaturePower.None, CreatureEffects.PowerOf(new[] { "Fire", "Flying" }));
+        Assert.Equal(CreaturePower.Fire, CreatureEffects.PowerOf(new[] { "Fire", "Flying" }));
+        Assert.Equal(CreaturePower.Water, CreatureEffects.PowerOf(new[] { "Water" }));
+        Assert.Equal(CreaturePower.Leaves, CreatureEffects.PowerOf(new[] { "Leaf" }));
+        Assert.Equal(CreaturePower.Gust, CreatureEffects.PowerOf(new[] { "Normal", "Flying" }));
+        Assert.Equal(CreaturePower.None, CreatureEffects.PowerOf(new[] { "Normal" }));
         Assert.Equal(CreaturePower.Shadow, CreatureEffects.PowerOf(new[] { "Ghost", "Poison" }));
         Assert.Equal(CreaturePower.Sand, CreatureEffects.PowerOf(new[] { "Ground", "Flying" }));
         Assert.True(CreatureEffects.HasTailFlame(new[] { "Fire", "Flying" }));
@@ -126,5 +130,25 @@ public sealed class CreatureEffectsTests
         Assert.NotEmpty(sand);
         Assert.All(sand, p => Assert.True(p.X <= Mouth.X + 4)); // Facing left.
         Assert.Contains(sand, p => p.VY > 0); // Falls back down.
+    }
+
+    [Theory]
+    [InlineData("Water", 5)]
+    [InlineData("Leaves", 6)]
+    [InlineData("Gust", 7)]
+    public void Water_leaves_and_wind_go_the_way_it_faces(string name, int kind)
+    {
+        var effects = new CreatureEffects(Enum.Parse<CreaturePower>(name), false, new Random(6));
+        var seen = new List<Particle>();
+        var started = false;
+        for (var i = 0; i < 60 * 9; i++)
+        {
+            started |= effects.Update(1 / 60.0, Mouth, Tail, -1);
+            seen.AddRange(effects.Particles);
+        }
+        Assert.True(started);
+        Assert.Contains(seen, p => p.Kind == kind);
+        Assert.All(seen.Where(p => p.Kind == kind && p.Age > .1), p => Assert.True(p.X < Mouth.X));
+        Assert.All(seen, p => Assert.True(Math.Abs(p.X - Mouth.X) < CreatureEffects.ReachFor(0) + 20));
     }
 }

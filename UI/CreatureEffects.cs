@@ -9,15 +9,16 @@ using Brush = System.Windows.Media.Brush;
 namespace WallpaperProfiles.UI;
 
 /// <summary>
-/// What a creature can do besides walk: dragons breathe fire, electric ones throw lightning, ghosts throw shadow
-/// balls, and ground types kick up sand.
+/// What a creature can do besides walk: dragons and fire types breathe fire, electric ones throw lightning, ghosts
+/// throw shadow balls, ground types kick up sand, water types shoot a jet, grass types throw leaves, and fliers blow
+/// a gust of wind.
 /// </summary>
-internal enum CreaturePower { None, Fire, Lightning, Shadow, Sand }
+internal enum CreaturePower { None, Fire, Lightning, Shadow, Sand, Water, Leaves, Gust }
 
 internal struct Particle
 {
     public double X, Y, VX, VY, Age, Life, Size, Grow;
-    /// <summary>0 fire breath, 1 spark, 2 tail flame, 3 ghostly wisp, 4 sand.</summary>
+    /// <summary>0 fire breath, 1 spark, 2 tail flame, 3 ghostly wisp, 4 sand, 5 water, 6 leaf, 7 wind.</summary>
     public byte Kind;
 }
 
@@ -27,6 +28,7 @@ internal struct Particle
 /// </summary>
 internal sealed class CreatureEffects
 {
+    public const double SprayTime = .8;
     public const double BreathTime = .9, BoltTime = .45, ChargeTime = .4, ShadowTime = 1.1, SandTime = .7;
     /// <summary>The level at which effects reach their full size.</summary>
     public const int FullLevel = 50;
@@ -39,7 +41,7 @@ internal sealed class CreatureEffects
     private readonly Random _random;
     private readonly List<Point> _bolt = new();
     private double _cooldown, _burst, _boltTime, _flashIn, _sparkIn, _tailCarry, _breathCarry;
-    private double _shadow, _ballVX, _sand, _sandCarry, _wispIn = 1;
+    private double _shadow, _ballVX, _sand, _sandCarry, _wispIn = 1, _spray, _sprayCarry;
 
     /// <param name="strength">0 for a new creature up to 1 at <see cref="FullLevel"/>; fire, lightning and flames grow with it.</param>
     public CreatureEffects(CreaturePower power, bool tailFlame, Random? random = null, double strength = 0)
@@ -66,16 +68,24 @@ internal sealed class CreatureEffects
     /// <summary>How long a whole attack takes, so the creature can wait for it.</summary>
     public double AttackTime => Power switch
     {
-        CreaturePower.Fire => BreathTime, CreaturePower.Lightning => BoltTime, CreaturePower.Shadow => ChargeTime + .5, CreaturePower.Sand => SandTime, _ => 0
+        CreaturePower.Fire => BreathTime, CreaturePower.Lightning => BoltTime, CreaturePower.Shadow => ChargeTime + .5, CreaturePower.Sand => SandTime,
+        CreaturePower.Water or CreaturePower.Leaves or CreaturePower.Gust => SprayTime, _ => 0
     };
-    public bool Attacking => _burst > 0 || _boltTime > 0 || _shadow > 0 || _sand > 0;
+    public bool Attacking => _burst > 0 || _boltTime > 0 || _shadow > 0 || _sand > 0 || _spray > 0;
     public bool Empty => Particles.Count == 0 && BoltGlow <= 0 && !TailFlame;
 
     public static CreaturePower PowerOf(IReadOnlyCollection<string> types)
     {
         bool Has(params string[] names) => types.Any(type => names.Contains(type, StringComparer.OrdinalIgnoreCase));
-        return Has("Dragon") ? CreaturePower.Fire : Has("Electric", "Spark") ? CreaturePower.Lightning
-            : Has("Ghost", "Shade") ? CreaturePower.Shadow : Has("Ground", "Rock", "Stone") ? CreaturePower.Sand : CreaturePower.None;
+        // In order: the first type that has a power gives it, so a fire-and-flying creature breathes fire.
+        if (Has("Dragon", "Fire", "Ember")) return CreaturePower.Fire;
+        if (Has("Electric", "Spark")) return CreaturePower.Lightning;
+        if (Has("Ghost", "Shade")) return CreaturePower.Shadow;
+        if (Has("Ground", "Rock", "Stone")) return CreaturePower.Sand;
+        if (Has("Water", "Tide", "Ice")) return CreaturePower.Water;
+        if (Has("Grass", "Leaf", "Bug")) return CreaturePower.Leaves;
+        if (Has("Flying", "Air")) return CreaturePower.Gust;
+        return CreaturePower.None;
     }
 
     public static bool HasTailFlame(IReadOnlyCollection<string> types)
@@ -99,6 +109,9 @@ internal sealed class CreatureEffects
                 case 1: p.VX *= 1 - 3 * seconds; p.VY += 60 * seconds; break; // Sparks slow and fall.
                 case 3: p.VX *= 1 - 2 * seconds; p.VY -= 18 * seconds; break; // Wisps drift up.
                 case 4: p.VX *= 1 - 2.4 * seconds; p.VY += 90 * seconds; break; // Sand settles.
+                case 5: p.VY += 260 * seconds; break; // Water arcs down.
+                case 6: p.VX *= 1 - 1.4 * seconds; p.VY += 25 * seconds; p.X += Math.Cos(p.Age * 11 + p.Life * 40) * 22 * seconds; break; // Leaves flutter.
+                case 7: p.VX *= 1 - .8 * seconds; p.VY = Math.Sin(p.Age * 9 + p.Life * 30) * 14; break; // Wind wavers.
                 default: p.VY -= 70 * seconds; break; // Flames rise.
             }
             p.X += p.VX * seconds; p.Y += p.VY * seconds;
@@ -125,6 +138,7 @@ internal sealed class CreatureEffects
                     case CreaturePower.Lightning: _boltTime = BoltTime; _flashIn = 0; break;
                     case CreaturePower.Shadow: _shadow = ShadowTime; _ballVX = facing * 120 * (1 + Strength * .6); break;
                     case CreaturePower.Sand: _sand = SandTime; break;
+                    case CreaturePower.Water or CreaturePower.Leaves or CreaturePower.Gust: _spray = SprayTime; break;
                 }
                 started = true;
             }
@@ -189,6 +203,33 @@ internal sealed class CreatureEffects
             }
         }
 
+        if (_spray > 0)
+        {
+            _spray -= seconds;
+            var power = 1 + Strength * .7;
+            switch (Power)
+            {
+                case CreaturePower.Water:
+                    // A jet that arcs and falls, with a few big drops in it.
+                    for (_sprayCarry += seconds * 180 * grow; _sprayCarry >= 1; _sprayCarry--)
+                        Add(5, mouth.X, mouth.Y + Spread(2.5 * grow), facing * (135 + _random.NextDouble() * 40) * power, -60 - _random.NextDouble() * 30 + Spread(18),
+                            .42 + _random.NextDouble() * .14, (_random.NextDouble() < .25 ? 5 : 3.5) * grow, -1.5);
+                    break;
+                case CreaturePower.Leaves:
+                    // A flurry of leaves that tumbles forward and drifts down.
+                    for (_sprayCarry += seconds * 60 * grow; _sprayCarry >= 1; _sprayCarry--)
+                        Add(6, mouth.X, mouth.Y + Spread(6 * grow), facing * (90 + _random.NextDouble() * 70) * power, Spread(40) - 15,
+                            .7 + _random.NextDouble() * .4, (3 + _random.NextDouble() * 2) * grow, 0);
+                    break;
+                case CreaturePower.Gust:
+                    // Streaks of wind that rush forward and fade.
+                    for (_sprayCarry += seconds * 55 * grow; _sprayCarry >= 1; _sprayCarry--)
+                        Add(7, mouth.X + Spread(4), mouth.Y + Spread(14 * grow), facing * (170 + _random.NextDouble() * 80) * power, 0,
+                            .35 + _random.NextDouble() * .25, 2 * grow, 0);
+                    break;
+            }
+        }
+
         if (_sand > 0)
         {
             // A swipe of sand, thrown forward and up in an arc, that settles as it slows.
@@ -216,7 +257,7 @@ internal sealed class CreatureEffects
     }
 
     /// <summary>Clears everything at once, as when the creature hides.</summary>
-    public void Clear() { Particles.Clear(); _bolt.Clear(); Forks = Array.Empty<Point[]>(); _shadow = 0; _sand = 0; BallRadius = 0; BoltGlow = 0; _burst = 0; _boltTime = 0; }
+    public void Clear() { Particles.Clear(); _bolt.Clear(); Forks = Array.Empty<Point[]>(); _shadow = 0; _sand = 0; _spray = 0; BallRadius = 0; BoltGlow = 0; _burst = 0; _boltTime = 0; }
 
     private double Spread(double size) => (_random.NextDouble() * 2 - 1) * size;
 
@@ -300,10 +341,19 @@ internal sealed class CreatureEffectsView : FrameworkElement
                 1 => Brush(255, 240, 120, Fade(1 - t, 255)),
                 3 => t < .3 ? Brush(196, 130, 255, Fade(1 - t, 210)) : t < .7 ? Brush(128, 64, 206, Fade(1 - t, 210)) : Brush(64, 26, 112, Fade(1 - t, 210)),
                 4 => t < .3 ? Brush(232, 206, 150, Fade(1 - t, 235)) : t < .7 ? Brush(198, 166, 106, Fade(1 - t, 235)) : Brush(150, 120, 80, Fade(1 - t, 235)),
+                5 => t < .25 ? Brush(214, 240, 255, Fade(1 - t, 240)) : t < .6 ? Brush(110, 180, 245, Fade(1 - t, 235)) : Brush(60, 120, 215, Fade(1 - t, 220)),
+                6 => t < .4 ? Brush(160, 222, 110, Fade(1 - t * .6, 250)) : t < .75 ? Brush(104, 178, 76, Fade(1 - t * .6, 250)) : Brush(70, 130, 56, Fade(1 - t, 250)),
+                7 => Brush(236, 242, 255, Fade((1 - t) * Math.Min(1, t * 6), 200)),
                 _ => t < .2 ? Brush(255, 248, 200, Fade(1 - t, 235)) : t < .45 ? Brush(255, 186, 60, Fade(1 - t, 235))
                     : t < .7 ? Brush(238, 98, 32, Fade(1 - t, 235)) : Brush(170, 48, 30, Fade(1 - t, 235))
             };
             var size = Math.Round(p.Size);
+            if (p.Kind == 7)
+            {
+                var length = Math.Round(Math.Min(22, Math.Abs(p.VX) * .07) * (1 + p.Size / 4));
+                context.DrawRectangle(brush, null, new Rect(Math.Round(p.X - (p.VX > 0 ? length : 0)), Math.Round(p.Y), length, Math.Max(1, size / 2)));
+                continue;
+            }
             context.DrawRectangle(brush, null, new Rect(Math.Round(p.X - size / 2), Math.Round(p.Y - size / 2), size, size));
         }
         if (_effects.BallRadius > .5)
