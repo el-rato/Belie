@@ -16,7 +16,7 @@
 - **A launcher.** Press **Ctrl+Space** or **Ctrl+K** to jump to any page, profile or action by typing part of its name. On Profiles, **Ctrl+S** saves, **Ctrl+Enter** applies and **Ctrl+N** makes a new profile.
 - **Your own themes.** Put a small `.json` file in the themes folder (**Settings → Open themes folder**) with a background, text and accent color, and Belie works out the rest. `_example.json` there shows how. Changes show up as you save the file, and Settings tells you if a file has a mistake.
 - **Creatures that move their own way.** Ghosts float and sometimes vanish, dragons glide, birds fly and land to rest, electric types dart, small ones hop, heavy ones stomp, and bats such as Gliscor hang upside down beneath the bar. They move in the Team panel and on the bar too.
-- **Creature powers that grow with level.** Dragons breathe fire, electric types throw forked lightning, ghosts throw shadow balls, ground types kick up sand, and fire types' tails burn. The higher the leader's level, the bigger the attacks. A creature pack can set a creature's `motion`, `mouth` and `tail`.
+- **Creature powers that grow with level.** Dragons and fire types breathe fire, electric types throw forked lightning, ghosts throw shadow balls, ground types kick up sand, water types shoot an arcing jet, grass types throw a flurry of leaves, fliers blow a gust of wind, and fire types' tails burn. The higher the leader's level, the bigger the attacks. A creature pack can set a creature's `motion`, `mouth` and `tail`.
 
 ### Fixed
 
