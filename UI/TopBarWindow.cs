@@ -692,7 +692,8 @@ internal sealed class TopBarWindow : Window
         var state = CreaturePack.LoadState();
         var creatures = CreaturePack.Installed();
         var leader = state.Members.ElementAtOrDefault(state.Leader) is { } member ? creatures.FirstOrDefault(creature => creature.Id == member.Id) : null;
-        _teamSprite.Source = leader != null ? TeamService.Sprite(leader) : null;
+        // On the bar it only swaps frames, slowly, so the bar stays calm.
+        CreatureSprite.Animate(_teamSprite, leader, lively: false);
         _teamSprite.Visibility = Show(leader != null);
         if (view.Text != null) view.Text.Text = leader == null ? "Team" : "Lv " + TeamProgress.Level(state.Members[state.Leader].Xp);
         AutomationProperties.SetName(view.Frame, leader == null ? "Team" : $"Team, {leader.Name} level {TeamProgress.Level(state.Members[state.Leader].Xp)}");

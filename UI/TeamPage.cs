@@ -66,8 +66,9 @@ internal sealed class TeamPage : System.Windows.Controls.UserControl
             var team = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
             foreach (var creature in creatures.Take(TeamProgress.Size))
             {
-                var sprite = new Image { Width = 40, Height = 40, Margin = new Thickness(0, 0, 10, 0), Source = TeamService.Sprite(creature), ToolTip = creature.Name };
+                var sprite = new Image { Width = 40, Height = 40, Margin = new Thickness(0, 0, 10, 0), ToolTip = creature.Name };
                 RenderOptions.SetBitmapScalingMode(sprite, BitmapScalingMode.NearestNeighbor);
+                CreatureSprite.Animate(sprite, creature);
                 team.Children.Add(sprite);
             }
             _body.Children.Add(team);

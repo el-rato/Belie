@@ -50,18 +50,6 @@ internal static class TeamService
         }
         finally { Counting.Release(); }
     }
-
-    internal static BitmapSource? Sprite(Creature creature)
-    {
-        try
-        {
-            var image = new BitmapImage();
-            image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad; image.UriSource = new Uri(CreaturePack.FramePath(creature.Frames[0])); image.EndInit();
-            image.Freeze();
-            return image;
-        }
-        catch { return null; }
-    }
 }
 
 /// <summary>
@@ -162,8 +150,9 @@ internal sealed class TeamPanel : System.Windows.Controls.UserControl
         var grid = new Grid { Margin = new Thickness(0, 5, 0, 5), Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent, ToolTip = leader ? null : "Make " + creature.Name + " the leader" };
         foreach (var width in new[] { 64.0, 200, 56 }) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var sprite = new Image { Width = 44, Height = 44, HorizontalAlignment = HorizontalAlignment.Left, Source = TeamService.Sprite(creature) };
+        var sprite = new Image { Width = 44, Height = 44, HorizontalAlignment = HorizontalAlignment.Left };
         RenderOptions.SetBitmapScalingMode(sprite, BitmapScalingMode.NearestNeighbor);
+        CreatureSprite.Animate(sprite, creature);
         grid.Children.Add(sprite);
 
         var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center };

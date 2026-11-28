@@ -209,7 +209,14 @@ internal static class GitHubContributions
     }
 }
 
-internal sealed record Creature(string Id, string Name, string[] Types, string[] Frames);
+/// <param name="Motion">How it moves, when the pack says: waddle, hop, dash, float, fly, glide or stomp. Otherwise its types decide.</param>
+internal sealed record Creature(string Id, string Name, string[] Types, string[] Frames, string? Motion = null)
+{
+    /// <summary>Where on the sprite its mouth is, as fractions of its width and height, facing right. Fire and lightning come from here.</summary>
+    public (double X, double Y)? Mouth { get; init; }
+    /// <summary>Where its tail's flame burns, for fire types; found in the sprite when the pack does not say.</summary>
+    public (double X, double Y)? Tail { get; init; }
+}
 
 /// <summary>
 /// The creatures' names and sprites are not in Belie: they are a pack downloaded once, from Belie's repository unless
@@ -286,9 +293,19 @@ internal static class CreaturePack
             if (!Safe.IsMatch(id) || frames.Length is 0 or > 8 || !frames.All(SafeFile.IsMatch)) continue;
             var name = (item.GetProperty("name").GetString() ?? id).Trim();
             var types = item.TryGetProperty("types", out var list) ? list.EnumerateArray().Select(type => type.GetString() ?? "").Where(type => type.Length is > 0 and <= 16).Take(2).ToArray() : Array.Empty<string>();
-            creatures.Add(new Creature(id, name.Length > 24 ? name[..24] : name, types, frames));
+            var motion = item.TryGetProperty("motion", out var how) && how.ValueKind == JsonValueKind.String ? how.GetString() : null;
+            creatures.Add(new Creature(id, name.Length > 24 ? name[..24] : name, types, frames, motion is { Length: > 0 and <= 16 } ? motion : null)
+                { Mouth = Spot(item, "mouth"), Tail = Spot(item, "tail") });
         }
         return creatures.ToArray();
+    }
+
+    /// <summary>A point on a sprite, written as [x, y] fractions between 0 and 1; null when missing or out of range.</summary>
+    private static (double X, double Y)? Spot(JsonElement item, string name)
+    {
+        if (!item.TryGetProperty(name, out var spot) || spot.ValueKind != JsonValueKind.Array || spot.GetArrayLength() != 2) return null;
+        var values = spot.EnumerateArray().Select(value => value.ValueKind == JsonValueKind.Number ? value.GetDouble() : -1).ToArray();
+        return values.All(value => value is >= 0 and <= 1) ? (values[0], values[1]) : null;
     }
 
     /// <summary>Downloads a pack and its frames into a fresh folder, then puts it in place of the old one.</summary>
