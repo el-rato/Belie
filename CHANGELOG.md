@@ -1,5 +1,35 @@
 # Belie patch notes
 
+## [4.3.0] - 2026-11-28 - A new look, and a livelier team
+
+### Changed
+
+- **A new look.** The main window is real glass: Windows blurs the desktop behind it, even when Belie is not in front. Choose **Off**, **Light** or **Strong** glass in Settings. Every screen has been restyled with rounded glass cards and pill buttons.
+- **One bar instead of the sidebar.** Home, Profiles, Widgets and Library sit in a bar along the top, with Top bar, Workspaces, Transitions, Team and Switcher under **More**. Pills on the bar show the profile on your desktop, what automation is doing, and when an update is ready. Narrow windows keep the bar to icons.
+- **A calmer overview.** It shows your desktop's wallpaper large, then your profiles, what comes next, and what happened recently.
+- **Discover has its own tab,** with a full-width grid and a full-page viewer you can step through with the arrow keys.
+- **Edit schedules and triggers in the profile,** on its **Automation** tab, instead of in a separate window. New profiles are made in place.
+- **Mood is gone.** Accent colors, ambient sound and starter presets have been removed. Profiles that used them still load.
+
+### Added
+
+- **A launcher.** Press **Ctrl+Space** or **Ctrl+K** to jump to any page, profile or action by typing part of its name. On Profiles, **Ctrl+S** saves, **Ctrl+Enter** applies and **Ctrl+N** makes a new profile.
+- **Your own themes.** Put a small `.json` file in the themes folder (**Settings → Open themes folder**) with a background, text and accent color, and Belie works out the rest. `_example.json` there shows how. Changes show up as you save the file, and Settings tells you if a file has a mistake.
+- **Creatures that move their own way.** Ghosts float and sometimes vanish, dragons glide, birds fly and land to rest, electric types dart, small ones hop, heavy ones stomp, and bats such as Gliscor hang upside down beneath the bar. They move in the Team panel and on the bar too.
+- **Creature powers that grow with level.** Dragons breathe fire, electric types throw forked lightning, ghosts throw shadow balls, ground types kick up sand, and fire types' tails burn. The higher the leader's level, the bigger the attacks. A creature pack can set a creature's `motion`, `mouth` and `tail`.
+
+### Fixed
+
+- **The walker stays out of your games.** The walking creature hides while a full-screen app or game is in front, and comes back after. With no window to stand on, it walks along Belie's bar instead of the taskbar.
+- **The team grows for every account.** Some GitHub accounts show an empty contribution calendar although their commits are there. The team now counts those commits instead, so levels and the streak still grow.
+- **Smoother glass.** Setting a still wallpaper no longer switches Belie to slower drawing, which made the window stutter.
+
+### Updating
+
+Read these notes offline at **Settings → App updates → What’s new**.
+
+Open **Settings > App updates > Check for updates**, then choose **Update and restart**. Profiles, settings, schedules, widgets, and shortcuts are retained, and so is your team. Settings for Mood are dropped.
+
 ## [4.2.3] - 2026-11-27 - Hide widgets on one wallpaper
 
 ### Changed
